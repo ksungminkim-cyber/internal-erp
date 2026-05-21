@@ -1,15 +1,19 @@
 'use client';
 
 import WorkplaceSwitcher from './WorkplaceSwitcher';
+import NotificationBell from './NotificationBell';
 
 export default function PageHeader({ title, subtitle, action, hideSwitcher = false, large = false }) {
   const topRow = (!hideSwitcher || action) ? (
     <div
       className="mobile-only"
-      style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}
+      style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, gap: 8 }}
     >
       {hideSwitcher ? <span /> : <WorkplaceSwitcher />}
-      {action}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+        <NotificationBell inline />
+        {action}
+      </div>
     </div>
   ) : null;
 
@@ -26,7 +30,10 @@ export default function PageHeader({ title, subtitle, action, hideSwitcher = fal
               </p>
             )}
           </div>
-          {action && <div className="desktop-only">{action}</div>}
+          <div className="desktop-only" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <NotificationBell inline />
+            {action}
+          </div>
         </div>
       </div>
     </header>

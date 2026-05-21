@@ -63,7 +63,9 @@ export function AppProvider({ children, initialUser }) {
 
   const currentMembership = memberships.find((m) => m.workplace_id === currentWorkplaceId) ?? null;
   const currentWorkplace = currentMembership?.workplaces ?? null;
-  const role = currentMembership?.role ?? 'staff';
+  // role 없으면 null — UI에서 fallback 처리 (super_admin이면 owner로 간주)
+  const role = currentMembership?.role
+    ?? (profile?.is_super_admin ? 'owner' : null);
   const isManager = role === 'manager' || role === 'owner';
 
   const value = {

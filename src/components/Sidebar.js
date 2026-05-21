@@ -38,9 +38,10 @@ const ADMIN_LINKS = [
 ];
 
 const ROLE_META = {
-  owner:   { label: '대표',   icon: Crown },
-  manager: { label: '매니저', icon: Shield },
-  staff:   { label: '직원',   icon: User },
+  owner:   { label: '대표',     icon: Crown },
+  manager: { label: '매니저',   icon: Shield },
+  staff:   { label: '직원',     icon: User },
+  null:    { label: '미배정',   icon: User },
 };
 
 export default function Sidebar() {
@@ -51,17 +52,30 @@ export default function Sidebar() {
   const isAdmin = profile?.is_super_admin === true || memberships.some((m) => m.role === 'owner');
 
   const isActive = (href) => pathname === href || pathname.startsWith(href + '/');
-  const r = ROLE_META[role] ?? ROLE_META.staff;
+  // super_admin이면 항상 대표 표시, 멤버십 없으면 미배정
+  const effectiveRole = profile?.is_super_admin ? 'owner' : (role ?? 'null');
+  const r = ROLE_META[effectiveRole] ?? ROLE_META.staff;
   const RoleIcon = r.icon;
 
   async function logout() {
     try {
-      await supabase.auth.signOut();
+      await supabase.auth.signOut({ scope: 'global' });
     } catch (e) {
       console.warn('signOut error', e);
     }
     if (typeof window !== 'undefined') {
-      window.location.href = '/login';
+      try {
+        localStorage.clear();
+        sessionStorage.clear();
+        // supabase 쿠키 강제 제거 (브라우저별 차이 대비)
+        document.cookie.split(';').forEach((c) => {
+          const name = c.split('=')[0].trim();
+          if (name.startsWith('sb-')) {
+            document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/`;
+          }
+        });
+      } catch {}
+      window.location.replace('/login');
     }
   }
 

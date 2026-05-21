@@ -40,13 +40,22 @@ export default function MePage() {
 
   async function logout() {
     try {
-      await supabase.auth.signOut();
+      await supabase.auth.signOut({ scope: 'global' });
     } catch (e) {
       console.warn('signOut error', e);
     }
-    // hard navigation — 세션 쿠키 정리 보장
     if (typeof window !== 'undefined') {
-      window.location.href = '/login';
+      try {
+        localStorage.clear();
+        sessionStorage.clear();
+        document.cookie.split(';').forEach((c) => {
+          const name = c.split('=')[0].trim();
+          if (name.startsWith('sb-')) {
+            document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/`;
+          }
+        });
+      } catch {}
+      window.location.replace('/login');
     }
   }
 
