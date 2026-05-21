@@ -154,7 +154,7 @@ export default function ApprovalDetailPage({ params }) {
         }
       />
 
-      <main className="fade-in" style={{ padding: '20px 16px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <main className="fade-in page-main" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
         {/* 헤더 카드 */}
         <section className="card">
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>

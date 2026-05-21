@@ -144,7 +144,7 @@ export default function AttendancePage() {
     <>
       <PageHeader title="근태" subtitle="버튼을 눌러 출/퇴근을 기록해요" />
 
-      <main className="fade-in" style={{ padding: '20px 16px', display: 'flex', flexDirection: 'column', gap: 24 }}>
+      <main className="fade-in page-main" style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
         {/* 본인 상태 카드 */}
         <section
           className={`bento ${myStatus === 'working' ? 'mint' : myStatus === 'on_break' ? 'warm' : 'dark'}`}

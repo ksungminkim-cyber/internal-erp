@@ -83,7 +83,7 @@ export default function ApprovalsListPage() {
     <>
       <PageHeader title="전자결재" subtitle="지출결의서 · 휴가 등 사내 결재" />
 
-      <main className="fade-in" style={{ padding: '20px 16px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <main className="fade-in page-main" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
           <div className="segment">
             {TABS.map((t) => (

@@ -79,7 +79,7 @@ export default function SalesPage() {
         }
       />
 
-      <main className="fade-in" style={{ padding: '20px 16px', display: 'flex', flexDirection: 'column', gap: 20 }}>
+      <main className="fade-in page-main" style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
         {/* 오늘 */}
         <section className="bento accent" style={{ minHeight: 160 }}>
           <div className="bento-decor" />

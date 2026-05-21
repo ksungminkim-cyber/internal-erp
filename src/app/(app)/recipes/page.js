@@ -74,7 +74,7 @@ export default function RecipesPage() {
         }
       />
 
-      <main className="fade-in" style={{ padding: '20px 16px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <main className="fade-in page-main" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
         <div style={{ position: 'relative' }}>
           <Search size={16} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
           <input
@@ -114,7 +114,7 @@ export default function RecipesPage() {
             </div>
           </div>
         ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <div className="grid-4">
             {filtered.map((r) => {
               const Icon = CATEGORY_ICON[r.category] || BookOpen;
               return (

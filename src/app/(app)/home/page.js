@@ -134,7 +134,7 @@ export default function HomePage() {
     <>
       <PageHeader title={`${greeting},`} subtitle={`${profile?.name ?? ''}님 · ${today}`} large />
 
-      <main className="fade-in" style={{ padding: '20px 16px', display: 'flex', flexDirection: 'column', gap: 24 }}>
+      <main className="fade-in page-main" style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
         {/* 긴급 알림 */}
         {urgentCount > 0 && (
           <section className="bento warm pop-in" style={{ minHeight: 90 }}>
@@ -201,7 +201,7 @@ export default function HomePage() {
         {/* 빠른 액션 */}
         <section className="stack stack-3">
           <h2 className="h3">바로가기</h2>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <div className="grid-4">
             <QuickAction href="/attendance" icon={Clock} label="출퇴근" desc="지금 기록" tone="accent" />
             <QuickAction href="/approvals/new" icon={Plus} label="지출결의서" desc="새 기안" tone="mint" />
             <QuickAction href="/schedule" icon={Calendar} label="시프트" desc={`오늘 ${stats.todayShifts}건`} tone="violet" />

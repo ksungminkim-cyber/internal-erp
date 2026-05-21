@@ -48,7 +48,7 @@ export default function MePage() {
     <>
       <PageHeader title="내정보" subtitle={user?.email} hideSwitcher />
 
-      <main className="fade-in" style={{ padding: '20px 16px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <main className="fade-in page-main" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
         {/* 프로필 카드 */}
         <section className="card" style={{ textAlign: 'center', paddingTop: 32 }}>
           <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 12 }}>

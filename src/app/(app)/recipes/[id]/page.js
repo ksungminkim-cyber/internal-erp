@@ -117,7 +117,7 @@ export default function RecipeDetail({ params }) {
           }
         />
 
-        <main className="fade-in" style={{ padding: '20px 16px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <main className="fade-in page-main" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           {/* 가격·서빙 카드 */}
           <section className="bento accent" style={{ minHeight: 130 }}>
             <div className="bento-decor" />
@@ -209,7 +209,7 @@ export default function RecipeDetail({ params }) {
         }
       />
 
-      <main className="fade-in" style={{ padding: '20px 16px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <main className="fade-in page-main" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
         <section className="card">
           <label className="label">이름</label>
           <input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="예) 카페라떼" />

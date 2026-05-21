@@ -174,7 +174,7 @@ export default function ReportsPage() {
         }
       />
 
-      <main className="fade-in" style={{ padding: '20px 16px', display: 'flex', flexDirection: 'column', gap: 20 }}>
+      <main className="fade-in page-main" style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
         {/* 월 네비게이터 */}
         <div className="card compact" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <button className="btn btn-ghost btn-icon" onClick={prevMonth} aria-label="이전 달"><ChevronLeft size={18} /></button>

@@ -69,7 +69,7 @@ export default function EquipmentDetail({ params }) {
         }
       />
 
-      <main className="fade-in" style={{ padding: '20px 16px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <main className="fade-in page-main" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
         <section className="card">
           <div className="stack stack-2" style={{ fontSize: 13 }}>
             {equipment.model && <Row label="모델" value={equipment.model} />}

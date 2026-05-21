@@ -16,6 +16,7 @@ export default function BottomNav() {
   const pathname = usePathname();
   return (
     <nav
+      className="bottom-nav"
       style={{
         position: 'fixed',
         bottom: 0, left: 0, right: 0,

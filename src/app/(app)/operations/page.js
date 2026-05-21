@@ -91,7 +91,7 @@ export default function OperationsMenu() {
     <>
       <PageHeader title="운영" subtitle="매장 운영의 모든 기능" />
 
-      <main className="fade-in" style={{ padding: '20px 16px', display: 'flex', flexDirection: 'column', gap: 24 }}>
+      <main className="fade-in page-main" style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
         {urgentItems.length > 0 && (
           <Link href={urgentItems[0].href} style={{ textDecoration: 'none' }}>
             <div className="bento warm" style={{ minHeight: 90, padding: 18 }}>
@@ -113,7 +113,7 @@ export default function OperationsMenu() {
 
         <section className="stack stack-3">
           <h2 className="h3">매장 운영</h2>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <div className="grid-4">
             <OpsCard href="/schedule"    icon={Calendar}        label="시프트"     desc="근무 일정"
               accent="violet" badge={stats.todayShifts > 0 ? `오늘 ${stats.todayShifts}` : null} />
             <OpsCard href="/handover"    icon={ClipboardCheck}  label="인수인계"   desc="교대 메모"
@@ -126,7 +126,7 @@ export default function OperationsMenu() {
 
         <section className="stack stack-3">
           <h2 className="h3">품질 · 서비스</h2>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <div className="grid-4">
             <OpsCard href="/equipment"  icon={Wrench}        label="장비 점검"   desc="머신·기기 관리"
               accent="violet" badge={stats.equipmentIssue > 0 ? `${stats.equipmentIssue}` : null} urgent={stats.equipmentIssue > 0} />
             <OpsCard href="/recipes"    icon={BookOpen}      label="레시피"      desc="두 매장 공통"      accent="mint" />
@@ -137,7 +137,7 @@ export default function OperationsMenu() {
 
         <section className="stack stack-3">
           <h2 className="h3">매출 · 인사이트</h2>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <div className="grid-4">
             <OpsCard href="/sales"          icon={TrendingUp} label="매출"       desc="일별 매출"    accent="success" />
             <OpsCard href="/reports"        icon={BarChart3}  label="월별 리포트" desc="통합 대시보드" accent="accent" />
             <OpsCard href="/announcements"  icon={Megaphone}  label="공지사항"   desc="전직원 공지"

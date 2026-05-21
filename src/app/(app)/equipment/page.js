@@ -84,7 +84,7 @@ export default function EquipmentPage() {
         }
       />
 
-      <main className="fade-in" style={{ padding: '20px 16px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <main className="fade-in page-main" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
         {needsAttention.length > 0 && (
           <div className="bento warm" style={{ padding: 16 }}>
             <div className="bento-decor" />

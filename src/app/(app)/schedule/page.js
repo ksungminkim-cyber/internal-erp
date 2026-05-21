@@ -98,7 +98,7 @@ export default function SchedulePage() {
         }
       />
 
-      <main className="fade-in" style={{ padding: '20px 16px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <main className="fade-in page-main" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
         {/* Week navigator */}
         <div className="card compact" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <button className="btn btn-ghost btn-icon" onClick={() => setWeekStart(addDays(weekStart, -7))} aria-label="이전 주">

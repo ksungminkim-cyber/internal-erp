@@ -81,7 +81,7 @@ export default function HandoverPage() {
         }
       />
 
-      <main className="fade-in" style={{ padding: '20px 16px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <main className="fade-in page-main" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
         <div className="segment">
           <button className={`segment-item ${filter === 'all' ? 'is-active' : ''}`} onClick={() => setFilter('all')}>전체</button>
           <button className={`segment-item ${filter === 'unresolved' ? 'is-active' : ''}`} onClick={() => setFilter('unresolved')}>
