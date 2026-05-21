@@ -1,0 +1,155 @@
+'use client';
+
+import { useEffect, useState, useCallback, useMemo } from 'react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { useApp } from '@/context/AppContext';
+import PageHeader from '@/components/PageHeader';
+import { formatCurrency } from '@/lib/format';
+import { ChevronLeft, Plus, Search, BookOpen, Coffee, Cake, IceCream } from 'lucide-react';
+
+const CATEGORY_ICON = {
+  '에스프레소': Coffee,
+  '브루잉': Coffee,
+  '라떼/베리에이션': Coffee,
+  '논커피': IceCream,
+  '디저트': Cake,
+  '베이커리': Cake,
+};
+
+export default function RecipesPage() {
+  const router = useRouter();
+  const { supabase, isManager } = useApp();
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+  const [category, setCategory] = useState('all');
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    const { data } = await supabase
+      .from('recipes')
+      .select('*')
+      .eq('active', true)
+      .order('category')
+      .order('name');
+    setItems(data ?? []);
+    setLoading(false);
+  }, [supabase]);
+
+  useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    const ch = supabase
+      .channel('recipes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'recipes' }, () => load())
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, [supabase, load]);
+
+  const categories = useMemo(() => {
+    const set = new Set();
+    items.forEach((r) => { if (r.category) set.add(r.category); });
+    return Array.from(set);
+  }, [items]);
+
+  const filtered = useMemo(() => {
+    let list = items;
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      list = list.filter((r) => r.name.toLowerCase().includes(q));
+    }
+    if (category !== 'all') list = list.filter((r) => r.category === category);
+    return list;
+  }, [items, search, category]);
+
+  return (
+    <>
+      <PageHeader
+        title="레시피"
+        subtitle="두 매장 공통 레시피 (전사 공유)"
+        hideSwitcher
+        action={
+          <button onClick={() => router.back()} className="btn btn-ghost btn-icon"><ChevronLeft size={20} /></button>
+        }
+      />
+
+      <main className="fade-in" style={{ padding: '20px 16px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <div style={{ position: 'relative' }}>
+          <Search size={16} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+          <input
+            className="input"
+            placeholder="레시피 검색"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            style={{ paddingLeft: 36 }}
+          />
+        </div>
+
+        {categories.length > 0 && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            <button className={`tag ${category === 'all' ? 'tag-accent' : ''}`} onClick={() => setCategory('all')}>
+              전체
+            </button>
+            {categories.map((c) => (
+              <button
+                key={c}
+                className={`tag ${category === c ? 'tag-accent' : ''}`}
+                onClick={() => setCategory(c)}
+              >
+                {c}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {loading ? (
+          <div className="skeleton" style={{ height: 200 }} />
+        ) : filtered.length === 0 ? (
+          <div className="card empty">
+            <div className="empty-icon"><BookOpen size={26} /></div>
+            <div className="empty-title">{search ? '검색 결과 없음' : '레시피 없음'}</div>
+            <div className="empty-desc">
+              {isManager ? '+ 버튼으로 첫 레시피를 작성해보세요' : '매니저가 작성한 레시피가 여기 표시됩니다'}
+            </div>
+          </div>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            {filtered.map((r) => {
+              const Icon = CATEGORY_ICON[r.category] || BookOpen;
+              return (
+                <Link key={r.id} href={`/recipes/${r.id}`} style={{ textDecoration: 'none' }}>
+                  <div className="card compact interactive" style={{ minHeight: 130 }}>
+                    <div
+                      style={{
+                        width: 38, height: 38, borderRadius: 12,
+                        background: 'var(--accent-soft)', color: 'var(--accent)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        marginBottom: 10,
+                      }}
+                    >
+                      <Icon size={18} />
+                    </div>
+                    {r.category && <div className="text-muted" style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.04, textTransform: 'uppercase' }}>{r.category}</div>}
+                    <div className="h4" style={{ marginTop: 2 }}>{r.name}</div>
+                    {r.sell_price != null && (
+                      <div className="num" style={{ marginTop: 8, fontSize: 14, fontWeight: 700, color: 'var(--accent)' }}>
+                        {formatCurrency(r.sell_price)}원
+                      </div>
+                    )}
+                  </div>
+                </Link>
+              );
+            })}
+          </div>
+        )}
+      </main>
+
+      {isManager && (
+        <Link href="/recipes/new" className="fab" style={{ textDecoration: 'none' }} aria-label="새 레시피">
+          <Plus size={26} />
+        </Link>
+      )}
+    </>
+  );
+}
