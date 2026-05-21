@@ -8,7 +8,7 @@ import BottomSheet from '@/components/BottomSheet';
 import { formatRelative } from '@/lib/format';
 import { ChevronLeft, Plus, X, Package, AlertTriangle, TrendingUp, TrendingDown, Edit3, Trash2, Search } from 'lucide-react';
 
-const CATEGORY_OPTIONS = ['식자재', '음료/시럽', '컵·뚜껑', '비품', '청소·세제', '포장', '기타'];
+const CATEGORY_OPTIONS = ['식자재', '음료/시럽', '주류', '컵·뚜껑', '비품', '청소·세제', '포장', '기타'];
 
 export default function InventoryPage() {
   const router = useRouter();

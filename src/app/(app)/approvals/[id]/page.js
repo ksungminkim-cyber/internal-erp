@@ -32,6 +32,7 @@ export default function ApprovalDetailPage({ params }) {
   const [items, setItems] = useState([]);
   const [steps, setSteps] = useState([]);
   const [attachments, setAttachments] = useState([]);
+  const [shifts, setShifts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [comment, setComment] = useState('');
   const [acting, setActing] = useState(false);
@@ -39,7 +40,7 @@ export default function ApprovalDetailPage({ params }) {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const [{ data: r }, { data: it }, { data: st }, { data: att }] = await Promise.all([
+    const [{ data: r }, { data: it }, { data: st }, { data: att }, { data: sh }] = await Promise.all([
       supabase
         .from('approval_requests')
         .select('*, drafter:profiles!approval_requests_drafter_id_fkey(name, phone)')
@@ -52,11 +53,17 @@ export default function ApprovalDetailPage({ params }) {
         .eq('request_id', id)
         .order('step_order'),
       supabase.from('approval_attachments').select('*').eq('request_id', id).order('uploaded_at'),
+      supabase
+        .from('shifts')
+        .select('*, user:profiles!shifts_user_id_fkey(name)')
+        .eq('approval_request_id', id)
+        .order('start_at'),
     ]);
     setReq(r);
     setItems(it ?? []);
     setSteps(st ?? []);
     setAttachments(att ?? []);
+    setShifts(sh ?? []);
     setLoading(false);
   }, [supabase, id]);
 
@@ -150,9 +157,11 @@ export default function ApprovalDetailPage({ params }) {
         hideSwitcher
         action={
           <div style={{ display: 'flex', gap: 6 }}>
-            <Link href={`/approvals/${id}/print`} className="btn btn-soft btn-sm">
-              <Printer size={14} /> 출력
-            </Link>
+            {req.doc_type !== 'schedule' && (
+              <Link href={`/approvals/${id}/print`} className="btn btn-soft btn-sm">
+                <Printer size={14} /> 출력
+              </Link>
+            )}
             <button onClick={() => router.back()} className="btn btn-ghost btn-icon">
               <ChevronLeft size={20} />
             </button>
@@ -181,44 +190,81 @@ export default function ApprovalDetailPage({ params }) {
           )}
         </section>
 
-        {/* 지출 항목 */}
-        <section className="card">
-          <h2 className="h3" style={{ marginBottom: 12 }}>지출 항목</h2>
-          <div className="stack stack-2">
-            {items.map((it) => (
-              <div
-                key={it.id}
-                style={{
-                  display: 'flex', gap: 12, padding: 14,
-                  background: 'var(--surface-soft)', borderRadius: 12,
-                }}
-              >
-                <div style={{ flex: 1 }}>
-                  <div className="h4" style={{ fontSize: 14 }}>{it.description}</div>
-                  <div className="text-muted" style={{ fontSize: 12, marginTop: 2 }}>
-                    <span className="tag" style={{ marginRight: 6 }}>{it.category}</span>
-                    {it.vendor}
-                  </div>
+        {/* 결재 종류별 본문 — schedule이면 시프트 목록, expense면 지출 항목 */}
+        {req.doc_type === 'schedule' ? (
+          <section className="card">
+            <h2 className="h3" style={{ marginBottom: 12 }}>
+              {req.period_year}년 {req.period_month}월 시프트
+            </h2>
+            {shifts.length === 0 ? (
+              <p className="text-muted" style={{ fontSize: 13 }}>묶인 시프트가 없습니다.</p>
+            ) : (
+              <>
+                <p className="text-muted" style={{ fontSize: 12, marginBottom: 10 }}>
+                  총 {shifts.length}개 시프트
+                </p>
+                <div className="stack stack-2">
+                  {shifts.map((s) => {
+                    const d = new Date(s.start_at);
+                    const e = new Date(s.end_at);
+                    const dayStr = d.toLocaleDateString('ko-KR', { month: 'numeric', day: 'numeric', weekday: 'short' });
+                    const startStr = d.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false });
+                    const endStr = e.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false });
+                    return (
+                      <div key={s.id} style={{
+                        display: 'flex', alignItems: 'center', gap: 10,
+                        padding: 10, background: 'var(--surface-soft)', borderRadius: 10,
+                      }}>
+                        <span className="num" style={{ width: 60, fontSize: 13, fontWeight: 700 }}>{dayStr}</span>
+                        <span style={{ flex: 1, fontSize: 13, fontWeight: 600 }}>{s.user?.name || '—'}</span>
+                        <span className="num text-muted" style={{ fontSize: 12 }}>{startStr} - {endStr}</span>
+                        {s.role_label && <span className="tag" style={{ fontSize: 10 }}>{s.role_label}</span>}
+                      </div>
+                    );
+                  })}
                 </div>
-                <span className="num" style={{ fontWeight: 700, fontSize: 15, alignSelf: 'center' }}>
-                  {formatCurrency(it.amount)}원
-                </span>
-              </div>
-            ))}
-          </div>
-          <div
-            style={{
-              marginTop: 14, padding: '16px 18px',
-              background: 'var(--accent-soft)', borderRadius: 14,
-              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-            }}
-          >
-            <span style={{ fontWeight: 700, color: 'var(--accent-strong)' }}>합계</span>
-            <span className="num" style={{ fontWeight: 800, fontSize: 22, color: 'var(--accent-strong)' }}>
-              {formatCurrency(req.total_amount)}<span style={{ fontSize: 14, marginLeft: 2 }}>원</span>
-            </span>
-          </div>
-        </section>
+              </>
+            )}
+          </section>
+        ) : (
+          <section className="card">
+            <h2 className="h3" style={{ marginBottom: 12 }}>지출 항목</h2>
+            <div className="stack stack-2">
+              {items.map((it) => (
+                <div
+                  key={it.id}
+                  style={{
+                    display: 'flex', gap: 12, padding: 14,
+                    background: 'var(--surface-soft)', borderRadius: 12,
+                  }}
+                >
+                  <div style={{ flex: 1 }}>
+                    <div className="h4" style={{ fontSize: 14 }}>{it.description}</div>
+                    <div className="text-muted" style={{ fontSize: 12, marginTop: 2 }}>
+                      <span className="tag" style={{ marginRight: 6 }}>{it.category}</span>
+                      {it.vendor}
+                    </div>
+                  </div>
+                  <span className="num" style={{ fontWeight: 700, fontSize: 15, alignSelf: 'center' }}>
+                    {formatCurrency(it.amount)}원
+                  </span>
+                </div>
+              ))}
+            </div>
+            <div
+              style={{
+                marginTop: 14, padding: '16px 18px',
+                background: 'var(--accent-soft)', borderRadius: 14,
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+              }}
+            >
+              <span style={{ fontWeight: 700, color: 'var(--accent-strong)' }}>합계</span>
+              <span className="num" style={{ fontWeight: 800, fontSize: 22, color: 'var(--accent-strong)' }}>
+                {formatCurrency(req.total_amount)}<span style={{ fontSize: 14, marginLeft: 2 }}>원</span>
+              </span>
+            </div>
+          </section>
+        )}
 
         {/* 첨부 */}
         {attachments.length > 0 && (
