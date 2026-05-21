@@ -6,11 +6,12 @@ import { useApp } from '@/context/AppContext';
 import PageHeader from '@/components/PageHeader';
 import {
   Calendar, ClipboardCheck, ListTodo, Package, TrendingUp, Megaphone,
-  AlertCircle, Sparkles, Wrench, BookOpen, MessageCircle, BarChart3,
+  AlertCircle, Sparkles, Wrench, BookOpen, MessageCircle, BarChart3, UserCog,
 } from 'lucide-react';
 
 export default function OperationsMenu() {
-  const { currentWorkplaceId, supabase, user } = useApp();
+  const { currentWorkplaceId, supabase, user, profile, memberships } = useApp();
+  const isAdmin = profile?.is_super_admin === true || memberships.some((m) => m.role === 'owner');
   const [stats, setStats] = useState({
     todayShifts: 0,
     handoverUnresolved: 0,
@@ -144,6 +145,15 @@ export default function OperationsMenu() {
               accent="neutral" badge={stats.unreadAnn > 0 ? `${stats.unreadAnn} 신규` : null} urgent={stats.unreadAnn > 0} />
           </div>
         </section>
+
+        {isAdmin && (
+          <section className="stack stack-3">
+            <h2 className="h3">관리</h2>
+            <div className="grid-4">
+              <OpsCard href="/members" icon={UserCog} label="직원 관리" desc="가입·배정·역할" accent="accent" />
+            </div>
+          </section>
+        )}
 
         <section style={{ paddingTop: 8 }}>
           <div className="card" style={{ background: 'var(--surface-soft)', boxShadow: 'none' }}>

@@ -29,6 +29,10 @@ const OPS_LINKS = [
   { href: '/announcements', label: '공지사항', icon: Megaphone },
 ];
 
+const ADMIN_LINKS = [
+  { href: '/members', label: '직원 관리', icon: User },
+];
+
 const ROLE_META = {
   owner:   { label: '대표',   icon: Crown },
   manager: { label: '매니저', icon: Shield },
@@ -40,6 +44,7 @@ export default function Sidebar() {
   const router = useRouter();
   const { profile, memberships, currentWorkplaceId, currentWorkplace, switchWorkplace, role, supabase } = useApp();
   const [wpOpen, setWpOpen] = useState(false);
+  const isAdmin = profile?.is_super_admin === true || memberships.some((m) => m.role === 'owner');
 
   const isActive = (href) => pathname === href || pathname.startsWith(href + '/');
   const r = ROLE_META[role] ?? ROLE_META.staff;
@@ -141,6 +146,21 @@ export default function Sidebar() {
         {OPS_LINKS.map(({ href, label, icon: Icon }) => (
           <NavLink key={href} href={href} icon={Icon} label={label} active={isActive(href)} />
         ))}
+
+        {isAdmin && (
+          <>
+            <div style={{
+              fontSize: 10, fontWeight: 700, color: 'var(--text-muted)',
+              letterSpacing: 0.08, textTransform: 'uppercase',
+              padding: '16px 12px 6px',
+            }}>
+              관리
+            </div>
+            {ADMIN_LINKS.map(({ href, label, icon: Icon }) => (
+              <NavLink key={href} href={href} icon={Icon} label={label} active={isActive(href)} />
+            ))}
+          </>
+        )}
       </nav>
 
       {/* Profile footer */}
