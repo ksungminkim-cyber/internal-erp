@@ -12,8 +12,8 @@ import {
 } from 'lucide-react';
 
 const CATEGORY_META = {
-  kpi: { label: 'KPI', tag: 'tag-accent', desc: '핵심 성과 지표 (전사 목표)' },
-  opi: { label: 'OPI', tag: 'tag-mint',   desc: '운영 성과 지표 (매장 운영)' },
+  kpi: { label: 'KPI', tag: 'tag-accent', desc: '핵심 성과 지표 (정량 측정용 단일 지표)' },
+  okr: { label: 'OKR', tag: 'tag-mint',   desc: 'Objectives & Key Results — 목표와 핵심 결과' },
 };
 
 const PERIOD_META = {
@@ -66,14 +66,14 @@ export default function KpisPage() {
 
   const filtered = useMemo(() => {
     if (filter === 'kpi') return kpis.filter((k) => k.category === 'kpi');
-    if (filter === 'opi') return kpis.filter((k) => k.category === 'opi');
+    if (filter === 'okr') return kpis.filter((k) => k.category === 'okr');
     return kpis;
   }, [kpis, filter]);
 
   return (
     <>
       <PageHeader
-        title="KPI · OPI"
+        title="KPI · OKR"
         subtitle="목표 등록과 결재, 실적 기록"
         hideSwitcher
         action={
@@ -85,7 +85,7 @@ export default function KpisPage() {
         <div className="segment" style={{ alignSelf: 'flex-start' }}>
           <button className={`segment-item ${filter === 'all' ? 'is-active' : ''}`} onClick={() => setFilter('all')}>전체</button>
           <button className={`segment-item ${filter === 'kpi' ? 'is-active' : ''}`} onClick={() => setFilter('kpi')}>KPI</button>
-          <button className={`segment-item ${filter === 'opi' ? 'is-active' : ''}`} onClick={() => setFilter('opi')}>OPI</button>
+          <button className={`segment-item ${filter === 'okr' ? 'is-active' : ''}`} onClick={() => setFilter('okr')}>OKR</button>
         </div>
 
         {loading ? (
@@ -212,7 +212,7 @@ export default function KpisPage() {
 
 function KpiEditor({ kpi, memberships, currentWorkplaceId, isSuperAdmin, userId, supabase, onClose, onSaved }) {
   const isEdit = !!kpi?.id;
-  const [category, setCategory] = useState(kpi?.category ?? 'opi');
+  const [category, setCategory] = useState(kpi?.category ?? 'okr');
   const [name, setName] = useState(kpi?.name ?? '');
   const [target, setTarget] = useState(kpi?.target_value ?? '');
   const [unit, setUnit] = useState(kpi?.unit ?? '');
@@ -320,7 +320,7 @@ function KpiEditor({ kpi, memberships, currentWorkplaceId, isSuperAdmin, userId,
   return (
     <BottomSheet onClose={onClose}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <h2 className="h3">{isEdit ? '지표 편집' : '새 KPI · OPI'}</h2>
+        <h2 className="h3">{isEdit ? '지표 편집' : '새 KPI · OKR'}</h2>
         <button onClick={onClose} className="btn btn-ghost btn-icon"><X size={18} /></button>
       </div>
 
