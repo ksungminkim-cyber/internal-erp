@@ -2,11 +2,12 @@
 
 import { useEffect, useState, useCallback, use } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { useApp } from '@/context/AppContext';
 import PageHeader from '@/components/PageHeader';
 import Avatar from '@/components/Avatar';
 import { formatDateTime, formatCurrency } from '@/lib/format';
-import { CheckCircle2, XCircle, Clock, ChevronLeft, Paperclip, Download, Sparkles } from 'lucide-react';
+import { CheckCircle2, XCircle, Clock, ChevronLeft, Paperclip, Download, Sparkles, Printer } from 'lucide-react';
 
 const STATUS_META = {
   pending:   { label: '진행 중',   tag: 'tag-warning',  icon: Clock },
@@ -148,9 +149,14 @@ export default function ApprovalDetailPage({ params }) {
         title="결재 상세"
         hideSwitcher
         action={
-          <button onClick={() => router.back()} className="btn btn-ghost btn-icon">
-            <ChevronLeft size={20} />
-          </button>
+          <div style={{ display: 'flex', gap: 6 }}>
+            <Link href={`/approvals/${id}/print`} className="btn btn-soft btn-sm">
+              <Printer size={14} /> 출력
+            </Link>
+            <button onClick={() => router.back()} className="btn btn-ghost btn-icon">
+              <ChevronLeft size={20} />
+            </button>
+          </div>
         }
       />
 

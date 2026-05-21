@@ -30,7 +30,7 @@ export default function BottomSheet({ children, onClose, maxWidth = 480 }) {
         padding: isDesktop ? 20 : 0,
         animation: 'fadeIn .2s var(--ease)',
       }}
-      onClick={onClose}
+      // 바깥 클릭으로 실수로 입력 내용이 사라지는 것 방지 — X 버튼 또는 ESC 키로만 닫힘
     >
       <div
         className={isDesktop ? 'pop-in' : 'slide-up'}
@@ -47,7 +47,6 @@ export default function BottomSheet({ children, onClose, maxWidth = 480 }) {
           overflowY: 'auto',
           boxShadow: 'var(--sh-lg)',
         }}
-        onClick={(e) => e.stopPropagation()}
       >
         {!isDesktop && (
           <div style={{
