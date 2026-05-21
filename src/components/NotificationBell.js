@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback, useRef, useId } from 'react';
 import Link from 'next/link';
 import { useApp } from '@/context/AppContext';
 import { formatRelative } from '@/lib/format';
@@ -18,6 +18,7 @@ export default function NotificationBell({ inline = false }) {
   const [items, setItems] = useState([]);
   const [open, setOpen] = useState(false);
   const dropdownRef = useRef(null);
+  const instanceId = useId();
 
   const load = useCallback(async () => {
     if (!user) return;
@@ -34,15 +35,17 @@ export default function NotificationBell({ inline = false }) {
 
   useEffect(() => {
     if (!user) return;
+    // useId 로 인스턴스마다 채널 이름 unique 화 (mobile/desktop 동시 렌더링 시 충돌 방지)
+    const channelName = `notifications:${user.id}${instanceId}`;
     const ch = supabase
-      .channel(`notifications:${user.id}`)
+      .channel(channelName)
       .on('postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${user.id}` },
         () => load()
       )
       .subscribe();
     return () => { supabase.removeChannel(ch); };
-  }, [supabase, user, load]);
+  }, [supabase, user, load, instanceId]);
 
   useEffect(() => {
     function onDocClick(e) {

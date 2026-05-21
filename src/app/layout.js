@@ -2,7 +2,7 @@ import './globals.css';
 
 export const metadata = {
   title: 'Counter',
-  description: '나울·녹턴 통합 매장 운영 플랫폼',
+  description: '맥클린 사업장 운영 ERP',
   manifest: '/manifest.json',
 };
 

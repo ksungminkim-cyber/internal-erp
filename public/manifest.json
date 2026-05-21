@@ -1,7 +1,7 @@
 {
   "name": "Counter",
   "short_name": "Counter",
-  "description": "매장 운영 통합 플랫폼",
+  "description": "맥클린 사업장 운영 ERP",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#f7f8fa",

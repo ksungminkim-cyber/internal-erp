@@ -70,7 +70,7 @@ function LoginForm() {
         </div>
         <h1 className="h1" style={{ fontSize: 30 }}>Counter</h1>
         <p className="text-secondary" style={{ fontSize: 14, marginTop: 8, fontWeight: 500 }}>
-          매장 운영 플랫폼
+          맥클린 사업장 운영 ERP
         </p>
       </div>
 
