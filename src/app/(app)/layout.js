@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 import { AppProvider } from '@/context/AppContext';
 import BottomNav from '@/components/BottomNav';
 import Sidebar from '@/components/Sidebar';
+import WelcomeModal from '@/components/WelcomeModal';
 
 export default async function AppLayout({ children }) {
   const supabase = await createClient();
@@ -14,6 +15,7 @@ export default async function AppLayout({ children }) {
       <Sidebar />
       <div className="app-shell">{children}</div>
       <BottomNav />
+      <WelcomeModal />
     </AppProvider>
   );
 }

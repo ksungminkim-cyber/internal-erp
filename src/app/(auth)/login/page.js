@@ -61,16 +61,16 @@ function LoginForm() {
             borderRadius: 22,
             background: 'var(--grad-accent)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            color: '#fff', fontSize: 28, fontWeight: 800,
+            color: '#fff', fontSize: 36, fontWeight: 800,
             boxShadow: 'var(--sh-accent)',
             letterSpacing: '-0.04em',
           }}
         >
-          ERP
+          C
         </div>
-        <h1 className="h1" style={{ fontSize: 30 }}>사내 ERP</h1>
+        <h1 className="h1" style={{ fontSize: 30 }}>Counter</h1>
         <p className="text-secondary" style={{ fontSize: 14, marginTop: 8, fontWeight: 500 }}>
-          나울 · 녹턴 통합 관리
+          매장 운영 플랫폼
         </p>
       </div>
 

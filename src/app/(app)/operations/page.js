@@ -7,6 +7,7 @@ import PageHeader from '@/components/PageHeader';
 import {
   Calendar, ClipboardCheck, ListTodo, Package, TrendingUp, Megaphone,
   AlertCircle, Sparkles, Wrench, BookOpen, MessageCircle, BarChart3, UserCog, Lock,
+  Target, MessageSquare,
 } from 'lucide-react';
 
 export default function OperationsMenu() {
@@ -139,10 +140,12 @@ export default function OperationsMenu() {
         <section className="stack stack-3">
           <h2 className="h3">매출 · 인사이트</h2>
           <div className="grid-4">
-            <OpsCard href="/sales"          icon={TrendingUp} label="매출"       desc="일별 매출"    accent="success" />
-            <OpsCard href="/reports"        icon={BarChart3}  label="월별 리포트" desc="통합 대시보드" accent="accent" />
+            <OpsCard href="/sales"          icon={TrendingUp} label="매출"       desc="일별 매출"      accent="success" />
+            <OpsCard href="/kpis"           icon={Target}     label="KPI · OPI"  desc="목표·실적 추적"  accent="violet" />
+            <OpsCard href="/reports"        icon={BarChart3}  label="월별 리포트" desc="통합 대시보드"  accent="accent" />
             <OpsCard href="/announcements"  icon={Megaphone}  label="공지사항"   desc="전직원 공지"
               accent="neutral" badge={stats.unreadAnn > 0 ? `${stats.unreadAnn} 신규` : null} urgent={stats.unreadAnn > 0} />
+            <OpsCard href="/suggestions"    icon={MessageSquare} label="건의함" desc="본사로 의견 전달" accent="mint" />
           </div>
         </section>
 

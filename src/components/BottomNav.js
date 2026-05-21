@@ -7,7 +7,7 @@ import { Home, Clock, LayoutGrid, FileText, User } from 'lucide-react';
 const TABS = [
   { href: '/home', label: '홈', icon: Home },
   { href: '/attendance', label: '근태', icon: Clock },
-  { href: '/operations', label: '운영', icon: LayoutGrid, matches: ['/operations', '/schedule', '/handover', '/checklists', '/inventory', '/sales', '/announcements', '/equipment', '/recipes', '/complaints', '/reports', '/members', '/closing'] },
+  { href: '/operations', label: '운영', icon: LayoutGrid, matches: ['/operations', '/schedule', '/handover', '/checklists', '/inventory', '/sales', '/announcements', '/equipment', '/recipes', '/complaints', '/reports', '/members', '/closing', '/kpis', '/suggestions'] },
   { href: '/approvals', label: '결재', icon: FileText },
   { href: '/me', label: '내정보', icon: User },
 ];

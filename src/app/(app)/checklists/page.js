@@ -5,7 +5,8 @@ import { useRouter } from 'next/navigation';
 import { useApp } from '@/context/AppContext';
 import PageHeader from '@/components/PageHeader';
 import BottomSheet from '@/components/BottomSheet';
-import { ChevronLeft, ListTodo, Check, Plus, X, Trash2, Edit3, Sun, Moon, Repeat } from 'lucide-react';
+import { ChevronLeft, ListTodo, Check, Plus, X, Trash2, Edit3, Sun, Moon, Repeat, Calendar } from 'lucide-react';
+import { isChecklistDueToday, frequencyLabel } from '@/lib/checklist';
 
 const TYPE_META = {
   open:    { label: '오픈',  icon: Sun,    tag: 'tag-warning' },
@@ -116,9 +117,15 @@ export default function ChecklistsPage() {
                       <TypeIcon size={22} />
                     </div>
                     <div style={{ flex: 1 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                         <span className="h3">{t.name}</span>
                         <span className={`tag ${meta.tag}`}>{meta.label}</span>
+                        <span className="tag" style={{ fontSize: 10 }}>
+                          <Calendar size={10} /> {frequencyLabel(t)}
+                        </span>
+                        {isChecklistDueToday(t) && (
+                          <span className="tag tag-accent" style={{ fontSize: 10 }}>오늘</span>
+                        )}
                       </div>
                       <div className="text-muted" style={{ fontSize: 12, marginTop: 4 }}>
                         {done}/{total} 완료
@@ -286,10 +293,18 @@ function ChecklistRunner({ template, completion, supabase, userId, workplaceId, 
   );
 }
 
+const DOW_OPTIONS = [
+  { v: 1, label: '월' }, { v: 2, label: '화' }, { v: 3, label: '수' },
+  { v: 4, label: '목' }, { v: 5, label: '금' }, { v: 6, label: '토' }, { v: 0, label: '일' },
+];
+
 function ChecklistEditor({ template, supabase, workplaceId, onClose, onSaved }) {
   const isEdit = !!template?.id;
   const [name, setName] = useState(template?.name ?? '');
   const [type, setType] = useState(template?.type ?? 'open');
+  const [frequency, setFrequency] = useState(template?.frequency ?? 'daily');
+  const [dayOfWeek, setDayOfWeek] = useState(template?.day_of_week ?? 1);
+  const [dayOfMonth, setDayOfMonth] = useState(template?.day_of_month ?? 1);
   const [items, setItems] = useState(
     (template?.checklist_items ?? []).map((i) => ({ id: i.id, text: i.text, order_idx: i.order_idx, required: i.required }))
   );
@@ -314,18 +329,25 @@ function ChecklistEditor({ template, supabase, workplaceId, onClose, onSaved }) 
 
     setSaving(true);
     try {
+      const meta = {
+        name: name.trim(),
+        type,
+        frequency,
+        day_of_week: frequency === 'weekly' ? Number(dayOfWeek) : null,
+        day_of_month: frequency === 'monthly' ? Number(dayOfMonth) : null,
+      };
       let templateId = template?.id;
       if (isEdit) {
         const { error } = await supabase
           .from('checklist_templates')
-          .update({ name: name.trim(), type })
+          .update(meta)
           .eq('id', templateId);
         if (error) throw error;
         await supabase.from('checklist_items').delete().eq('template_id', templateId);
       } else {
         const { data, error } = await supabase
           .from('checklist_templates')
-          .insert({ workplace_id: workplaceId, name: name.trim(), type })
+          .insert({ workplace_id: workplaceId, ...meta })
           .select('id')
           .single();
         if (error) throw error;
@@ -382,6 +404,57 @@ function ChecklistEditor({ template, supabase, workplaceId, onClose, onSaved }) 
           </button>
         ))}
       </div>
+
+      <label className="label" style={{ marginTop: 12 }}>주기</label>
+      <div className="segment" style={{ width: '100%' }}>
+        {[
+          { v: 'daily', l: '매일' },
+          { v: 'weekly', l: '매주' },
+          { v: 'monthly', l: '매월' },
+          { v: 'custom', l: '수시' },
+        ].map((f) => (
+          <button
+            key={f.v}
+            type="button"
+            className={`segment-item ${frequency === f.v ? 'is-active' : ''}`}
+            onClick={() => setFrequency(f.v)}
+            style={{ flex: 1 }}
+          >
+            {f.l}
+          </button>
+        ))}
+      </div>
+      {frequency === 'weekly' && (
+        <div style={{ marginTop: 8 }}>
+          <label className="label">요일</label>
+          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+            {DOW_OPTIONS.map((d) => (
+              <button
+                key={d.v}
+                type="button"
+                onClick={() => setDayOfWeek(d.v)}
+                className={`tag ${Number(dayOfWeek) === d.v ? 'tag-accent' : ''}`}
+                style={{ cursor: 'pointer', minWidth: 36, justifyContent: 'center' }}
+              >
+                {d.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+      {frequency === 'monthly' && (
+        <div style={{ marginTop: 8 }}>
+          <label className="label">매월 며칠</label>
+          <input
+            className="input num"
+            type="number"
+            min={1} max={31}
+            value={dayOfMonth}
+            onChange={(e) => setDayOfMonth(e.target.value)}
+            placeholder="1~31"
+          />
+        </div>
+      )}
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 16, marginBottom: 8 }}>
         <label className="label" style={{ margin: 0 }}>항목</label>

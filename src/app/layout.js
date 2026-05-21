@@ -1,8 +1,8 @@
 import './globals.css';
 
 export const metadata = {
-  title: '사내 ERP',
-  description: '나울·녹턴 통합 근태·전자결재 플랫폼',
+  title: 'Counter',
+  description: '나울·녹턴 통합 매장 운영 플랫폼',
   manifest: '/manifest.json',
 };
 

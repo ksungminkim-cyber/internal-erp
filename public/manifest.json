@@ -1,7 +1,7 @@
 {
-  "name": "Internal ERP",
-  "short_name": "ERP",
-  "description": "사내 근태·전자결재·공지 플랫폼",
+  "name": "Counter",
+  "short_name": "Counter",
+  "description": "매장 운영 통합 플랫폼",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#f7f8fa",

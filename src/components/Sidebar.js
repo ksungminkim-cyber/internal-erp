@@ -7,6 +7,7 @@ import {
   Home, Clock, FileText, User, Building2, Calendar, ClipboardCheck,
   ListTodo, Package, TrendingUp, Megaphone, Wrench, BookOpen,
   MessageCircle, BarChart3, LogOut, Crown, Shield, ChevronDown, Lock,
+  Target, MessageSquare,
 } from 'lucide-react';
 import { useState } from 'react';
 
@@ -25,8 +26,10 @@ const OPS_LINKS = [
   { href: '/recipes', label: '레시피', icon: BookOpen },
   { href: '/complaints', label: '고객 클레임', icon: MessageCircle },
   { href: '/sales', label: '매출', icon: TrendingUp },
+  { href: '/kpis', label: 'KPI · OPI', icon: Target },
   { href: '/reports', label: '월별 리포트', icon: BarChart3 },
   { href: '/announcements', label: '공지사항', icon: Megaphone },
+  { href: '/suggestions', label: '건의함', icon: MessageSquare },
 ];
 
 const ADMIN_LINKS = [
@@ -66,15 +69,16 @@ export default function Sidebar() {
             width: 36, height: 36, borderRadius: 10,
             background: 'var(--grad-accent)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            color: '#fff', fontWeight: 800, fontSize: 12,
+            color: '#fff', fontWeight: 800, fontSize: 16,
             boxShadow: 'var(--sh-sm)',
+            letterSpacing: '-0.04em',
           }}
         >
-          ERP
+          C
         </div>
         <div>
-          <div className="h4" style={{ fontSize: 14 }}>사내 ERP</div>
-          <div className="text-muted" style={{ fontSize: 11 }}>나울 · 녹턴</div>
+          <div className="h4" style={{ fontSize: 14 }}>Counter</div>
+          <div className="text-muted" style={{ fontSize: 11 }}>매장 운영 플랫폼</div>
         </div>
       </div>
 
