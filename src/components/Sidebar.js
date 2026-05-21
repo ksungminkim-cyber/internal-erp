@@ -6,7 +6,7 @@ import { useApp } from '@/context/AppContext';
 import {
   Home, Clock, FileText, User, Building2, Calendar, ClipboardCheck,
   ListTodo, Package, TrendingUp, Megaphone, Wrench, BookOpen,
-  MessageCircle, BarChart3, LogOut, Crown, Shield, ChevronDown,
+  MessageCircle, BarChart3, LogOut, Crown, Shield, ChevronDown, Lock,
 } from 'lucide-react';
 import { useState } from 'react';
 
@@ -30,6 +30,7 @@ const OPS_LINKS = [
 ];
 
 const ADMIN_LINKS = [
+  { href: '/closing', label: '월 마감', icon: Lock },
   { href: '/members', label: '직원 관리', icon: User },
 ];
 

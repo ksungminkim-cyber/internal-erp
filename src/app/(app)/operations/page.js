@@ -6,7 +6,7 @@ import { useApp } from '@/context/AppContext';
 import PageHeader from '@/components/PageHeader';
 import {
   Calendar, ClipboardCheck, ListTodo, Package, TrendingUp, Megaphone,
-  AlertCircle, Sparkles, Wrench, BookOpen, MessageCircle, BarChart3, UserCog,
+  AlertCircle, Sparkles, Wrench, BookOpen, MessageCircle, BarChart3, UserCog, Lock,
 } from 'lucide-react';
 
 export default function OperationsMenu() {
@@ -150,7 +150,8 @@ export default function OperationsMenu() {
           <section className="stack stack-3">
             <h2 className="h3">관리</h2>
             <div className="grid-4">
-              <OpsCard href="/members" icon={UserCog} label="직원 관리" desc="가입·배정·역할" accent="accent" />
+              <OpsCard href="/closing" icon={Lock} label="월 마감" desc="손익·인건비·지출" accent="accent" />
+              <OpsCard href="/members" icon={UserCog} label="직원 관리" desc="가입·배정·시급" accent="neutral" />
             </div>
           </section>
         )}

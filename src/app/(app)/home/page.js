@@ -135,67 +135,63 @@ export default function HomePage() {
       <PageHeader title={`${greeting},`} subtitle={`${profile?.name ?? ''}님 · ${today}`} large />
 
       <main className="fade-in page-main" style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-        {/* 긴급 알림 */}
+        {/* 긴급 알림 — 간결한 띠 형태 */}
         {urgentCount > 0 && (
-          <section className="bento warm pop-in" style={{ minHeight: 90 }}>
-            <div className="bento-decor" />
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <AlertTriangle size={26} />
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 13, fontWeight: 700 }}>확인이 필요해요</div>
-                <div style={{ fontSize: 12, marginTop: 4, opacity: 0.92, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                  {stats.inbox > 0 && <Link href="/approvals" style={{ color: '#fff', textDecoration: 'underline' }}>결재 {stats.inbox}건</Link>}
-                  {stats.lowStock > 0 && <Link href="/inventory" style={{ color: '#fff', textDecoration: 'underline' }}>발주 {stats.lowStock}품목</Link>}
-                  {stats.handoverUnresolved > 0 && <Link href="/handover" style={{ color: '#fff', textDecoration: 'underline' }}>인수인계 {stats.handoverUnresolved}건</Link>}
-                </div>
-              </div>
+          <section
+            className="card"
+            style={{
+              borderLeft: '3px solid var(--warning)',
+              background: 'var(--warning-soft)',
+              boxShadow: 'none',
+              padding: '12px 16px',
+              display: 'flex', alignItems: 'center', gap: 10,
+            }}
+          >
+            <AlertTriangle size={18} color="#c2410c" />
+            <div style={{ flex: 1, fontSize: 13, display: 'flex', flexWrap: 'wrap', gap: 12 }}>
+              {stats.inbox > 0 && <Link href="/approvals" style={{ color: '#c2410c', fontWeight: 700, textDecoration: 'none' }}>결재 {stats.inbox}건</Link>}
+              {stats.lowStock > 0 && <Link href="/inventory" style={{ color: '#c2410c', fontWeight: 700, textDecoration: 'none' }}>발주 {stats.lowStock}품목</Link>}
+              {stats.handoverUnresolved > 0 && <Link href="/handover" style={{ color: '#c2410c', fontWeight: 700, textDecoration: 'none' }}>인수인계 {stats.handoverUnresolved}건</Link>}
             </div>
           </section>
         )}
 
-        {/* Hero stats */}
-        <section className="stack stack-3 stagger">
+        {/* 핵심 수치 — 단순 카드 (보여주기식 그라데이션 제거) */}
+        <section className="grid-3">
           <Link href="/sales" style={{ textDecoration: 'none' }}>
-            <div className="bento accent interactive" style={{ minHeight: 130 }}>
-              <div className="bento-decor" />
-              <div className="bento-label">
-                <TrendingUp size={14} /> 오늘 매출
+            <div className="card compact interactive" style={{ minHeight: 100 }}>
+              <div className="text-muted" style={{ fontSize: 11, fontWeight: 700, letterSpacing: 0.04, textTransform: 'uppercase' }}>오늘 매출</div>
+              <div className="num" style={{ fontSize: 24, fontWeight: 800, marginTop: 6 }}>
+                {formatCurrency(stats.todaySales)}<span style={{ fontSize: 12, color: 'var(--text-muted)', marginLeft: 2 }}>원</span>
               </div>
-              <div className="bento-value num">
-                {formatCurrency(stats.todaySales)}<span style={{ fontSize: 14, opacity: 0.85, marginLeft: 4 }}>원</span>
-              </div>
-              <div className="bento-sub">{currentWorkplace?.name}</div>
+              <div className="text-muted" style={{ fontSize: 11, marginTop: 4 }}>{currentWorkplace?.name}</div>
             </div>
           </Link>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Link href="/attendance" style={{ textDecoration: 'none' }}>
-              <div className="bento interactive" style={{ minHeight: 110 }}>
-                <div className="bento-label text-secondary">
-                  <Users size={14} /> 매장 인원
-                </div>
-                <div className="bento-value sm num">
-                  {stats.working}<span style={{ fontSize: 14, color: 'var(--text-muted)', marginLeft: 4 }}>명</span>
-                </div>
-                <div className="bento-sub text-muted">오늘 출근 {stats.todayCheckins}명</div>
+          <Link href="/attendance" style={{ textDecoration: 'none' }}>
+            <div className="card compact interactive" style={{ minHeight: 100 }}>
+              <div className="text-muted" style={{ fontSize: 11, fontWeight: 700, letterSpacing: 0.04, textTransform: 'uppercase' }}>매장 인원</div>
+              <div className="num" style={{ fontSize: 24, fontWeight: 800, marginTop: 6 }}>
+                {stats.working}<span style={{ fontSize: 12, color: 'var(--text-muted)', marginLeft: 2 }}>명</span>
               </div>
-            </Link>
+              <div className="text-muted" style={{ fontSize: 11, marginTop: 4 }}>오늘 출근 {stats.todayCheckins}명</div>
+            </div>
+          </Link>
 
-            <Link href="/approvals" style={{ textDecoration: 'none' }}>
-              <div className={`bento interactive ${stats.inbox > 0 ? 'violet' : ''}`} style={{ minHeight: 110 }}>
-                {stats.inbox > 0 && <div className="bento-decor" />}
-                <div className="bento-label" style={{ color: stats.inbox > 0 ? undefined : 'var(--text-secondary)' }}>
-                  <FileText size={14} /> 결재 대기
-                </div>
-                <div className="bento-value sm num" style={{ color: stats.inbox > 0 ? '#fff' : 'var(--text)' }}>
-                  {stats.inbox}<span style={{ fontSize: 14, opacity: 0.7, marginLeft: 4 }}>건</span>
-                </div>
-                <div className="bento-sub" style={{ color: stats.inbox > 0 ? 'rgba(255,255,255,0.85)' : 'var(--text-muted)' }}>
-                  {stats.inbox > 0 ? '확인 필요' : '모두 처리됨'}
-                </div>
+          <Link href="/approvals" style={{ textDecoration: 'none' }}>
+            <div className="card compact interactive" style={{ minHeight: 100 }}>
+              <div className="text-muted" style={{ fontSize: 11, fontWeight: 700, letterSpacing: 0.04, textTransform: 'uppercase' }}>결재 대기</div>
+              <div className="num" style={{
+                fontSize: 24, fontWeight: 800, marginTop: 6,
+                color: stats.inbox > 0 ? 'var(--accent)' : 'var(--text)',
+              }}>
+                {stats.inbox}<span style={{ fontSize: 12, color: 'var(--text-muted)', marginLeft: 2 }}>건</span>
               </div>
-            </Link>
-          </div>
+              <div className="text-muted" style={{ fontSize: 11, marginTop: 4 }}>
+                {stats.inbox > 0 ? '확인 필요' : '모두 처리됨'}
+              </div>
+            </div>
+          </Link>
         </section>
 
         {/* 빠른 액션 */}

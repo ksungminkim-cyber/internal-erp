@@ -6,7 +6,8 @@ import { useApp } from '@/context/AppContext';
 import PageHeader from '@/components/PageHeader';
 import Avatar from '@/components/Avatar';
 import { formatRelative, formatCurrency } from '@/lib/format';
-import { Plus, CheckCircle2, XCircle, Clock, Inbox } from 'lucide-react';
+import { downloadCsv, fmtDate } from '@/lib/csvExport';
+import { Plus, CheckCircle2, XCircle, Clock, Inbox, Download } from 'lucide-react';
 
 const STATUS_META = {
   pending:   { label: '진행중', tag: 'tag-warning' },
@@ -79,6 +80,26 @@ export default function ApprovalsListPage() {
     return () => { supabase.removeChannel(channel); };
   }, [supabase, currentWorkplaceId, load]);
 
+  function exportCsv() {
+    downloadCsv(
+      `approvals_${tab}.csv`,
+      [
+        { key: 'submitted_at', label: '기안일', format: (v) => fmtDate(v) },
+        { key: 'drafter_name', label: '기안자' },
+        { key: 'title', label: '제목' },
+        { key: 'total_amount', label: '금액' },
+        { key: 'status', label: '상태', format: (v) => STATUS_META[v]?.label || v },
+        { key: 'current_step', label: '진행단계' },
+        { key: 'step_total', label: '전체단계' },
+      ],
+      items.map((r) => ({
+        ...r,
+        drafter_name: r.drafter?.name ?? '',
+        step_total: r.approval_steps?.length ?? 0,
+      }))
+    );
+  }
+
   return (
     <>
       <PageHeader title="전자결재" subtitle="지출결의서 · 휴가 등 사내 결재" />
@@ -96,6 +117,9 @@ export default function ApprovalsListPage() {
               </button>
             ))}
           </div>
+          <button onClick={exportCsv} className="btn btn-soft btn-sm" disabled={!items.length}>
+            <Download size={14} /> CSV
+          </button>
         </div>
 
         {loading ? (

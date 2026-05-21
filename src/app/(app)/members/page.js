@@ -6,10 +6,11 @@ import { useApp } from '@/context/AppContext';
 import PageHeader from '@/components/PageHeader';
 import Avatar from '@/components/Avatar';
 import BottomSheet from '@/components/BottomSheet';
-import { formatRelative } from '@/lib/format';
+import { formatRelative, formatCurrency } from '@/lib/format';
+import { downloadCsv } from '@/lib/csvExport';
 import {
   ChevronLeft, UserPlus, X, Crown, Shield, User as UserIcon,
-  MoreVertical, Trash2, Building2, Sparkles,
+  MoreVertical, Trash2, Building2, Sparkles, Download,
 } from 'lucide-react';
 
 const ROLE_META = {
@@ -86,13 +87,47 @@ export default function MembersPage() {
   const unassigned = allProfiles.filter((p) => !(activeByUser.get(p.user_id)?.length));
   const assigned = allProfiles.filter((p) => activeByUser.get(p.user_id)?.length);
 
+  function exportCsv() {
+    const rows = assigned.map((p) => {
+      const mems = activeByUser.get(p.user_id) ?? [];
+      const wpNames = mems
+        .map((m) => `${workplaces.find((w) => w.id === m.workplace_id)?.name ?? '-'}(${ROLE_META[m.role]?.label ?? m.role})`)
+        .join(' / ');
+      return {
+        name: p.name ?? '',
+        phone: p.phone ?? '',
+        hourly_wage: p.hourly_wage ?? 0,
+        workplaces: wpNames,
+        created_at: p.created_at,
+      };
+    });
+    downloadCsv(
+      'members.csv',
+      [
+        { key: 'name', label: '이름' },
+        { key: 'phone', label: '연락처' },
+        { key: 'hourly_wage', label: '시급(원)' },
+        { key: 'workplaces', label: '소속 사업장 / 역할' },
+        { key: 'created_at', label: '가입일', format: (v) => v?.slice(0, 10) },
+      ],
+      rows
+    );
+  }
+
   return (
     <>
       <PageHeader
         title="직원 관리"
-        subtitle="회원가입한 직원에게 사업장·역할 배정"
+        subtitle="회원가입한 직원에게 사업장·역할·시급 배정"
         hideSwitcher
-        action={<button onClick={() => router.back()} className="btn btn-ghost btn-icon"><ChevronLeft size={20} /></button>}
+        action={
+          <div style={{ display: 'flex', gap: 6 }}>
+            <button onClick={exportCsv} className="btn btn-soft btn-sm" disabled={!assigned.length}>
+              <Download size={14} /> CSV
+            </button>
+            <button onClick={() => router.back()} className="btn btn-ghost btn-icon"><ChevronLeft size={20} /></button>
+          </div>
+        }
       />
 
       <main className="fade-in page-main" style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -202,7 +237,7 @@ export default function MembersPage() {
                       </div>
                     </div>
 
-                    <div style={{ marginTop: 10, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                    <div style={{ marginTop: 10, display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
                       {mems.map((m) => {
                         const wp = workplaces.find((w) => w.id === m.workplace_id);
                         const r = ROLE_META[m.role] ?? ROLE_META.staff;
@@ -216,6 +251,11 @@ export default function MembersPage() {
                           </span>
                         );
                       })}
+                      {Number(p.hourly_wage) > 0 && (
+                        <span className="tag" style={{ marginLeft: 'auto', fontWeight: 700 }}>
+                          시급 <span className="num">{formatCurrency(p.hourly_wage)}</span>원
+                        </span>
+                      )}
                     </div>
                   </div>
                 );
@@ -275,6 +315,7 @@ function AssignDialog({ profile, mode, workplaces, currentMemberships, supabase,
     });
     return s;
   });
+  const [hourlyWage, setHourlyWage] = useState(profile?.hourly_wage ?? 0);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
 
@@ -289,6 +330,14 @@ function AssignDialog({ profile, mode, workplaces, currentMemberships, supabase,
     setError(null);
     setSaving(true);
     try {
+      // 시급 변경되었으면 profiles 업데이트
+      if (Number(hourlyWage) !== Number(profile?.hourly_wage ?? 0)) {
+        const { error } = await supabase
+          .from('profiles')
+          .update({ hourly_wage: Number(hourlyWage) || 0, updated_at: new Date().toISOString() })
+          .eq('user_id', profile.user_id);
+        if (error) throw error;
+      }
       for (const w of workplaces) {
         const s = state[w.id];
         const existing = currentMemberships.find((m) => m.workplace_id === w.id);
@@ -386,6 +435,21 @@ function AssignDialog({ profile, mode, workplaces, currentMemberships, supabase,
             </div>
           );
         })}
+      </div>
+
+      <div style={{ marginTop: 16, padding: 14, borderRadius: 14, background: 'var(--surface-soft)' }}>
+        <label className="label">시급 (원/시간)</label>
+        <input
+          className="input num"
+          type="number"
+          inputMode="numeric"
+          value={hourlyWage}
+          onChange={(e) => setHourlyWage(e.target.value)}
+          placeholder="예) 10500"
+        />
+        <p className="text-muted" style={{ fontSize: 11, marginTop: 6 }}>
+          월 마감 인건비 자동 계산에 사용됩니다 (근무시간 × 시급)
+        </p>
       </div>
 
       {error && (

@@ -6,7 +6,8 @@ import { useApp } from '@/context/AppContext';
 import PageHeader from '@/components/PageHeader';
 import BottomSheet from '@/components/BottomSheet';
 import { formatCurrency } from '@/lib/format';
-import { ChevronLeft, ChevronRight, TrendingUp, Plus, X, Info, Calendar, CreditCard, Banknote } from 'lucide-react';
+import { downloadCsv } from '@/lib/csvExport';
+import { ChevronLeft, ChevronRight, TrendingUp, Plus, X, Info, Calendar, CreditCard, Banknote, Download } from 'lucide-react';
 
 function addDays(d, n) { const x = new Date(d); x.setDate(x.getDate() + n); return x; }
 function ymd(d) { return d.toISOString().slice(0, 10); }
@@ -68,6 +69,23 @@ export default function SalesPage() {
     return arr;
   }, [rows, today]);
 
+  function exportCsv() {
+    downloadCsv(
+      `sales_${ymd(start)}_${ymd(today)}.csv`,
+      [
+        { key: 'sales_date', label: '날짜' },
+        { key: 'total_amount', label: '총매출' },
+        { key: 'card_amount', label: '카드' },
+        { key: 'cash_amount', label: '현금' },
+        { key: 'other_amount', label: '기타' },
+        { key: 'transaction_count', label: '거래건수' },
+        { key: 'source', label: '입력방식' },
+        { key: 'notes', label: '메모' },
+      ],
+      rows
+    );
+  }
+
   return (
     <>
       <PageHeader
@@ -75,7 +93,12 @@ export default function SalesPage() {
         subtitle="일별 매출 현황"
         hideSwitcher
         action={
-          <button onClick={() => router.back()} className="btn btn-ghost btn-icon"><ChevronLeft size={20} /></button>
+          <div style={{ display: 'flex', gap: 6 }}>
+            <button onClick={exportCsv} className="btn btn-soft btn-sm" disabled={!rows.length}>
+              <Download size={14} /> CSV
+            </button>
+            <button onClick={() => router.back()} className="btn btn-ghost btn-icon"><ChevronLeft size={20} /></button>
+          </div>
         }
       />
 
