@@ -39,9 +39,15 @@ export default function MePage() {
   }
 
   async function logout() {
-    await supabase.auth.signOut();
-    router.replace('/login');
-    router.refresh();
+    try {
+      await supabase.auth.signOut();
+    } catch (e) {
+      console.warn('signOut error', e);
+    }
+    // hard navigation — 세션 쿠키 정리 보장
+    if (typeof window !== 'undefined') {
+      window.location.href = '/login';
+    }
   }
 
   return (

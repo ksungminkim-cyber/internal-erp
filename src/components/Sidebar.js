@@ -55,9 +55,14 @@ export default function Sidebar() {
   const RoleIcon = r.icon;
 
   async function logout() {
-    await supabase.auth.signOut();
-    router.replace('/login');
-    router.refresh();
+    try {
+      await supabase.auth.signOut();
+    } catch (e) {
+      console.warn('signOut error', e);
+    }
+    if (typeof window !== 'undefined') {
+      window.location.href = '/login';
+    }
   }
 
   return (
