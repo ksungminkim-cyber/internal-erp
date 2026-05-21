@@ -39,24 +39,13 @@ export default function MePage() {
   }
 
   async function logout() {
-    try {
-      await supabase.auth.signOut({ scope: 'global' });
-    } catch (e) {
-      console.warn('signOut error', e);
-    }
     if (typeof window !== 'undefined') {
       try {
         localStorage.clear();
         sessionStorage.clear();
-        document.cookie.split(';').forEach((c) => {
-          const name = c.split('=')[0].trim();
-          if (name.startsWith('sb-')) {
-            document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/`;
-          }
-        });
       } catch {}
-      window.location.replace('/login');
     }
+    window.location.href = '/api/auth/logout';
   }
 
   return (

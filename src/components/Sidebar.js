@@ -58,25 +58,15 @@ export default function Sidebar() {
   const RoleIcon = r.icon;
 
   async function logout() {
-    try {
-      await supabase.auth.signOut({ scope: 'global' });
-    } catch (e) {
-      console.warn('signOut error', e);
-    }
+    // 클라이언트 캐시 정리
     if (typeof window !== 'undefined') {
       try {
         localStorage.clear();
         sessionStorage.clear();
-        // supabase 쿠키 강제 제거 (브라우저별 차이 대비)
-        document.cookie.split(';').forEach((c) => {
-          const name = c.split('=')[0].trim();
-          if (name.startsWith('sb-')) {
-            document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/`;
-          }
-        });
       } catch {}
-      window.location.replace('/login');
     }
+    // 서버 라우트가 쿠키 제거 + redirect 처리 (HttpOnly 쿠키는 서버에서만 제거 가능)
+    window.location.href = '/api/auth/logout';
   }
 
   return (
