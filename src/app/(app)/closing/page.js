@@ -17,7 +17,10 @@ function ymd(d) { return d.toISOString().slice(0, 10); }
 export default function ClosingPage() {
   const router = useRouter();
   const { user, profile, currentWorkplaceId, currentWorkplace, supabase, memberships } = useApp();
-  const isAdmin = profile?.is_super_admin === true || memberships.some((m) => m.role === 'owner');
+  const isAdmin =
+    profile?.is_super_admin === true
+    || profile?.can_close_books === true
+    || memberships.some((m) => m.role === 'owner');
 
   const now = new Date();
   // 기본값: 지난 달 (이번 달이 진행 중일 가능성이 높으므로)

@@ -193,10 +193,11 @@ export default function MembersPage() {
                     <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                       <Avatar name={p.name} userId={p.user_id} />
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                           <div className="h4">{p.name || '이름 없음'}</div>
                           {isMe && <span className="tag tag-accent">나</span>}
                           {p.is_super_admin && <span className="tag tag-warning"><Crown size={10} /> 전체관리</span>}
+                          {p.can_close_books && !p.is_super_admin && <span className="tag tag-mint">마감권한</span>}
                         </div>
                         <div className="text-muted" style={{ fontSize: 12, marginTop: 2 }}>
                           {p.phone || '연락처 없음'}
@@ -316,6 +317,7 @@ function AssignDialog({ profile, mode, workplaces, currentMemberships, supabase,
     return s;
   });
   const [hourlyWage, setHourlyWage] = useState(profile?.hourly_wage ?? 0);
+  const [canCloseBooks, setCanCloseBooks] = useState(profile?.can_close_books === true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
 
@@ -330,11 +332,17 @@ function AssignDialog({ profile, mode, workplaces, currentMemberships, supabase,
     setError(null);
     setSaving(true);
     try {
-      // 시급 변경되었으면 profiles 업데이트
-      if (Number(hourlyWage) !== Number(profile?.hourly_wage ?? 0)) {
+      // 시급 또는 마감권한 변경되었으면 profiles 업데이트
+      const wageChanged = Number(hourlyWage) !== Number(profile?.hourly_wage ?? 0);
+      const permChanged = canCloseBooks !== (profile?.can_close_books === true);
+      if (wageChanged || permChanged) {
         const { error } = await supabase
           .from('profiles')
-          .update({ hourly_wage: Number(hourlyWage) || 0, updated_at: new Date().toISOString() })
+          .update({
+            hourly_wage: Number(hourlyWage) || 0,
+            can_close_books: canCloseBooks,
+            updated_at: new Date().toISOString(),
+          })
           .eq('user_id', profile.user_id);
         if (error) throw error;
       }
@@ -451,6 +459,32 @@ function AssignDialog({ profile, mode, workplaces, currentMemberships, supabase,
           월 마감 인건비 자동 계산에 사용됩니다 (근무시간 × 시급)
         </p>
       </div>
+
+      <label
+        style={{
+          display: 'flex', alignItems: 'center', gap: 10,
+          marginTop: 12, padding: 14, borderRadius: 14,
+          background: canCloseBooks ? 'var(--accent-soft)' : 'var(--surface-soft)',
+          border: canCloseBooks ? '1.5px solid var(--accent)' : '1.5px solid transparent',
+          cursor: 'pointer',
+          transition: 'all var(--t-sm) var(--ease)',
+        }}
+      >
+        <input
+          type="checkbox"
+          checked={canCloseBooks}
+          onChange={(e) => setCanCloseBooks(e.target.checked)}
+          style={{ accentColor: 'var(--accent)', width: 18, height: 18 }}
+        />
+        <div style={{ flex: 1 }}>
+          <div className="h4" style={{ fontSize: 14, color: canCloseBooks ? 'var(--accent-strong)' : 'var(--text)' }}>
+            월 마감 권한
+          </div>
+          <p className="text-muted" style={{ fontSize: 11, marginTop: 2 }}>
+            대표 외에 이 직원에게도 월 마감 확정/해제 권한을 부여합니다
+          </p>
+        </div>
+      </label>
 
       {error && (
         <div style={{ marginTop: 12, padding: 10, background: 'var(--danger-soft)', color: 'var(--danger)', borderRadius: 10, fontSize: 13 }}>
