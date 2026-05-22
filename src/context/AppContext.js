@@ -6,7 +6,8 @@ import { createClient } from '@/lib/supabase/client';
 const AppContext = createContext(null);
 
 export function AppProvider({ children, initialUser }) {
-  const supabase = createClient();
+  // 매 렌더마다 새 클라이언트 만들지 않도록 lazy init
+  const [supabase] = useState(() => createClient());
   const [user, setUser] = useState(initialUser ?? null);
   const [profile, setProfile] = useState(null);
   const [memberships, setMemberships] = useState([]);
