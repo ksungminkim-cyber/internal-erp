@@ -12,7 +12,7 @@ const CATEGORY_OPTIONS = ['에스프레소', '브루잉', '라떼/베리에이�
 export default function RecipeDetail({ params }) {
   const { id } = use(params);
   const router = useRouter();
-  const { user, supabase, isManager, profile } = useApp();
+  const { user, supabase, isManager, profile, currentWorkplaceId, memberships } = useApp();
   const isNew = id === 'new';
 
   const [loading, setLoading] = useState(!isNew);
@@ -27,6 +27,8 @@ export default function RecipeDetail({ params }) {
   const [notes, setNotes] = useState('');
   const [ingredients, setIngredients] = useState([{ name: '', qty: '', unit: '', note: '' }]);
   const [steps, setSteps] = useState(['']);
+  const [workplaceId, setWorkplaceId] = useState(currentWorkplaceId ?? '');
+  const [workplaceName, setWorkplaceName] = useState('');
   const [updatedBy, setUpdatedBy] = useState(null);
   const [updatedAt, setUpdatedAt] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -37,7 +39,7 @@ export default function RecipeDetail({ params }) {
     setLoading(true);
     const { data: r } = await supabase
       .from('recipes')
-      .select('*, updater:profiles!recipes_updated_by_fkey(name)')
+      .select('*, updater:profiles!recipes_updated_by_fkey(name), workplaces(name)')
       .eq('id', id)
       .maybeSingle();
     if (r) {
@@ -49,6 +51,8 @@ export default function RecipeDetail({ params }) {
       setNotes(r.notes || '');
       setIngredients(r.ingredients?.length ? r.ingredients : [{ name: '', qty: '', unit: '', note: '' }]);
       setSteps(r.steps?.length ? r.steps : ['']);
+      setWorkplaceId(r.workplace_id ?? '');
+      setWorkplaceName(r.workplaces?.name ?? '');
       setUpdatedBy(r.updater?.name);
       setUpdatedAt(r.updated_at);
     }
@@ -66,6 +70,7 @@ export default function RecipeDetail({ params }) {
 
     setSaving(true);
     const payload = {
+      workplace_id: workplaceId || null,
       name: name.trim(),
       category,
       serving_size: servingSize.trim() || null,
@@ -110,7 +115,7 @@ export default function RecipeDetail({ params }) {
       <>
         <PageHeader
           title={name || '—'}
-          subtitle={category}
+          subtitle={`${category} · ${workplaceName || '전사 공유'}`}
           hideSwitcher
           action={
             <button onClick={() => router.back()} className="btn btn-ghost btn-icon"><ChevronLeft size={20} /></button>
@@ -213,6 +218,17 @@ export default function RecipeDetail({ params }) {
         <section className="card">
           <label className="label">이름</label>
           <input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="예) 카페라떼" />
+
+          <label className="label" style={{ marginTop: 12 }}>적용 매장</label>
+          <select className="input" value={workplaceId} onChange={(e) => setWorkplaceId(e.target.value)}>
+            <option value="">전사 공유 (모든 매장)</option>
+            {memberships.filter((m) => m.workplaces?.name !== '본사').map((m) => (
+              <option key={m.workplace_id} value={m.workplace_id}>{m.workplaces?.name}</option>
+            ))}
+          </select>
+          <p className="text-muted" style={{ fontSize: 11, marginTop: 4 }}>
+            특정 매장 전용으로 만들거나 모든 매장에서 보이도록 전사 공유 선택
+          </p>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 12 }}>
             <div>
