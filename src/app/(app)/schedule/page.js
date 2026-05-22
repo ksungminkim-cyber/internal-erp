@@ -7,7 +7,7 @@ import { useApp } from '@/context/AppContext';
 import PageHeader from '@/components/PageHeader';
 import Avatar from '@/components/Avatar';
 import BottomSheet from '@/components/BottomSheet';
-import { Plus, ChevronLeft, ChevronRight, X, Trash2, Send, CheckCircle2, AlertCircle, Lock, FileText } from 'lucide-react';
+import { Plus, ChevronLeft, ChevronRight, X, Trash2, Send, CheckCircle2, AlertCircle, Lock, FileText, Copy } from 'lucide-react';
 
 const DOW = ['일', '월', '화', '수', '목', '금', '토'];
 
@@ -203,7 +203,16 @@ export default function SchedulePage() {
         subtitle="근무 일정"
         hideSwitcher
         action={
-          <div style={{ display: 'flex', gap: 6 }}>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            {isManager && view === 'month' && !hasApproval && (
+              <button
+                type="button"
+                className="btn btn-soft btn-sm"
+                onClick={() => setEditing({ mode: 'copy_prev_month' })}
+              >
+                <Copy size={14} /> 지난달 복사
+              </button>
+            )}
             {isManager && view === 'month' && unsubmittedCount > 0 && !hasApproval && (
               <button
                 type="button"
@@ -255,15 +264,36 @@ export default function SchedulePage() {
           </div>
         )}
 
-        {/* 시프트 리스트 */}
+        {/* 월간 보기 — 캘린더 그리드 */}
+        {!loading && view === 'month' && (
+          <CalendarGrid
+            anchor={anchor}
+            shifts={shifts}
+            logs={logs}
+            todayStr={todayStr}
+            isManager={isManager}
+            hasApproval={hasApproval}
+            onCellClick={(d) => {
+              const s = new Date(d); s.setHours(9, 0, 0, 0);
+              const e = new Date(d); e.setHours(18, 0, 0, 0);
+              setEditing({ mode: 'shift', start_at: s.toISOString(), end_at: e.toISOString() });
+            }}
+            onShiftClick={(s) => {
+              if (isManager && !s.approval_request_id) {
+                setEditing({ mode: 'shift', ...s });
+              }
+            }}
+          />
+        )}
+
+        {/* 주간 보기 — 기존 카드 리스트 */}
         {loading ? (
           <div className="skeleton" style={{ height: 380 }} />
-        ) : (
+        ) : view === 'week' && (
           <div className="stack stack-2">
             {days.map((d, i) => {
               const dayShifts = shiftsForDate(d);
               const isToday = ymd(d) === todayStr;
-              if (view === 'month' && dayShifts.length === 0) return null; // 월간 보기에서 빈 날 숨김
               return (
                 <div
                   key={i}
@@ -364,6 +394,19 @@ export default function SchedulePage() {
             load();
             router.push(`/approvals/${approvalId}`);
           }}
+        />
+      )}
+
+      {editing?.mode === 'copy_prev_month' && (
+        <CopyPrevMonthDialog
+          year={anchor.getFullYear()}
+          month={anchor.getMonth()}
+          coworkers={coworkers}
+          workplaceId={currentWorkplaceId}
+          userId={user.id}
+          supabase={supabase}
+          onClose={() => setEditing(null)}
+          onSaved={() => { setEditing(null); load(); }}
         />
       )}
     </>
@@ -656,4 +699,296 @@ function toLocalInput(iso) {
   const d = new Date(iso);
   const pad = (n) => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+// ============== 캘린더 그리드 (월간 보기) ==============
+function CalendarGrid({ anchor, shifts, logs, todayStr, isManager, hasApproval, onCellClick, onShiftClick }) {
+  const year = anchor.getFullYear();
+  const month = anchor.getMonth();
+  const firstDay = new Date(year, month, 1);
+  const lastDay = new Date(year, month + 1, 0);
+  const startWeekday = firstDay.getDay();       // 0=일요일
+  const daysInMonth = lastDay.getDate();
+  const totalCells = Math.ceil((startWeekday + daysInMonth) / 7) * 7;
+
+  const cells = [];
+  for (let i = 0; i < totalCells; i++) {
+    const dayNum = i - startWeekday + 1;
+    const inMonth = dayNum >= 1 && dayNum <= daysInMonth;
+    cells.push(inMonth ? new Date(year, month, dayNum) : null);
+  }
+
+  function shiftsForDate(d) {
+    if (!d) return [];
+    const key = ymd(d);
+    return shifts.filter((s) => new Date(s.start_at).toISOString().slice(0, 10) === key);
+  }
+
+  return (
+    <div className="card compact" style={{ padding: 0, overflow: 'hidden' }}>
+      {/* 요일 헤더 */}
+      <div style={{
+        display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)',
+        background: 'var(--surface-soft)',
+        borderBottom: '1px solid var(--border)',
+      }}>
+        {DOW.map((d, i) => (
+          <div key={d} style={{
+            padding: '8px 4px',
+            textAlign: 'center',
+            fontSize: 11, fontWeight: 700,
+            color: i === 0 ? 'var(--danger)' : i === 6 ? 'var(--accent)' : 'var(--text-secondary)',
+          }}>{d}</div>
+        ))}
+      </div>
+      {/* 날짜 셀 */}
+      <div style={{
+        display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)',
+      }}>
+        {cells.map((d, i) => {
+          const dayShifts = d ? shiftsForDate(d) : [];
+          const isToday = d && ymd(d) === todayStr;
+          const dow = i % 7;
+          const isLastRow = i >= cells.length - 7;
+          const clickable = isManager && !hasApproval && d;
+          return (
+            <div
+              key={i}
+              onClick={() => { if (clickable) onCellClick(d); }}
+              style={{
+                minHeight: 80,
+                padding: 6,
+                borderRight: dow < 6 ? '1px solid var(--border)' : undefined,
+                borderBottom: !isLastRow ? '1px solid var(--border)' : undefined,
+                background: !d ? 'var(--surface-soft)' :
+                  isToday ? 'var(--accent-soft)' : 'var(--surface)',
+                cursor: clickable ? 'pointer' : 'default',
+                transition: 'background var(--t-fast) var(--ease)',
+                position: 'relative',
+              }}
+            >
+              {d && (
+                <>
+                  <div style={{
+                    fontSize: 12, fontWeight: 700,
+                    color: dow === 0 ? 'var(--danger)' : dow === 6 ? 'var(--accent)' : 'var(--text)',
+                    marginBottom: 4,
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  }}>
+                    <span className="num">{d.getDate()}</span>
+                    {isToday && (
+                      <span style={{ fontSize: 9, fontWeight: 800, color: 'var(--accent)' }}>오늘</span>
+                    )}
+                  </div>
+                  <div className="stack" style={{ gap: 3 }}>
+                    {dayShifts.slice(0, 4).map((s) => {
+                      const att = matchAttendance(s, logs);
+                      const startStr = new Date(s.start_at).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false });
+                      const bgColor =
+                        s.status === 'confirmed' ? 'var(--success-soft)' :
+                        s.status === 'cancelled' ? 'var(--surface-soft)' :
+                        'var(--accent-soft)';
+                      const fgColor =
+                        s.status === 'confirmed' ? '#00876c' :
+                        s.status === 'cancelled' ? 'var(--text-muted)' :
+                        'var(--accent-strong)';
+                      return (
+                        <div
+                          key={s.id}
+                          onClick={(e) => { e.stopPropagation(); onShiftClick(s); }}
+                          title={`${s.user?.name ?? '—'} · ${startStr}${att ? ' · ' + att.label : ''}`}
+                          style={{
+                            fontSize: 10, fontWeight: 600,
+                            padding: '3px 6px',
+                            background: bgColor, color: fgColor,
+                            borderRadius: 4,
+                            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                            cursor: isManager && !s.approval_request_id ? 'pointer' : 'default',
+                          }}
+                        >
+                          <span className="num">{startStr}</span> {s.user?.name?.slice(0, 5) ?? '—'}
+                          {att && (att.status === 'late' || att.status === 'absent') && (
+                            <span style={{ marginLeft: 4, color: 'var(--danger)' }}>●</span>
+                          )}
+                        </div>
+                      );
+                    })}
+                    {dayShifts.length > 4 && (
+                      <div style={{ fontSize: 9, color: 'var(--text-muted)', textAlign: 'center' }}>
+                        +{dayShifts.length - 4}
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+          );
+        })}
+      </div>
+      {isManager && !hasApproval && (
+        <div style={{
+          padding: '8px 12px',
+          background: 'var(--surface-soft)',
+          borderTop: '1px solid var(--border)',
+          fontSize: 11, color: 'var(--text-muted)',
+          textAlign: 'center',
+        }}>
+          빈 날짜를 클릭해 시프트 추가 · 기존 시프트 클릭해 수정
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============== 지난달 복사 다이얼로그 ==============
+function CopyPrevMonthDialog({ year, month, coworkers, workplaceId, userId, supabase, onClose, onSaved }) {
+  const [loading, setLoading] = useState(true);
+  const [prevShifts, setPrevShifts] = useState([]);
+  const [selectedIds, setSelectedIds] = useState(new Set());
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState(null);
+
+  // year, month는 현재 보고 있는 달. 지난달은 month - 1
+  const prevDate = new Date(year, month - 1, 1);
+  const prevYear = prevDate.getFullYear();
+  const prevMonth = prevDate.getMonth();
+  const prevStart = new Date(prevYear, prevMonth, 1);
+  const prevEnd = new Date(prevYear, prevMonth + 1, 1);
+  const targetMonthLabel = `${year}년 ${month + 1}월`;
+
+  useEffect(() => {
+    (async () => {
+      setLoading(true);
+      const { data } = await supabase
+        .from('shifts')
+        .select('*, user:profiles!shifts_user_id_fkey(name)')
+        .eq('workplace_id', workplaceId)
+        .gte('start_at', prevStart.toISOString())
+        .lt('start_at', prevEnd.toISOString())
+        .order('start_at');
+      setPrevShifts(data ?? []);
+      setSelectedIds(new Set((data ?? []).map((s) => s.id)));
+      setLoading(false);
+    })();
+  }, [supabase, workplaceId, prevStart.toISOString(), prevEnd.toISOString()]);
+
+  function toggleId(id) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+
+  async function save() {
+    const targets = prevShifts.filter((s) => selectedIds.has(s.id));
+    if (targets.length === 0) return setError('복사할 시프트를 선택해주세요.');
+    setSaving(true);
+    setError(null);
+    // 각 시프트를 다음 달의 같은 일자로 변환
+    const newRows = targets.map((s) => {
+      const sStart = new Date(s.start_at);
+      const sEnd = new Date(s.end_at);
+      const day = sStart.getDate();
+      const newStart = new Date(year, month, day, sStart.getHours(), sStart.getMinutes(), 0);
+      const newEnd = new Date(year, month, day, sEnd.getHours(), sEnd.getMinutes(), 0);
+      // 만약 대상 월에 그 일자가 없으면(예: 2월 30일) 마지막 날로
+      const lastDay = new Date(year, month + 1, 0).getDate();
+      if (day > lastDay) {
+        newStart.setDate(lastDay);
+        newEnd.setDate(lastDay);
+      }
+      return {
+        workplace_id: workplaceId,
+        user_id: s.user_id,
+        start_at: newStart.toISOString(),
+        end_at: newEnd.toISOString(),
+        role_label: s.role_label,
+        notes: s.notes,
+        created_by: userId,
+        status: 'scheduled',
+      };
+    });
+    const { error } = await supabase.from('shifts').insert(newRows);
+    if (error) { setError(error.message); setSaving(false); return; }
+    onSaved();
+  }
+
+  return (
+    <BottomSheet onClose={onClose} maxWidth={560}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+        <h2 className="h3">지난달 시프트 복사</h2>
+        <button onClick={onClose} className="btn btn-ghost btn-icon"><X size={18} /></button>
+      </div>
+
+      <div className="card" style={{ background: 'var(--accent-soft)', boxShadow: 'none', marginBottom: 14 }}>
+        <p style={{ fontSize: 13 }}>
+          <strong>{prevYear}년 {prevMonth + 1}월</strong> → <strong>{targetMonthLabel}</strong> 로 복사합니다.
+          같은 일자·같은 시간으로 새 시프트가 생성됩니다.
+        </p>
+      </div>
+
+      {loading ? (
+        <div className="skeleton" style={{ height: 200 }} />
+      ) : prevShifts.length === 0 ? (
+        <p className="text-muted" style={{ fontSize: 13, padding: 20, textAlign: 'center' }}>
+          {prevYear}년 {prevMonth + 1}월 시프트가 없습니다.
+        </p>
+      ) : (
+        <>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+            <span className="text-muted" style={{ fontSize: 12 }}>
+              {selectedIds.size}/{prevShifts.length} 선택
+            </span>
+            <div style={{ display: 'flex', gap: 6 }}>
+              <button type="button" className="btn btn-ghost btn-xs" onClick={() => setSelectedIds(new Set(prevShifts.map((s) => s.id)))}>전체</button>
+              <button type="button" className="btn btn-ghost btn-xs" onClick={() => setSelectedIds(new Set())}>해제</button>
+            </div>
+          </div>
+          <div className="stack stack-2" style={{ maxHeight: 320, overflowY: 'auto' }}>
+            {prevShifts.map((s) => {
+              const d = new Date(s.start_at);
+              const startStr = d.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false });
+              const endStr = new Date(s.end_at).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false });
+              const checked = selectedIds.has(s.id);
+              return (
+                <label
+                  key={s.id}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 10,
+                    padding: 10, borderRadius: 10,
+                    background: checked ? 'var(--accent-soft)' : 'var(--surface-soft)',
+                    cursor: 'pointer',
+                  }}
+                >
+                  <input
+                    type="checkbox" checked={checked} onChange={() => toggleId(s.id)}
+                    style={{ accentColor: 'var(--accent)' }}
+                  />
+                  <span className="num" style={{ width: 60, fontSize: 12, fontWeight: 700 }}>
+                    {d.getMonth() + 1}/{d.getDate()}
+                  </span>
+                  <span style={{ flex: 1, fontSize: 13, fontWeight: 600 }}>{s.user?.name ?? '—'}</span>
+                  <span className="num text-muted" style={{ fontSize: 11 }}>{startStr}-{endStr}</span>
+                </label>
+              );
+            })}
+          </div>
+        </>
+      )}
+
+      {error && (
+        <div style={{ marginTop: 12, padding: 10, background: 'var(--danger-soft)', color: 'var(--danger)', borderRadius: 10, fontSize: 13 }}>
+          {error}
+        </div>
+      )}
+
+      <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
+        <button type="button" className="btn btn-outline" onClick={onClose} style={{ flex: 1 }}>취소</button>
+        <button type="button" className="btn btn-primary" onClick={save} disabled={saving || selectedIds.size === 0} style={{ flex: 2 }}>
+          <Copy size={14} /> {saving ? '복사 중...' : `${selectedIds.size}개 복사`}
+        </button>
+      </div>
+    </BottomSheet>
+  );
 }
