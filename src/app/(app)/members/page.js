@@ -8,9 +8,10 @@ import Avatar from '@/components/Avatar';
 import BottomSheet from '@/components/BottomSheet';
 import { formatRelative, formatCurrency } from '@/lib/format';
 import { downloadCsv } from '@/lib/csvExport';
+import { getMembersData, saveMemberAssignment } from './actions';
 import {
   ChevronLeft, UserPlus, X, Crown, Shield, User as UserIcon,
-  MoreVertical, Trash2, Building2, Sparkles, Download,
+  MoreVertical, Building2, Sparkles, Download,
 } from 'lucide-react';
 
 // 표시용 (직원 관리 목록)
@@ -33,41 +34,35 @@ const HQ_ROLES = [
 
 export default function MembersPage() {
   const router = useRouter();
-  const { user, profile, supabase, memberships: myMemberships, isManager } = useApp();
+  const { user, profile, memberships: myMemberships } = useApp();
   const isSuperAdmin = profile?.is_super_admin === true;
 
   const [workplaces, setWorkplaces] = useState([]);
   const [allProfiles, setAllProfiles] = useState([]);
   const [allMemberships, setAllMemberships] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [editing, setEditing] = useState(null); // { profile } or null
+  const [editing, setEditing] = useState(null); // { profile, mode } or null
   const [menuOpenId, setMenuOpenId] = useState(null);
   const [error, setError] = useState(null);
 
   // 사장님/대표는 super_admin or owner 권한이어야 들어올 수 있음
   const canManage = isSuperAdmin || myMemberships.some((m) => m.role === 'owner');
 
+  // Server Action으로 데이터 로드 — 클라이언트 supabase hang 문제 없음
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const [wpsRes, profsRes, memsRes] = await Promise.all([
-        supabase.from('workplaces').select('id, name').order('name'),
-        supabase.from('profiles').select('*').order('created_at', { ascending: false }),
-        supabase.from('memberships').select('id, user_id, workplace_id, role, active'),
-      ]);
-      if (wpsRes.error) throw new Error('workplaces: ' + wpsRes.error.message);
-      if (profsRes.error) throw new Error('profiles: ' + profsRes.error.message);
-      if (memsRes.error) throw new Error('memberships: ' + memsRes.error.message);
-      setWorkplaces(wpsRes.data ?? []);
-      setAllProfiles(profsRes.data ?? []);
-      setAllMemberships(memsRes.data ?? []);
+      const data = await getMembersData();
+      setWorkplaces(data.workplaces);
+      setAllProfiles(data.profiles);
+      setAllMemberships(data.memberships);
     } catch (err) {
       setError(err.message ?? '데이터 로드 실패');
     } finally {
       setLoading(false);
     }
-  }, [supabase]);
+  }, []); // 의존성 없음 — Server Action은 서버 사이드에서 실행
 
   useEffect(() => {
     if (!canManage) return;
@@ -109,7 +104,7 @@ export default function MembersPage() {
     activeByUser.get(m.user_id).push(m);
   });
 
-  // 미배정: profiles 중에 active membership 없음 + 본인 제외하면 더 깔끔
+  // 미배정: profiles 중에 active membership 없음
   const unassigned = allProfiles.filter((p) => !(activeByUser.get(p.user_id)?.length));
   const assigned = allProfiles.filter((p) => activeByUser.get(p.user_id)?.length);
 
@@ -163,6 +158,7 @@ export default function MembersPage() {
             <button type="button" onClick={load} className="btn btn-sm" style={{ marginLeft: 12 }}>재시도</button>
           </div>
         )}
+
         {/* 미배정 사용자 */}
         <section className="stack stack-3">
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
@@ -319,7 +315,6 @@ export default function MembersPage() {
           mode={editing.mode}
           workplaces={workplaces}
           currentMemberships={allMemberships.filter((m) => m.user_id === editing.profile.user_id)}
-          supabase={supabase}
           onClose={() => setEditing(null)}
           onSaved={() => { setEditing(null); load(); }}
         />
@@ -336,7 +331,7 @@ const menuItemStyle = {
   borderRadius: 8,
 };
 
-function AssignDialog({ profile, mode, workplaces, currentMemberships, supabase, onClose, onSaved }) {
+function AssignDialog({ profile, mode, workplaces, currentMemberships, onClose, onSaved }) {
   // 사업장별 멤버십 상태: { workplace_id: { active: bool, role: 'staff'|'manager'|'owner' } }
   const [state, setState] = useState(() => {
     const s = {};
@@ -365,43 +360,39 @@ function AssignDialog({ profile, mode, workplaces, currentMemberships, supabase,
     setError(null);
     setSaving(true);
     try {
-      // 시급 또는 마감권한 변경되었으면 profiles 업데이트
       const wageChanged = Number(hourlyWage) !== Number(profile?.hourly_wage ?? 0);
       const permChanged = canCloseBooks !== (profile?.can_close_books === true);
-      if (wageChanged || permChanged) {
-        const { error } = await supabase
-          .from('profiles')
-          .update({
-            hourly_wage: Number(hourlyWage) || 0,
-            can_close_books: canCloseBooks,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('user_id', profile.user_id);
-        if (error) throw error;
-      }
-      for (const w of workplaces) {
+      const profileChanged = wageChanged || permChanged;
+
+      // 멤버십 변경 목록 계산
+      const updates = workplaces.map((w) => {
         const s = state[w.id];
         const existing = currentMemberships.find((m) => m.workplace_id === w.id);
-        if (existing) {
-          if (s.active !== existing.active || s.role !== existing.role) {
-            const { error } = await supabase
-              .from('memberships')
-              .update({ active: s.active, role: s.role })
-              .eq('id', existing.id);
-            if (error) throw error;
-          }
-        } else if (s.active) {
-          const { error } = await supabase
-            .from('memberships')
-            .insert({
-              user_id: profile.user_id,
-              workplace_id: w.id,
-              role: s.role,
-              active: true,
-            });
-          if (error) throw error;
-        }
+        const changed = existing
+          ? (s.active !== existing.active || s.role !== existing.role)
+          : s.active; // 새 멤버십은 active인 경우만
+        if (!changed) return null;
+        return {
+          workplaceId: w.id,
+          active: s.active,
+          role: s.role,
+          existingId: existing?.id ?? null,
+        };
+      }).filter(Boolean);
+
+      if (!profileChanged && updates.length === 0) {
+        onClose();
+        return;
       }
+
+      await saveMemberAssignment({
+        userId: profile.user_id,
+        hourlyWage: Number(hourlyWage) || 0,
+        canCloseBooks,
+        profileChanged,
+        updates,
+      });
+
       onSaved();
     } catch (err) {
       setError(err.message);
