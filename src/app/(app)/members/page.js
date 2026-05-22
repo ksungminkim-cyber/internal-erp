@@ -13,11 +13,23 @@ import {
   MoreVertical, Trash2, Building2, Sparkles, Download,
 } from 'lucide-react';
 
+// 표시용 (직원 관리 목록)
 const ROLE_META = {
-  staff:   { label: '직원',   tag: 'tag',         icon: UserIcon },
-  manager: { label: '매니저', tag: 'tag-accent',  icon: Shield },
-  owner:   { label: '대표',   tag: 'tag-warning', icon: Crown },
+  staff:   { label: '직원',       tag: 'tag',         icon: UserIcon },
+  manager: { label: '매니저',     tag: 'tag-accent',  icon: Shield },
+  owner:   { label: '대표(임원)', tag: 'tag-warning', icon: Crown },
 };
+// 배정 다이얼로그에서 사업장별로 다른 역할 옵션 제공
+// 본사: owner/manager/staff / 나울·녹턴: manager/staff 만
+const STORE_ROLES = [
+  { key: 'manager', label: '매니저', icon: Shield },
+  { key: 'staff',   label: '직원',   icon: UserIcon },
+];
+const HQ_ROLES = [
+  { key: 'owner',   label: '대표(임원)', icon: Crown },
+  { key: 'manager', label: '관리자',     icon: Shield },
+  { key: 'staff',   label: '직원',       icon: UserIcon },
+];
 
 export default function MembersPage() {
   const router = useRouter();
@@ -50,7 +62,14 @@ export default function MembersPage() {
     setLoading(false);
   }, [supabase]);
 
-  useEffect(() => { if (canManage) load(); }, [load, canManage]);
+  useEffect(() => {
+    if (!canManage) return;
+    let cancelled = false;
+    (async () => {
+      if (!cancelled) await load();
+    })();
+    return () => { cancelled = true; };
+  }, [load, canManage]);
 
   useEffect(() => {
     function onDocClick() { setMenuOpenId(null); }
@@ -196,7 +215,8 @@ export default function MembersPage() {
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                           <div className="h4">{p.name || '이름 없음'}</div>
                           {isMe && <span className="tag tag-accent">나</span>}
-                          {p.is_super_admin && <span className="tag tag-warning"><Crown size={10} /> 전체관리</span>}
+                          {p.is_executive && <span className="tag tag-warning"><Crown size={10} /> 임원</span>}
+                          {p.is_super_admin && !p.is_executive && <span className="tag tag-accent"><Crown size={10} /> 전체관리</span>}
                           {p.can_close_books && !p.is_super_admin && <span className="tag tag-mint">마감권한</span>}
                         </div>
                         <div className="text-muted" style={{ fontSize: 12, marginTop: 2 }}>
@@ -272,8 +292,8 @@ export default function MembersPage() {
               <div className="h4" style={{ marginBottom: 4 }}>배정 흐름</div>
               <ul style={{ listStyle: 'none', padding: 0, fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.7 }}>
                 <li>1. 직원이 사이트에서 회원가입 (이메일·비번)</li>
-                <li>2. 이 페이지 "배정 대기" 목록에 자동 표시</li>
-                <li>3. "배정" 버튼 → 사업장·역할 선택 → 완료</li>
+                <li>2. 이 페이지 &ldquo;배정 대기&rdquo; 목록에 자동 표시</li>
+                <li>3. &ldquo;배정&rdquo; 버튼 → 사업장·역할 선택 → 완료</li>
               </ul>
             </div>
           </div>
@@ -423,22 +443,33 @@ function AssignDialog({ profile, mode, workplaces, currentMemberships, supabase,
               </div>
 
               {s.active && (
-                <div className="segment" style={{ width: '100%' }}>
-                  {Object.entries(ROLE_META).map(([k, m]) => {
-                    const RoleIcon = m.icon;
-                    return (
-                      <button
-                        key={k}
-                        type="button"
-                        className={`segment-item ${s.role === k ? 'is-active' : ''}`}
-                        onClick={() => setRole(w.id, k)}
-                        style={{ flex: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}
-                      >
-                        <RoleIcon size={12} /> {m.label}
-                      </button>
-                    );
-                  })}
-                </div>
+                <>
+                  <div className="segment" style={{ width: '100%' }}>
+                    {(w.name === '본사' ? HQ_ROLES : STORE_ROLES).map((m) => {
+                      const RoleIcon = m.icon;
+                      return (
+                        <button
+                          key={m.key}
+                          type="button"
+                          className={`segment-item ${s.role === m.key ? 'is-active' : ''}`}
+                          onClick={() => setRole(w.id, m.key)}
+                          style={{ flex: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}
+                        >
+                          <RoleIcon size={12} /> {m.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <p className="text-muted" style={{ fontSize: 11, marginTop: 8, lineHeight: 1.5 }}>
+                    {w.name === '본사'
+                      ? s.role === 'owner'
+                        ? '→ 임원(대표). 전 매장 접근 + 결재 최종 승인 가능.'
+                        : '→ 본사 멤버. 전 매장 접근 가능. 결재 최종은 임원만.'
+                      : s.role === 'manager'
+                        ? '→ 매니저. 결재 중간 승인 가능.'
+                        : '→ 직원. 일반 업무만 가능.'}
+                  </p>
+                </>
               )}
             </div>
           );

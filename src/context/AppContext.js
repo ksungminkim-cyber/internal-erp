@@ -11,10 +11,13 @@ export function AppProvider({ children, initialUser, initialProfile = null, init
   const [user, setUser] = useState(initialUser ?? null);
   const [profile, setProfile] = useState(initialProfile);
   const [memberships, setMemberships] = useState(initialMemberships);
-  // SSR에서 첫 사업장 결정 (lazy init — localStorage는 mount 후에만 접근)
+  // SSR + localStorage 모두 고려한 lazy init
   const [currentWorkplaceId, setCurrentWorkplaceId] = useState(() => {
     if (initialMemberships.length === 0) return null;
-    return initialMemberships[0].workplace_id;
+    // 클라이언트에서만 localStorage 접근 가능
+    const stored = typeof window !== 'undefined' ? localStorage.getItem('erp:workplace') : null;
+    const validStored = stored ? initialMemberships.find((m) => m.workplace_id === stored) : null;
+    return validStored?.workplace_id ?? initialMemberships[0].workplace_id;
   });
   const [loading, setLoading] = useState(!initialProfile); // 초기 profile 있으면 loading false
 
@@ -39,15 +42,7 @@ export function AppProvider({ children, initialUser, initialProfile = null, init
     }
   }, [supabase]);
 
-  // mount 시 localStorage 의 사업장 선택 반영 (SSR 에서는 localStorage 접근 불가)
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const stored = localStorage.getItem('erp:workplace');
-    if (stored && memberships.some((m) => m.workplace_id === stored)) {
-      setCurrentWorkplaceId(stored);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  // localStorage 사업장 선택은 useState lazy init에서 처리 (위 참조)
 
   useEffect(() => {
     let mounted = true;
@@ -59,14 +54,20 @@ export function AppProvider({ children, initialUser, initialProfile = null, init
         setLoading(false);
       })();
     }
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      const u = session?.user ?? null;
-      setUser(u);
-      if (u) await loadProfileAndMemberships(u.id);
-      else {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      // SIGNED_OUT 일 때만 상태 초기화
+      // INITIAL_SESSION·TOKEN_REFRESHED 등 중간 상태에서 session=null 이 와도 무시
+      if (event === 'SIGNED_OUT') {
+        setUser(null);
         setProfile(null);
         setMemberships([]);
         setCurrentWorkplaceId(null);
+        return;
+      }
+      const u = session?.user ?? null;
+      if (u) {
+        setUser(u);
+        await loadProfileAndMemberships(u.id);
       }
     });
     return () => { mounted = false; subscription.unsubscribe(); };
