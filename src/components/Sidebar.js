@@ -7,7 +7,7 @@ import {
   Home, Clock, FileText, User, Building2, Calendar, ClipboardCheck,
   ListTodo, Package, TrendingUp, Megaphone, Wrench, BookOpen,
   MessageCircle, BarChart3, LogOut, Crown, Shield, ChevronDown, Lock,
-  Target, MessageSquare,
+  Target, MessageSquare, HelpCircle,
 } from 'lucide-react';
 import { useState } from 'react';
 
@@ -30,6 +30,7 @@ const OPS_LINKS = [
   { href: '/reports', label: '월별 리포트', icon: BarChart3 },
   { href: '/announcements', label: '공지사항', icon: Megaphone },
   { href: '/suggestions', label: '건의함', icon: MessageSquare },
+  { href: '/guide', label: '사용 가이드', icon: HelpCircle },
 ];
 
 const ADMIN_LINKS = [

@@ -5,14 +5,18 @@ import { createClient } from '@/lib/supabase/client';
 
 const AppContext = createContext(null);
 
-export function AppProvider({ children, initialUser }) {
+export function AppProvider({ children, initialUser, initialProfile = null, initialMemberships = [] }) {
   // 매 렌더마다 새 클라이언트 만들지 않도록 lazy init
   const [supabase] = useState(() => createClient());
   const [user, setUser] = useState(initialUser ?? null);
-  const [profile, setProfile] = useState(null);
-  const [memberships, setMemberships] = useState([]);
-  const [currentWorkplaceId, setCurrentWorkplaceId] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [profile, setProfile] = useState(initialProfile);
+  const [memberships, setMemberships] = useState(initialMemberships);
+  // SSR에서 첫 사업장 결정 (lazy init — localStorage는 mount 후에만 접근)
+  const [currentWorkplaceId, setCurrentWorkplaceId] = useState(() => {
+    if (initialMemberships.length === 0) return null;
+    return initialMemberships[0].workplace_id;
+  });
+  const [loading, setLoading] = useState(!initialProfile); // 초기 profile 있으면 loading false
 
   const loadProfileAndMemberships = useCallback(async (uid) => {
     if (!uid) return;
@@ -35,15 +39,26 @@ export function AppProvider({ children, initialUser }) {
     }
   }, [supabase]);
 
+  // mount 시 localStorage 의 사업장 선택 반영 (SSR 에서는 localStorage 접근 불가)
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const stored = localStorage.getItem('erp:workplace');
+    if (stored && memberships.some((m) => m.workplace_id === stored)) {
+      setCurrentWorkplaceId(stored);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   useEffect(() => {
     let mounted = true;
-    (async () => {
-      const { data: { user: u } } = await supabase.auth.getUser();
-      if (!mounted) return;
-      setUser(u);
-      if (u) await loadProfileAndMemberships(u.id);
-      setLoading(false);
-    })();
+    // initialProfile 가 없으면 (SSR 실패 등) 클라이언트에서라도 시도
+    if (!initialProfile && initialUser) {
+      (async () => {
+        if (!mounted) return;
+        await loadProfileAndMemberships(initialUser.id);
+        setLoading(false);
+      })();
+    }
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       const u = session?.user ?? null;
       setUser(u);
@@ -55,7 +70,7 @@ export function AppProvider({ children, initialUser }) {
       }
     });
     return () => { mounted = false; subscription.unsubscribe(); };
-  }, [supabase, loadProfileAndMemberships]);
+  }, [supabase, loadProfileAndMemberships, initialProfile, initialUser]);
 
   const switchWorkplace = useCallback((wpId) => {
     setCurrentWorkplaceId(wpId);
