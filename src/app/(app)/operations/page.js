@@ -7,7 +7,7 @@ import PageHeader from '@/components/PageHeader';
 import {
   Calendar, ClipboardCheck, ListTodo, Package, TrendingUp, Megaphone,
   AlertCircle, Sparkles, Wrench, BookOpen, MessageCircle, BarChart3, UserCog, Lock,
-  Target, MessageSquare,
+  Target, MessageSquare, HelpCircle,
 } from 'lucide-react';
 
 export default function OperationsMenu() {
@@ -146,6 +146,7 @@ export default function OperationsMenu() {
             <OpsCard href="/announcements"  icon={Megaphone}  label="공지사항"   desc="전직원 공지"
               accent="neutral" badge={stats.unreadAnn > 0 ? `${stats.unreadAnn} 신규` : null} urgent={stats.unreadAnn > 0} />
             <OpsCard href="/suggestions"    icon={MessageSquare} label="건의함" desc="본사로 의견 전달" accent="mint" />
+            <OpsCard href="/guide"          icon={HelpCircle}    label="사용 가이드" desc="PDF 저장 가능"   accent="violet" />
           </div>
         </section>
 
