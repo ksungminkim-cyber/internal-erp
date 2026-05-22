@@ -98,7 +98,8 @@ function matchAttendance(shift, logs) {
 
 export default function SchedulePage() {
   const router = useRouter();
-  const { user, currentWorkplaceId, supabase, isManager } = useApp();
+  const { user, currentWorkplaceId, supabase } = useApp();
+  const isManager = true; // 전 직원 시프트 편집 허용
   const [view, setView] = useState('week'); // 'week' | 'month'
   const [anchor, setAnchor] = useState(() => new Date());
   const [shifts, setShifts] = useState([]);

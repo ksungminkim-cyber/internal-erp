@@ -118,18 +118,16 @@ export default function SalesPage() {
             {todayRow?.transaction_count != null ? `${todayRow.transaction_count}건` : '거래 없음'}
             {todayRow?.source && todayRow.source !== 'manual' && ' · POS 자동 집계'}
           </div>
-          {isManager && (
-            <div style={{ marginTop: 14 }}>
-              <button
-                type="button"
-                className="btn btn-sm"
-                onClick={() => setEditing({ sales_date: todayKey, ...(todayRow ?? {}) })}
-                style={{ background: 'rgba(255,255,255,0.25)', color: '#fff', border: 'none' }}
-              >
-                <Plus size={12} /> {todayRow ? '수정' : '입력'}
-              </button>
-            </div>
-          )}
+          <div style={{ marginTop: 14 }}>
+            <button
+              type="button"
+              className="btn btn-sm"
+              onClick={() => setEditing({ sales_date: todayKey, ...(todayRow ?? {}) })}
+              style={{ background: 'rgba(255,255,255,0.25)', color: '#fff', border: 'none' }}
+            >
+              <Plus size={12} /> {todayRow ? '수정' : '입력'}
+            </button>
+          </div>
         </section>
 
         {/* 7일 요약 */}
@@ -230,11 +228,9 @@ export default function SalesPage() {
                       <span className="tag tag-mint" style={{ fontSize: 9, marginTop: 2 }}>POS</span>
                     )}
                   </div>
-                  {isManager && (
-                    <button onClick={() => setEditing(r)} className="btn btn-ghost btn-icon">
-                      <ChevronRight size={16} />
-                    </button>
-                  )}
+                  <button onClick={() => setEditing(r)} className="btn btn-ghost btn-icon">
+                    <ChevronRight size={16} />
+                  </button>
                 </div>
               ))}
             </div>
@@ -242,11 +238,9 @@ export default function SalesPage() {
         </section>
       </main>
 
-      {isManager && (
-        <button type="button" className="fab" onClick={() => setEditing({ sales_date: todayKey })} aria-label="매출 입력">
-          <Plus size={26} />
-        </button>
-      )}
+      <button type="button" className="fab" onClick={() => setEditing({ sales_date: todayKey })} aria-label="매출 입력">
+        <Plus size={26} />
+      </button>
 
       {editing && (
         <SalesEditor
