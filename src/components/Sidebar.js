@@ -26,7 +26,7 @@ const OPS_LINKS = [
   { href: '/recipes', label: '레시피', icon: BookOpen },
   { href: '/complaints', label: '고객 클레임', icon: MessageCircle },
   { href: '/sales', label: '매출', icon: TrendingUp },
-  { href: '/kpis', label: 'KPI · OKR', icon: Target },
+  { href: '/kpis', label: 'KPI', icon: Target },
   { href: '/reports', label: '월별 리포트', icon: BarChart3 },
   { href: '/announcements', label: '공지사항', icon: Megaphone },
   { href: '/suggestions', label: '건의함', icon: MessageSquare },

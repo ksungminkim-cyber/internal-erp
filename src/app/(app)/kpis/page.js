@@ -12,8 +12,7 @@ import {
 } from 'lucide-react';
 
 const CATEGORY_META = {
-  kpi: { label: 'KPI', tag: 'tag-accent', desc: '핵심 성과 지표 (정량 측정용 단일 지표)' },
-  okr: { label: 'OKR', tag: 'tag-mint',   desc: 'Objectives & Key Results — 목표와 핵심 결과' },
+  kpi: { label: 'KPI', tag: 'tag-accent', desc: '핵심 성과 지표 — 결재 승인 시 전 직원이 알림으로 인지' },
 };
 
 const PERIOD_META = {
@@ -32,7 +31,6 @@ export default function KpisPage() {
   const [kpis, setKpis] = useState([]);
   const [recordsMap, setRecordsMap] = useState({});
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState('all');
   const [editing, setEditing] = useState(null);
   const [recording, setRecording] = useState(null);
 
@@ -64,17 +62,13 @@ export default function KpisPage() {
 
   useEffect(() => { load(); }, [load]);
 
-  const filtered = useMemo(() => {
-    if (filter === 'kpi') return kpis.filter((k) => k.category === 'kpi');
-    if (filter === 'okr') return kpis.filter((k) => k.category === 'okr');
-    return kpis;
-  }, [kpis, filter]);
+  const filtered = useMemo(() => kpis, [kpis]);
 
   return (
     <>
       <PageHeader
-        title="KPI · OKR"
-        subtitle="목표 등록과 결재, 실적 기록"
+        title="KPI"
+        subtitle="월별 목표 등록 → 결재 → 전 직원 인지"
         hideSwitcher
         action={
           <button onClick={() => router.back()} className="btn btn-ghost btn-icon"><ChevronLeft size={20} /></button>
@@ -82,12 +76,6 @@ export default function KpisPage() {
       />
 
       <main className="fade-in page-main" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-        <div className="segment" style={{ alignSelf: 'flex-start' }}>
-          <button className={`segment-item ${filter === 'all' ? 'is-active' : ''}`} onClick={() => setFilter('all')}>전체</button>
-          <button className={`segment-item ${filter === 'kpi' ? 'is-active' : ''}`} onClick={() => setFilter('kpi')}>KPI</button>
-          <button className={`segment-item ${filter === 'okr' ? 'is-active' : ''}`} onClick={() => setFilter('okr')}>OKR</button>
-        </div>
-
         {loading ? (
           <div className="skeleton" style={{ height: 200 }} />
         ) : filtered.length === 0 ? (
@@ -212,7 +200,7 @@ export default function KpisPage() {
 
 function KpiEditor({ kpi, memberships, currentWorkplaceId, isSuperAdmin, userId, supabase, onClose, onSaved }) {
   const isEdit = !!kpi?.id;
-  const [category, setCategory] = useState(kpi?.category ?? 'okr');
+  const category = 'kpi'; // KPI 단일 카테고리
   const [name, setName] = useState(kpi?.name ?? '');
   const [target, setTarget] = useState(kpi?.target_value ?? '');
   const [unit, setUnit] = useState(kpi?.unit ?? '');
@@ -324,23 +312,11 @@ function KpiEditor({ kpi, memberships, currentWorkplaceId, isSuperAdmin, userId,
         <button onClick={onClose} className="btn btn-ghost btn-icon"><X size={18} /></button>
       </div>
 
-      <label className="label">구분</label>
-      <div className="segment" style={{ width: '100%' }}>
-        {Object.entries(CATEGORY_META).map(([k, m]) => (
-          <button
-            key={k}
-            type="button"
-            className={`segment-item ${category === k ? 'is-active' : ''}`}
-            onClick={() => setCategory(k)}
-            style={{ flex: 1 }}
-          >
-            {m.label}
-          </button>
-        ))}
-      </div>
-      <p className="text-muted" style={{ fontSize: 11, marginTop: 6 }}>{CATEGORY_META[category].desc}</p>
+      <p className="text-muted" style={{ fontSize: 12, padding: '8px 12px', background: 'var(--surface-soft)', borderRadius: 8, marginBottom: 8 }}>
+        KPI 결재 승인 시 모든 직원에게 자동으로 알림이 전달됩니다.
+      </p>
 
-      <label className="label" style={{ marginTop: 12 }}>지표명</label>
+      <label className="label">지표명</label>
       <input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="예) 월 매출, 객단가, 재방문율" />
 
       <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 8, marginTop: 12 }}>

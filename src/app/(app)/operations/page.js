@@ -141,7 +141,7 @@ export default function OperationsMenu() {
           <h2 className="h3">매출 · 인사이트</h2>
           <div className="grid-4">
             <OpsCard href="/sales"          icon={TrendingUp} label="매출"       desc="일별 매출"      accent="success" />
-            <OpsCard href="/kpis"           icon={Target}     label="KPI · OKR"  desc="목표·실적 추적"  accent="violet" />
+            <OpsCard href="/kpis"           icon={Target}     label="KPI"        desc="월별 목표·결재"  accent="violet" />
             <OpsCard href="/reports"        icon={BarChart3}  label="월별 리포트" desc="통합 대시보드"  accent="accent" />
             <OpsCard href="/announcements"  icon={Megaphone}  label="공지사항"   desc="전직원 공지"
               accent="neutral" badge={stats.unreadAnn > 0 ? `${stats.unreadAnn} 신규` : null} urgent={stats.unreadAnn > 0} />

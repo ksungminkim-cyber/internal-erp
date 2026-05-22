@@ -27,6 +27,8 @@ export default function ApprovalsListPage() {
   const [tab, setTab] = useState('inbox');
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
 
   const load = useCallback(async () => {
     if (!currentWorkplaceId || !user) return;
@@ -35,15 +37,22 @@ export default function ApprovalsListPage() {
     let query = supabase
       .from('approval_requests')
       .select(`
-        id, title, status, total_amount, current_step, submitted_at, drafter_id,
+        id, title, status, total_amount, current_step, submitted_at, drafter_id, doc_type,
         drafter:profiles!approval_requests_drafter_id_fkey(name),
         approval_steps(id, step_order, approver_id, status)
       `)
       .eq('workplace_id', currentWorkplaceId)
       .order('submitted_at', { ascending: false })
-      .limit(50);
+      .limit(200);
 
     if (tab === 'mine') query = query.eq('drafter_id', user.id);
+    if (dateFrom) query = query.gte('submitted_at', dateFrom);
+    if (dateTo) {
+      // 종료일은 그날 끝까지 포함
+      const endDate = new Date(dateTo);
+      endDate.setHours(23, 59, 59, 999);
+      query = query.lte('submitted_at', endDate.toISOString());
+    }
 
     const { data, error } = await query;
     if (error) {
@@ -63,7 +72,7 @@ export default function ApprovalsListPage() {
       setItems(list);
     }
     setLoading(false);
-  }, [supabase, currentWorkplaceId, user, tab]);
+  }, [supabase, currentWorkplaceId, user, tab, dateFrom, dateTo]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -105,7 +114,7 @@ export default function ApprovalsListPage() {
       <PageHeader title="전자결재" subtitle="지출결의서 · 시프트 · KPI 등 사내 결재" />
 
       <main className="fade-in page-main" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
           <div className="segment">
             {TABS.map((t) => (
               <button
@@ -120,6 +129,35 @@ export default function ApprovalsListPage() {
           <button onClick={exportCsv} className="btn btn-soft btn-sm" disabled={!items.length}>
             <Download size={14} /> CSV
           </button>
+        </div>
+
+        {/* 날짜 범위 필터 */}
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', fontSize: 12 }}>
+          <span className="text-muted" style={{ fontWeight: 600 }}>기간</span>
+          <input
+            type="date"
+            value={dateFrom}
+            onChange={(e) => setDateFrom(e.target.value)}
+            className="input"
+            style={{ width: 'auto', padding: '8px 10px', fontSize: 13 }}
+          />
+          <span className="text-muted">~</span>
+          <input
+            type="date"
+            value={dateTo}
+            onChange={(e) => setDateTo(e.target.value)}
+            className="input"
+            style={{ width: 'auto', padding: '8px 10px', fontSize: 13 }}
+          />
+          {(dateFrom || dateTo) && (
+            <button
+              type="button"
+              className="btn btn-ghost btn-xs"
+              onClick={() => { setDateFrom(''); setDateTo(''); }}
+            >
+              초기화
+            </button>
+          )}
         </div>
 
         {loading ? (

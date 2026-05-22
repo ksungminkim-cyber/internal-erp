@@ -463,14 +463,14 @@ function ShiftEditor({ shift, initial, coworkers, workplaceId, userId, supabase,
         ))}
       </select>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 12 }}>
-        <div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: 8, marginTop: 12 }}>
+        <div style={{ minWidth: 0 }}>
           <label className="label">시작</label>
-          <input className="input" type="datetime-local" value={startAt} onChange={(e) => setStartAt(e.target.value)} />
+          <input className="input" type="datetime-local" value={startAt} onChange={(e) => setStartAt(e.target.value)} style={{ width: '100%', minWidth: 0, padding: '12px 10px' }} />
         </div>
-        <div>
+        <div style={{ minWidth: 0 }}>
           <label className="label">종료</label>
-          <input className="input" type="datetime-local" value={endAt} onChange={(e) => setEndAt(e.target.value)} />
+          <input className="input" type="datetime-local" value={endAt} onChange={(e) => setEndAt(e.target.value)} style={{ width: '100%', minWidth: 0, padding: '12px 10px' }} />
         </div>
       </div>
 
