@@ -86,7 +86,7 @@ export default function ChecklistsPage() {
             <div className="empty-icon"><ListTodo size={26} /></div>
             <div className="empty-title">체크리스트가 없어요</div>
             <div className="empty-desc">
-              {isManager ? '+ 버튼으로 새 체크리스트를 만들어보세요' : '관리자가 만들 때까지 기다려주세요'}
+              + 버튼으로 새 체크리스트를 만들어보세요
             </div>
           </div>
         ) : (
@@ -153,11 +153,9 @@ export default function ChecklistsPage() {
         )}
       </main>
 
-      {isManager && (
-        <button type="button" className="fab" onClick={() => setEditingTemplate({})} aria-label="새 체크리스트">
-          <Plus size={26} />
-        </button>
-      )}
+      <button type="button" className="fab" onClick={() => setEditingTemplate({})} aria-label="새 체크리스트">
+        <Plus size={26} />
+      </button>
 
       {activeTemplate && (
         <ChecklistRunner
@@ -166,7 +164,7 @@ export default function ChecklistsPage() {
           supabase={supabase}
           userId={user.id}
           workplaceId={currentWorkplaceId}
-          isManager={isManager}
+          isManager={true}
           onEdit={() => { setEditingTemplate(activeTemplate); setActiveTemplate(null); }}
           onClose={() => setActiveTemplate(null)}
           onChanged={load}

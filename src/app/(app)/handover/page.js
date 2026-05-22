@@ -29,7 +29,12 @@ export default function HandoverPage() {
   const [filter, setFilter] = useState('all');
 
   const load = useCallback(async () => {
-    if (!currentWorkplaceId) return;
+    // 사업장 미배정 상태에서는 로딩 종료 후 빈 상태로
+    if (!currentWorkplaceId) {
+      setItems([]);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     const { data } = await supabase
       .from('handover_notes')

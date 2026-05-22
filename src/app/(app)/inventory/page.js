@@ -6,7 +6,7 @@ import { useApp } from '@/context/AppContext';
 import PageHeader from '@/components/PageHeader';
 import BottomSheet from '@/components/BottomSheet';
 import { formatRelative } from '@/lib/format';
-import { ChevronLeft, Plus, X, Package, AlertTriangle, TrendingUp, TrendingDown, Edit3, Trash2, Search } from 'lucide-react';
+import { ChevronLeft, Plus, X, Package, AlertTriangle, TrendingUp, TrendingDown, Edit3, Trash2, Search, Lock, ClipboardList } from 'lucide-react';
 
 const CATEGORY_OPTIONS = ['식자재', '음료/시럽', '주류', '컵·뚜껑', '비품', '청소·세제', '포장', '기타'];
 
@@ -18,6 +18,7 @@ export default function InventoryPage() {
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState('all');
   const [editing, setEditing] = useState(null);
+  const [showClosing, setShowClosing] = useState(false);
   const [adjusting, setAdjusting] = useState(null);
 
   const load = useCallback(async () => {
@@ -76,7 +77,12 @@ export default function InventoryPage() {
         subtitle="식자재·비품 재고 관리"
         hideSwitcher
         action={
-          <button onClick={() => router.back()} className="btn btn-ghost btn-icon"><ChevronLeft size={20} /></button>
+          <div style={{ display: 'flex', gap: 6 }}>
+            <button onClick={() => setShowClosing(true)} className="btn btn-soft btn-sm">
+              <Lock size={14} /> 재고 마감
+            </button>
+            <button onClick={() => router.back()} className="btn btn-ghost btn-icon"><ChevronLeft size={20} /></button>
+          </div>
         }
       />
 
@@ -178,7 +184,144 @@ export default function InventoryPage() {
           onSaved={() => { setAdjusting(null); load(); }}
         />
       )}
+
+      {showClosing && (
+        <InventoryClosingDialog
+          items={items}
+          supabase={supabase}
+          userId={user.id}
+          workplaceId={currentWorkplaceId}
+          onClose={() => setShowClosing(false)}
+        />
+      )}
     </>
+  );
+}
+
+function InventoryClosingDialog({ items, supabase, userId, workplaceId, onClose }) {
+  const now = new Date();
+  const [year, setYear] = useState(now.getFullYear());
+  const [month, setMonth] = useState(now.getMonth() + 1);
+  const [closings, setClosings] = useState([]);
+  const [notes, setNotes] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    const { data } = await supabase
+      .from('inventory_closings')
+      .select('*, closed_by_user:profiles!inventory_closings_closed_by_fkey(name)')
+      .eq('workplace_id', workplaceId)
+      .order('year', { ascending: false })
+      .order('month', { ascending: false })
+      .limit(12);
+    setClosings(data ?? []);
+    setLoading(false);
+  }, [supabase, workplaceId]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const lowStockCount = items.filter((i) => Number(i.current_qty) < Number(i.min_qty)).length;
+  const totalQty = items.reduce((s, i) => s + Number(i.current_qty || 0), 0);
+
+  async function closeMonth() {
+    if (!confirm(`${year}년 ${month}월 재고를 마감하시겠습니까?\n현재 ${items.length}개 품목의 수량을 스냅샷으로 저장합니다.`)) return;
+    setSaving(true);
+    setError(null);
+    const snapshot = items.map((i) => ({
+      id: i.id, name: i.name, category: i.category, unit: i.unit,
+      qty: Number(i.current_qty), min_qty: Number(i.min_qty), vendor: i.vendor,
+    }));
+    const { error } = await supabase.from('inventory_closings').upsert({
+      workplace_id: workplaceId,
+      year, month,
+      item_count: items.length,
+      total_qty_estimate: totalQty,
+      low_stock_count: lowStockCount,
+      snapshot,
+      notes: notes.trim() || null,
+      closed_by: userId,
+      closed_at: new Date().toISOString(),
+    }, { onConflict: 'workplace_id,year,month' });
+    if (error) { setError(error.message); setSaving(false); return; }
+    setNotes('');
+    await load();
+    setSaving(false);
+  }
+
+  async function deleteClosing(id) {
+    if (!confirm('이 마감 기록을 삭제하시겠습니까?')) return;
+    const { error } = await supabase.from('inventory_closings').delete().eq('id', id);
+    if (error) { alert(error.message); return; }
+    load();
+  }
+
+  return (
+    <BottomSheet onClose={onClose}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+        <h2 className="h3">월별 재고 마감</h2>
+        <button onClick={onClose} className="btn btn-ghost btn-icon"><X size={18} /></button>
+      </div>
+
+      <div className="card" style={{ background: 'var(--accent-soft)', boxShadow: 'none', marginBottom: 16 }}>
+        <div className="h4" style={{ marginBottom: 6 }}>현재 재고 스냅샷</div>
+        <div style={{ display: 'flex', gap: 16, fontSize: 13 }}>
+          <span>품목 <strong className="num">{items.length}</strong>개</span>
+          <span>총수량 <strong className="num">{Math.round(totalQty)}</strong></span>
+          <span className={lowStockCount > 0 ? 'text-danger' : ''}>부족 <strong className="num">{lowStockCount}</strong></span>
+        </div>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+        <div>
+          <label className="label">연도</label>
+          <input className="input num" type="number" value={year} onChange={(e) => setYear(Number(e.target.value))} />
+        </div>
+        <div>
+          <label className="label">월</label>
+          <input className="input num" type="number" min={1} max={12} value={month} onChange={(e) => setMonth(Number(e.target.value))} />
+        </div>
+      </div>
+
+      <label className="label" style={{ marginTop: 12 }}>비고</label>
+      <textarea className="input" rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} style={{ resize: 'vertical' }} placeholder="예: 월말 실사 완료, 폐기 처리 5건 포함" />
+
+      {error && (
+        <div style={{ marginTop: 12, padding: 10, background: 'var(--danger-soft)', color: 'var(--danger)', borderRadius: 10, fontSize: 13 }}>{error}</div>
+      )}
+
+      <button type="button" className="btn btn-primary btn-lg btn-block" onClick={closeMonth} disabled={saving} style={{ marginTop: 14 }}>
+        <Lock size={16} /> {saving ? '마감 중...' : `${year}년 ${month}월 마감하기`}
+      </button>
+
+      <div style={{ marginTop: 24 }}>
+        <h3 className="h4" style={{ marginBottom: 8 }}>이력</h3>
+        {loading ? (
+          <div className="skeleton" style={{ height: 60 }} />
+        ) : closings.length === 0 ? (
+          <p className="text-muted" style={{ fontSize: 13 }}>아직 마감 기록이 없어요</p>
+        ) : (
+          <div className="stack stack-2">
+            {closings.map((c) => (
+              <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: 10, background: 'var(--surface-soft)', borderRadius: 10 }}>
+                <ClipboardList size={16} color="var(--accent)" />
+                <div style={{ flex: 1 }}>
+                  <div className="h4" style={{ fontSize: 13 }}>{c.year}년 {c.month}월</div>
+                  <div className="text-muted" style={{ fontSize: 11 }}>
+                    품목 {c.item_count}개 · 부족 {c.low_stock_count}개 · {c.closed_by_user?.name || '—'} · {c.closed_at?.slice(0, 10)}
+                  </div>
+                </div>
+                <button type="button" onClick={() => deleteClosing(c.id)} className="btn btn-ghost btn-icon">
+                  <Trash2 size={13} color="var(--danger)" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </BottomSheet>
   );
 }
 
