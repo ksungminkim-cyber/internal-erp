@@ -15,7 +15,7 @@ export default function NewApprovalPage() {
 
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
-  const [items, setItems] = useState([{ description: '', category: '식자재', amount: '', vendor: '' }]);
+  const [items, setItems] = useState([{ description: '', category: '식자재', amount: '', vendor: '', product_url: '' }]);
   const [approvers, setApprovers] = useState([]);
   const [coworkers, setCoworkers] = useState([]);
   const [files, setFiles] = useState([]);
@@ -43,7 +43,7 @@ export default function NewApprovalPage() {
   function updateItem(idx, key, value) {
     setItems((prev) => prev.map((it, i) => (i === idx ? { ...it, [key]: value } : it)));
   }
-  function addItem() { setItems((prev) => [...prev, { description: '', category: '식자재', amount: '', vendor: '' }]); }
+  function addItem() { setItems((prev) => [...prev, { description: '', category: '식자재', amount: '', vendor: '', product_url: '' }]); }
   function removeItem(idx) { setItems((prev) => prev.filter((_, i) => i !== idx)); }
   function addApprover(uid) {
     if (approvers.some((a) => a.user_id === uid)) return;
@@ -92,6 +92,7 @@ export default function NewApprovalPage() {
           category: it.category,
           amount: parseFloat(it.amount) || 0,
           vendor: it.vendor.trim() || null,
+          product_url: it.product_url?.trim() || null,
         }))
       );
       if (e2) throw e2;
@@ -187,6 +188,7 @@ export default function NewApprovalPage() {
                   <input className="input" type="number" inputMode="numeric" placeholder="금액 (원)" value={it.amount} onChange={(e) => updateItem(idx, 'amount', e.target.value)} />
                 </div>
                 <input className="input" placeholder="거래처 (선택)" value={it.vendor} onChange={(e) => updateItem(idx, 'vendor', e.target.value)} />
+                <input className="input" type="url" placeholder="구매처 URL (재발주 시 바로가기)" value={it.product_url} onChange={(e) => updateItem(idx, 'product_url', e.target.value)} style={{ marginTop: 8 }} />
               </div>
             ))}
           </div>

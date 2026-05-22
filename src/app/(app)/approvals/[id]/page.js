@@ -239,7 +239,21 @@ export default function ApprovalDetailPage({ params }) {
                   }}
                 >
                   <div style={{ flex: 1 }}>
-                    <div className="h4" style={{ fontSize: 14 }}>{it.description}</div>
+                    <div className="h4" style={{ fontSize: 14, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                      <span>{it.description}</span>
+                      {it.product_url && (
+                        <a
+                          href={it.product_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="tag tag-accent"
+                          style={{ fontSize: 10, textDecoration: 'none' }}
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          🔗 구매하기
+                        </a>
+                      )}
+                    </div>
                     <div className="text-muted" style={{ fontSize: 12, marginTop: 2 }}>
                       <span className="tag" style={{ marginRight: 6 }}>{it.category}</span>
                       {it.vendor}

@@ -69,10 +69,29 @@ export default function PrintApprovalPage({ params }) {
   const paddedItems = [...items];
   while (paddedItems.length < MIN_ROWS) paddedItems.push(null);
 
-  // 결재선 — 최대 3칸 (표준 양식: 담당 / 검토 / 승인). 부족하면 빈 칸.
-  const APPROVAL_COLS = 3;
-  const stepsForBox = [...steps];
-  while (stepsForBox.length < APPROVAL_COLS) stepsForBox.push(null);
+  // 결재 박스 = 기안자(담당) + 결재선 단계들 — 최대 4칸
+  // 첫 칸: 기안자(담당), 마지막 결재자: 대표, 중간: 검토1, 2...
+  const APPROVAL_COLS = 4;
+  const boxCells = [
+    {
+      role: '담당',
+      name: req?.drafter?.name ?? '',
+      status: 'approved',
+      decided_at: req?.submitted_at,
+      isDrafter: true,
+    },
+    ...steps.map((s, i) => ({
+      role: i === steps.length - 1 ? '대표' : steps.length === 1 ? '대표' : `검토${steps.length > 2 ? i + 1 : ''}`,
+      name: s.approver?.name ?? '',
+      status: s.status,
+      decided_at: s.decided_at,
+      isDrafter: false,
+    })),
+  ];
+  while (boxCells.length < APPROVAL_COLS) {
+    boxCells.push({ role: '', name: '', status: null, decided_at: null });
+  }
+  const visibleCells = boxCells.slice(0, APPROVAL_COLS);
 
   if (loading) {
     return (
@@ -149,18 +168,18 @@ export default function PrintApprovalPage({ params }) {
 
           {/* 결재선 박스 (우상단 일반적 배치) */}
           <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
-            <table className="print-table" style={{ width: 360 }}>
+            <table className="print-table" style={{ width: 420 }}>
               <thead>
                 <tr>
                   <th rowSpan={2} style={{ width: 50 }}>결<br />재</th>
-                  {stepsForBox.map((s, i) => (
-                    <th key={i}>{i === stepsForBox.length - 1 ? '대표' : i === 0 ? '담당' : `검토 ${i}`}</th>
+                  {visibleCells.map((c, i) => (
+                    <th key={i}>{c.role}</th>
                   ))}
                 </tr>
                 <tr>
-                  {stepsForBox.map((s, i) => (
+                  {visibleCells.map((c, i) => (
                     <th key={i} style={{ fontWeight: 500, fontSize: 10, color: '#555' }}>
-                      {s?.approver?.name ?? ''}
+                      {c.name}
                     </th>
                   ))}
                 </tr>
@@ -168,9 +187,17 @@ export default function PrintApprovalPage({ params }) {
               <tbody>
                 <tr>
                   <td style={{ height: 56 }}></td>
-                  {stepsForBox.map((s, i) => (
+                  {visibleCells.map((c, i) => (
                     <td key={i} style={{ textAlign: 'center', verticalAlign: 'middle', height: 56 }}>
-                      {s?.status === 'approved' && (
+                      {c.isDrafter && c.name && (
+                        <span style={{
+                          display: 'inline-block', padding: '4px 10px',
+                          border: '1.5px solid #1d6bdb', color: '#1d6bdb',
+                          borderRadius: 4, fontWeight: 800, fontSize: 10,
+                          transform: 'rotate(-8deg)',
+                        }}>기안</span>
+                      )}
+                      {!c.isDrafter && c.status === 'approved' && (
                         <span style={{
                           display: 'inline-block', padding: '4px 10px',
                           border: '1.5px solid #c52f3e', color: '#c52f3e',
@@ -178,7 +205,7 @@ export default function PrintApprovalPage({ params }) {
                           transform: 'rotate(-8deg)',
                         }}>승인</span>
                       )}
-                      {s?.status === 'rejected' && (
+                      {!c.isDrafter && c.status === 'rejected' && (
                         <span style={{
                           display: 'inline-block', padding: '4px 10px',
                           border: '1.5px solid #999', color: '#999',
@@ -190,10 +217,10 @@ export default function PrintApprovalPage({ params }) {
                   ))}
                 </tr>
                 <tr>
-                  <td style={{ fontWeight: 600, textAlign: 'center', fontSize: 10 }}>결재일</td>
-                  {stepsForBox.map((s, i) => (
+                  <td style={{ fontWeight: 600, textAlign: 'center', fontSize: 10 }}>일자</td>
+                  {visibleCells.map((c, i) => (
                     <td key={i} style={{ textAlign: 'center', fontSize: 10, color: '#555' }}>
-                      {s?.decided_at ? ymd(s.decided_at) : ''}
+                      {c.decided_at ? ymd(c.decided_at) : ''}
                     </td>
                   ))}
                 </tr>
@@ -239,7 +266,14 @@ export default function PrintApprovalPage({ params }) {
               {paddedItems.map((it, idx) => (
                 <tr key={idx} style={{ height: 28 }}>
                   <td style={{ textAlign: 'center' }}>{it ? idx + 1 : ''}</td>
-                  <td>{it?.description ?? ''}</td>
+                  <td>
+                    {it?.description ?? ''}
+                    {it?.product_url && (
+                      <div style={{ fontSize: 9, color: '#666', marginTop: 2, wordBreak: 'break-all' }}>
+                        🔗 {it.product_url}
+                      </div>
+                    )}
+                  </td>
                   <td style={{ textAlign: 'center' }}>{it?.category ?? ''}</td>
                   <td>{it?.vendor ?? ''}</td>
                   <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
