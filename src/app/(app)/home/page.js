@@ -44,7 +44,7 @@ function WeatherWidget() {
           fetch(
             `https://api.open-meteo.com/v1/forecast` +
             `?latitude=${lat}&longitude=${lon}` +
-            `&current=temperature_2m,apparent_temperature,weathercode,precipitation_probability` +
+            `&current=temperature_2m,apparent_temperature,weathercode` +
             `&daily=weathercode,temperature_2m_max,temperature_2m_min,precipitation_probability_max` +
             `&timezone=Asia%2FSeoul&forecast_days=3`
           ).then((r) => r.json())
@@ -55,7 +55,6 @@ function WeatherWidget() {
           temp:   Math.round(r.current.temperature_2m),
           feels:  Math.round(r.current.apparent_temperature),
           code:   r.current.weathercode,
-          rain:   r.current.precipitation_probability ?? 0,
           daily:  r.daily.time.map((date, i) => ({
             date,
             code: r.daily.weathercode[i],
@@ -95,8 +94,8 @@ function WeatherWidget() {
         {SHOPS.map((shop, i) => {
           const w = data[i];
           const [icon, label] = wmo(w.code);
-          // 오늘 or 향후 3일 중 비 60% 이상이면 우산 경보
-          const rainAlert = w.rain >= 60 || w.daily.some((d) => d.rain >= 60);
+          // 오늘~모레 일별 최대 강수 확률 60% 이상이면 우산 경보
+          const rainAlert = w.daily.some((d) => d.rain >= 60);
           // 기온에 따른 색감
           const tempColor = w.temp >= 30 ? '#dc2626' : w.temp <= 5 ? '#2563eb' : 'var(--text)';
 
@@ -131,7 +130,7 @@ function WeatherWidget() {
                 <span style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.2 }}>{label}</span>
               </div>
               <div className="text-muted" style={{ fontSize: 11, marginBottom: 10 }}>
-                체감 {w.feels}°&nbsp;·&nbsp;강수 <strong style={{ color: w.rain >= 50 ? '#0891b2' : 'inherit' }}>{w.rain}%</strong>
+                체감 {w.feels}°
               </div>
 
               {/* 3일 미니 예보 */}
