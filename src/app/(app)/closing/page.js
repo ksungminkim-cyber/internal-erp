@@ -2,17 +2,27 @@
 
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { useApp } from '@/context/AppContext';
 import PageHeader from '@/components/PageHeader';
+import BottomSheet from '@/components/BottomSheet';
 import { formatCurrency } from '@/lib/format';
 import { downloadCsv, fmtDate } from '@/lib/csvExport';
 import {
   ChevronLeft, ChevronRight, Lock, Unlock, Download, Check, AlertCircle,
+  Send, Printer, X, Plus, Clock, FileCheck,
 } from 'lucide-react';
 
 function monthStart(y, m) { return new Date(y, m, 1, 0, 0, 0, 0); }
 function monthEnd(y, m) { return new Date(y, m + 1, 1, 0, 0, 0, 0); }
 function ymd(d) { return d.toISOString().slice(0, 10); }
+
+// 카테고리 → 회계분류 매핑 (스냅샷에서 재구성용 — approvals/new와 동일)
+function getCategoryKind(cat) {
+  if (['식자재', '음료/시럽', '주류'].includes(cat)) return 'cogs';
+  if (['전기', '수도', '가스', '통신', '임차료', '보험·세금', '공과잡비'].includes(cat)) return 'utilities';
+  return 'opex';
+}
 
 export default function ClosingPage() {
   const router = useRouter();
@@ -30,8 +40,10 @@ export default function ClosingPage() {
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState(null);
   const [existingClosing, setExistingClosing] = useState(null);
+  const [closingApproval, setClosingApproval] = useState(null);
   const [acting, setActing] = useState(false);
   const [error, setError] = useState(null);
+  const [showApprovalDialog, setShowApprovalDialog] = useState(false);
 
   const start = useMemo(() => monthStart(year, month), [year, month]);
   const end = useMemo(() => monthEnd(year, month), [year, month]);
@@ -52,19 +64,47 @@ export default function ClosingPage() {
 
     if (existing) {
       setExistingClosing(existing);
+      // 회계 분류는 expense_breakdown(category 기반)에서 재계산
+      const expBd = existing.expense_breakdown || [];
+      const byKind = { cogs: 0, opex: 0, utilities: 0 };
+      expBd.forEach((e) => {
+        const k = getCategoryKind(e.category);
+        byKind[k] = (byKind[k] ?? 0) + Number(e.amount || 0);
+      });
+      const totalRevenue = Number(existing.total_revenue);
+      const totalLabor = Number(existing.total_labor);
+      const grossProfit = totalRevenue - byKind.cogs;
+      const operatingProfit = grossProfit - totalLabor - byKind.opex - byKind.utilities;
       setData({
-        totalRevenue: Number(existing.total_revenue),
-        totalLabor: Number(existing.total_labor),
+        totalRevenue,
+        totalLabor,
         totalExpense: Number(existing.total_expense),
         netProfit: Number(existing.net_profit),
+        totalCogs: byKind.cogs,
+        totalOpex: byKind.opex,
+        totalUtilities: byKind.utilities,
+        grossProfit,
+        operatingProfit,
         revenueBreakdown: existing.revenue_breakdown || [],
         laborBreakdown: existing.labor_breakdown || [],
-        expenseBreakdown: existing.expense_breakdown || [],
+        expenseBreakdown: expBd,
       });
+      // 연결된 마감 결재 조회
+      if (existing.approval_request_id) {
+        const { data: appr } = await supabase
+          .from('approval_requests')
+          .select('id, status, title, submitted_at, decided_at')
+          .eq('id', existing.approval_request_id)
+          .maybeSingle();
+        setClosingApproval(appr ?? null);
+      } else {
+        setClosingApproval(null);
+      }
       setLoading(false);
       return;
     }
     setExistingClosing(null);
+    setClosingApproval(null);
 
     // 실시간 집계
     const [sales, expenses, attendance, profilesData] = await Promise.all([
@@ -77,7 +117,7 @@ export default function ClosingPage() {
         .order('sales_date'),
       supabase
         .from('approval_requests')
-        .select('id, title, total_amount, decided_at, expense_items(category, amount, description)')
+        .select('id, title, total_amount, decided_at, expense_items(category, amount, description, kind)')
         .eq('workplace_id', currentWorkplaceId)
         .eq('status', 'approved')
         .gte('submitted_at', start.toISOString())
@@ -96,19 +136,27 @@ export default function ClosingPage() {
     const salesRows = sales.data ?? [];
     const totalRevenue = salesRows.reduce((s, r) => s + Number(r.total_amount || 0), 0);
 
-    // 지출 집계 (카테고리별)
+    // 지출 집계 — 회계 분류(kind)별 + 카테고리별
     const expRows = expenses.data ?? [];
     const totalExpense = expRows.reduce((s, r) => s + Number(r.total_amount || 0), 0);
     const expenseByCategory = {};
+    const expenseByKind = { cogs: 0, opex: 0, utilities: 0 };
     expRows.forEach((r) => {
       (r.expense_items ?? []).forEach((it) => {
         const k = it.category || '기타';
-        expenseByCategory[k] = (expenseByCategory[k] ?? 0) + Number(it.amount || 0);
+        const amt = Number(it.amount || 0);
+        expenseByCategory[k] = (expenseByCategory[k] ?? 0) + amt;
+        const kind = it.kind || 'opex';
+        expenseByKind[kind] = (expenseByKind[kind] ?? 0) + amt;
       });
     });
     const expenseBreakdown = Object.entries(expenseByCategory)
       .map(([category, amount]) => ({ category, amount }))
       .sort((a, b) => b.amount - a.amount);
+
+    const totalCogs = expenseByKind.cogs;
+    const totalOpex = expenseByKind.opex;
+    const totalUtilities = expenseByKind.utilities;
 
     // 인건비 집계 (직원별 근무시간 × 시급)
     const wageMap = new Map();
@@ -149,9 +197,13 @@ export default function ClosingPage() {
     laborBreakdown.sort((a, b) => b.labor - a.labor);
 
     const netProfit = totalRevenue - totalLabor - totalExpense;
+    const grossProfit = totalRevenue - totalCogs;
+    const operatingProfit = grossProfit - totalLabor - totalOpex - totalUtilities;
 
     setData({
       totalRevenue, totalLabor, totalExpense, netProfit,
+      totalCogs, totalOpex, totalUtilities,
+      grossProfit, operatingProfit,
       revenueBreakdown: salesRows.map((r) => ({
         sales_date: r.sales_date,
         total: Number(r.total_amount),
@@ -270,6 +322,13 @@ export default function ClosingPage() {
         subtitle="매출 · 인건비 · 지출 통합 손익"
         action={
           <div style={{ display: 'flex', gap: 6 }}>
+            <Link
+              href={`/closing/print?year=${year}&month=${month + 1}`}
+              className="btn btn-soft btn-sm"
+              style={{ pointerEvents: !data || loading ? 'none' : 'auto', opacity: !data || loading ? 0.5 : 1 }}
+            >
+              <Printer size={14} /> 인쇄
+            </Link>
             <button onClick={exportCsv} className="btn btn-soft btn-sm" disabled={!data || loading}>
               <Download size={14} /> CSV
             </button>
@@ -303,18 +362,26 @@ export default function ClosingPage() {
           </div>
         ) : (
           <>
-            {/* 핵심 수치 — 단순한 테이블 형식 */}
+            {/* 손익계산서 — 표준 양식 */}
             <section className="card">
-              <h2 className="h3" style={{ marginBottom: 14 }}>손익 요약</h2>
+              <h2 className="h3" style={{ marginBottom: 14 }}>손익계산서</h2>
               <div className="stack stack-2">
-                <Row label="매출" value={data.totalRevenue} />
-                <Row label="인건비" value={-data.totalLabor} color="var(--danger)" />
-                <Row label="지출" value={-data.totalExpense} color="var(--danger)" />
+                <Row label="매출" value={data.totalRevenue} bold />
+                <Row label="(–) 매출원가 — 식자재·음료·주류" value={-data.totalCogs} color="var(--text-secondary)" small />
                 <hr className="divider" style={{ margin: '4px 0' }} />
                 <Row
+                  label="매출총이익"
+                  value={data.grossProfit}
+                  color={data.grossProfit >= 0 ? 'var(--text)' : 'var(--danger)'}
+                />
+                <Row label="(–) 인건비" value={-data.totalLabor} color="var(--text-secondary)" small />
+                <Row label="(–) 일반관리비 — 비품·소모품·수리·마케팅" value={-data.totalOpex} color="var(--text-secondary)" small />
+                <Row label="(–) 공과잡비 — 전기·수도·가스·통신·임차료" value={-data.totalUtilities} color="var(--text-secondary)" small />
+                <hr className="divider" style={{ margin: '4px 0', borderColor: 'var(--border-strong)' }} />
+                <Row
                   label="영업이익"
-                  value={data.netProfit}
-                  color={data.netProfit >= 0 ? 'var(--success)' : 'var(--danger)'}
+                  value={data.operatingProfit}
+                  color={data.operatingProfit >= 0 ? 'var(--success)' : 'var(--danger)'}
                   large
                 />
               </div>
@@ -414,9 +481,74 @@ export default function ClosingPage() {
                       이 스냅샷은 마감 시점 데이터로 저장되어 있습니다.
                       이후 데이터가 변경되어도 이 화면은 마감 당시 수치를 유지합니다.
                     </p>
-                    <button type="button" className="btn btn-outline btn-sm" onClick={unlockClose} disabled={acting} style={{ color: 'var(--danger)' }}>
+
+                    {/* 마감 결재 상태 */}
+                    {closingApproval ? (
+                      <div
+                        style={{
+                          padding: 12,
+                          borderRadius: 12,
+                          background: closingApproval.status === 'approved'
+                            ? 'var(--success-soft)'
+                            : closingApproval.status === 'rejected'
+                              ? 'var(--danger-soft)'
+                              : 'var(--accent-soft)',
+                          marginBottom: 12,
+                          display: 'flex', alignItems: 'center', gap: 10,
+                        }}
+                      >
+                        {closingApproval.status === 'approved' ? (
+                          <FileCheck size={18} color="var(--success)" />
+                        ) : closingApproval.status === 'rejected' ? (
+                          <X size={18} color="var(--danger)" />
+                        ) : (
+                          <Clock size={18} color="var(--accent)" />
+                        )}
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontSize: 13, fontWeight: 700 }}>
+                            {closingApproval.status === 'approved' && '마감 결재 완료'}
+                            {closingApproval.status === 'pending' && '마감 결재 진행 중'}
+                            {closingApproval.status === 'rejected' && '마감 결재 반려'}
+                            {closingApproval.status === 'draft' && '마감 결재 임시저장'}
+                          </div>
+                          <div className="text-muted" style={{ fontSize: 11, marginTop: 2 }}>
+                            {closingApproval.title}
+                          </div>
+                        </div>
+                        <Link href={`/approvals/${closingApproval.id}`} className="btn btn-ghost btn-sm">
+                          상세 →
+                        </Link>
+                      </div>
+                    ) : (
+                      <div style={{ marginBottom: 12 }}>
+                        <button
+                          type="button"
+                          className="btn btn-accent btn-block"
+                          onClick={() => setShowApprovalDialog(true)}
+                          disabled={acting}
+                        >
+                          <Send size={14} /> 마감 결재 올리기
+                        </button>
+                        <p className="text-muted" style={{ fontSize: 11, marginTop: 6, lineHeight: 1.5 }}>
+                          마감 결재가 승인되면 이 스냅샷이 잠금 상태로 변경되어 더 이상 수정할 수 없습니다.
+                        </p>
+                      </div>
+                    )}
+
+                    <button
+                      type="button"
+                      className="btn btn-outline btn-sm"
+                      onClick={unlockClose}
+                      disabled={acting || closingApproval?.status === 'approved'}
+                      style={{ color: 'var(--danger)' }}
+                    >
                       <Unlock size={14} /> 마감 해제
                     </button>
+                    {closingApproval?.status === 'approved' && (
+                      <p className="text-muted" style={{ fontSize: 11, marginTop: 6 }}>
+                        승인된 마감은 해제할 수 없습니다. (회계 정합성)
+                      </p>
+                    )}
                   </div>
                 ) : (
                   <div>
@@ -439,7 +571,198 @@ export default function ClosingPage() {
           </>
         )}
       </main>
+
+      {showApprovalDialog && existingClosing && (
+        <SubmitClosingApproval
+          closingId={existingClosing.id}
+          year={year}
+          month={month + 1}
+          totalRevenue={data.totalRevenue}
+          operatingProfit={data.operatingProfit}
+          userId={user.id}
+          workplaceId={currentWorkplaceId}
+          supabase={supabase}
+          onClose={() => setShowApprovalDialog(false)}
+          onSaved={async (requestId) => {
+            setShowApprovalDialog(false);
+            // 마감 스냅샷에 결재 ID 연결
+            await supabase
+              .from('month_closings')
+              .update({ approval_request_id: requestId })
+              .eq('id', existingClosing.id);
+            await load();
+            router.push(`/approvals/${requestId}`);
+          }}
+        />
+      )}
     </>
+  );
+}
+
+function SubmitClosingApproval({
+  closingId, year, month, totalRevenue, operatingProfit, userId, workplaceId, supabase, onClose, onSaved,
+}) {
+  const [approvers, setApprovers] = useState([]);
+  const [candidates, setCandidates] = useState([]);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    (async () => {
+      const { data } = await supabase
+        .from('memberships')
+        .select('user_id, role, profiles!memberships_user_id_fkey(name)')
+        .eq('workplace_id', workplaceId)
+        .eq('active', true)
+        .in('role', ['manager', 'owner'])
+        .neq('user_id', userId);
+      setCandidates(
+        (data ?? []).map((m) => ({ user_id: m.user_id, name: m.profiles?.name || '—', role: m.role }))
+      );
+    })();
+  }, [supabase, workplaceId, userId]);
+
+  function addApprover(uid) {
+    if (approvers.some((a) => a.user_id === uid)) return;
+    const f = candidates.find((c) => c.user_id === uid);
+    if (f) setApprovers((p) => [...p, f]);
+  }
+  function removeApprover(uid) { setApprovers((p) => p.filter((a) => a.user_id !== uid)); }
+  function moveApprover(idx, dir) {
+    setApprovers((prev) => {
+      const next = [...prev];
+      const j = idx + dir;
+      if (j < 0 || j >= next.length) return prev;
+      [next[idx], next[j]] = [next[j], next[idx]];
+      return next;
+    });
+  }
+
+  async function submit() {
+    setError(null);
+    if (approvers.length === 0) return setError('결재자를 최소 1명 지정해주세요.');
+    setSaving(true);
+    try {
+      const { data: req, error: e1 } = await supabase
+        .from('approval_requests')
+        .insert({
+          workplace_id: workplaceId,
+          drafter_id: userId,
+          doc_type: 'closing',
+          title: `${year}년 ${month}월 월 마감`,
+          body: `매출 ${formatCurrency(totalRevenue)}원 / 영업이익 ${formatCurrency(operatingProfit)}원`,
+          total_amount: operatingProfit,
+          period_year: year,
+          period_month: month,
+        })
+        .select('id')
+        .single();
+      if (e1) throw e1;
+      const requestId = req.id;
+
+      const { error: e2 } = await supabase.from('approval_steps').insert(
+        approvers.map((a, i) => ({
+          request_id: requestId,
+          step_order: i + 1,
+          approver_id: a.user_id,
+          status: 'waiting',
+        }))
+      );
+      if (e2) throw e2;
+
+      onSaved(requestId);
+    } catch (err) {
+      setError(err.message);
+      setSaving(false);
+    }
+  }
+
+  return (
+    <BottomSheet onClose={onClose}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+        <h2 className="h3">월 마감 결재 올리기</h2>
+        <button onClick={onClose} className="btn btn-ghost btn-icon"><X size={18} /></button>
+      </div>
+
+      <div className="card" style={{ background: 'var(--surface-soft)', boxShadow: 'none' }}>
+        <div className="text-muted" style={{ fontSize: 12, marginBottom: 4 }}>기간</div>
+        <div className="h3">{year}년 {month}월</div>
+        <div style={{ marginTop: 10, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+          <div>
+            <div className="text-muted" style={{ fontSize: 11 }}>매출</div>
+            <div className="num" style={{ fontWeight: 700 }}>{formatCurrency(totalRevenue)}원</div>
+          </div>
+          <div>
+            <div className="text-muted" style={{ fontSize: 11 }}>영업이익</div>
+            <div className="num" style={{
+              fontWeight: 700,
+              color: operatingProfit >= 0 ? 'var(--success)' : 'var(--danger)',
+            }}>
+              {operatingProfit >= 0 ? '' : '-'}{formatCurrency(Math.abs(operatingProfit))}원
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style={{ marginTop: 16 }}>
+        <label className="label">결재자 (순서대로)</label>
+        {approvers.length > 0 && (
+          <div className="stack stack-2" style={{ marginBottom: 12 }}>
+            {approvers.map((a, idx) => (
+              <div key={a.user_id} style={{
+                display: 'flex', alignItems: 'center', gap: 10,
+                padding: 10, borderRadius: 12, background: 'var(--accent-soft)',
+              }}>
+                <span className="num" style={{
+                  width: 26, height: 26, borderRadius: 999,
+                  background: 'var(--accent)', color: '#fff',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 12, fontWeight: 800,
+                }}>{idx + 1}</span>
+                <span style={{ flex: 1, fontWeight: 600, fontSize: 14 }}>{a.name}</span>
+                <span className="tag" style={{ fontSize: 10 }}>{a.role === 'owner' ? '대표' : '매니저'}</span>
+                <button type="button" onClick={() => moveApprover(idx, -1)} disabled={idx === 0} className="btn btn-ghost btn-icon">↑</button>
+                <button type="button" onClick={() => moveApprover(idx, 1)} disabled={idx === approvers.length - 1} className="btn btn-ghost btn-icon">↓</button>
+                <button type="button" onClick={() => removeApprover(a.user_id)} className="btn btn-ghost btn-icon">
+                  <X size={14} color="var(--danger)" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {candidates.length === 0 ? (
+          <p className="text-muted" style={{ fontSize: 13 }}>같은 사업장의 매니저/대표가 없어요</p>
+        ) : (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            {candidates.filter((c) => !approvers.find((a) => a.user_id === c.user_id)).map((c) => (
+              <button
+                key={c.user_id}
+                type="button"
+                className="tag tag-accent"
+                onClick={() => addApprover(c.user_id)}
+                style={{ cursor: 'pointer', border: '1px dashed var(--accent)' }}
+              >
+                <Plus size={11} /> {c.name}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {error && (
+        <div style={{ marginTop: 12, padding: 10, background: 'var(--danger-soft)', color: 'var(--danger)', borderRadius: 10, fontSize: 13 }}>
+          {error}
+        </div>
+      )}
+
+      <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
+        <button type="button" className="btn btn-outline" onClick={onClose} style={{ flex: 1 }}>취소</button>
+        <button type="button" className="btn btn-primary" onClick={submit} disabled={saving} style={{ flex: 2 }}>
+          <Send size={14} /> {saving ? '제출 중...' : '결재 올리기'}
+        </button>
+      </div>
+    </BottomSheet>
   );
 }
 

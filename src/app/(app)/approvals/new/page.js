@@ -7,7 +7,32 @@ import PageHeader from '@/components/PageHeader';
 import { formatCurrency } from '@/lib/format';
 import { Plus, Trash2, X, ChevronDown, ChevronLeft } from 'lucide-react';
 
-const EXPENSE_CATEGORIES = ['식자재', '비품', '소모품', '수리/유지', '마케팅', '기타'];
+// 카테고리 → 회계 분류 (kind) 자동 매핑
+const EXPENSE_CATEGORIES = [
+  // 매출원가 (cogs)
+  { value: '식자재',     kind: 'cogs',      group: '매출원가' },
+  { value: '음료/시럽',  kind: 'cogs',      group: '매출원가' },
+  { value: '주류',       kind: 'cogs',      group: '매출원가' },
+  // 일반관리비 (opex)
+  { value: '비품',       kind: 'opex',      group: '일반관리비' },
+  { value: '소모품',     kind: 'opex',      group: '일반관리비' },
+  { value: '수리/유지',  kind: 'opex',      group: '일반관리비' },
+  { value: '마케팅',     kind: 'opex',      group: '일반관리비' },
+  { value: '교육·복리',  kind: 'opex',      group: '일반관리비' },
+  // 공과잡비 (utilities)
+  { value: '전기',       kind: 'utilities', group: '공과잡비' },
+  { value: '수도',       kind: 'utilities', group: '공과잡비' },
+  { value: '가스',       kind: 'utilities', group: '공과잡비' },
+  { value: '통신',       kind: 'utilities', group: '공과잡비' },
+  { value: '임차료',     kind: 'utilities', group: '공과잡비' },
+  { value: '보험·세금',  kind: 'utilities', group: '공과잡비' },
+  // 기타
+  { value: '기타',       kind: 'opex',      group: '일반관리비' },
+];
+
+function getKindByCategory(cat) {
+  return EXPENSE_CATEGORIES.find((c) => c.value === cat)?.kind ?? 'opex';
+}
 
 export default function NewApprovalPage() {
   const router = useRouter();
@@ -93,6 +118,7 @@ export default function NewApprovalPage() {
           amount: parseFloat(it.amount) || 0,
           vendor: it.vendor.trim() || null,
           product_url: it.product_url?.trim() || null,
+          kind: getKindByCategory(it.category),
         }))
       );
       if (e2) throw e2;
@@ -183,7 +209,13 @@ export default function NewApprovalPage() {
                 <input className="input" placeholder="품목 / 내역" value={it.description} onChange={(e) => updateItem(idx, 'description', e.target.value)} />
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                   <select className="input" value={it.category} onChange={(e) => updateItem(idx, 'category', e.target.value)}>
-                    {EXPENSE_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+                    {['매출원가', '일반관리비', '공과잡비'].map((g) => (
+                      <optgroup key={g} label={g}>
+                        {EXPENSE_CATEGORIES.filter((c) => c.group === g).map((c) => (
+                          <option key={c.value} value={c.value}>{c.value}</option>
+                        ))}
+                      </optgroup>
+                    ))}
                   </select>
                   <input className="input" type="number" inputMode="numeric" placeholder="금액 (원)" value={it.amount} onChange={(e) => updateItem(idx, 'amount', e.target.value)} />
                 </div>
