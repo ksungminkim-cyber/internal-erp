@@ -193,11 +193,9 @@ export default function RecipeDetail({ params }) {
             </p>
           )}
 
-          {isManager && (
-            <button type="button" className="btn btn-outline btn-lg" onClick={() => setEditing(true)}>
-              <Edit3 size={14} /> 편집
-            </button>
-          )}
+          <button type="button" className="btn btn-outline btn-lg" onClick={() => setEditing(true)}>
+            <Edit3 size={14} /> 편집
+          </button>
         </main>
       </>
     );

@@ -144,7 +144,7 @@ export default function RecipesPage() {
             <div className="empty-icon"><BookOpen size={26} /></div>
             <div className="empty-title">{search ? '검색 결과 없음' : '레시피 없음'}</div>
             <div className="empty-desc">
-              {isManager ? '+ 버튼으로 첫 레시피를 작성해보세요' : '매니저가 작성한 레시피가 여기 표시됩니다'}
+              + 버튼으로 첫 레시피를 작성해보세요
             </div>
           </div>
         ) : (
@@ -205,11 +205,9 @@ export default function RecipesPage() {
         )}
       </main>
 
-      {isManager && (
-        <Link href="/recipes/new" className="fab" style={{ textDecoration: 'none' }} aria-label="새 레시피">
-          <Plus size={26} />
-        </Link>
-      )}
+      <Link href="/recipes/new" className="fab" style={{ textDecoration: 'none' }} aria-label="새 레시피">
+        <Plus size={26} />
+      </Link>
     </>
   );
 }

@@ -8,6 +8,7 @@ import PageHeader from '@/components/PageHeader';
 import Avatar from '@/components/Avatar';
 import BottomSheet from '@/components/BottomSheet';
 import { Plus, ChevronLeft, ChevronRight, X, Trash2, Send, CheckCircle2, AlertCircle, Lock, FileText, Copy } from 'lucide-react';
+import { isHoliday } from '@/lib/holidays';
 
 const DOW = ['일', '월', '화', '수', '목', '금', '토'];
 
@@ -274,8 +275,12 @@ export default function SchedulePage() {
             isManager={isManager}
             hasApproval={hasApproval}
             onCellClick={(d) => {
-              const s = new Date(d); s.setHours(9, 0, 0, 0);
-              const e = new Date(d); e.setHours(18, 0, 0, 0);
+              // 정확한 local 날짜 사용 — 시간대 오프셋 방지
+              const y = d.getFullYear();
+              const m = d.getMonth();
+              const day = d.getDate();
+              const s = new Date(y, m, day, 9, 0, 0, 0);
+              const e = new Date(y, m, day, 18, 0, 0, 0);
               setEditing({ mode: 'shift', start_at: s.toISOString(), end_at: e.toISOString() });
             }}
             onShiftClick={(s) => {
@@ -720,8 +725,13 @@ function CalendarGrid({ anchor, shifts, logs, todayStr, isManager, hasApproval, 
 
   function shiftsForDate(d) {
     if (!d) return [];
-    const key = ymd(d);
-    return shifts.filter((s) => new Date(s.start_at).toISOString().slice(0, 10) === key);
+    // Local 날짜 키 사용 (시간대 오프셋 방지)
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    return shifts.filter((s) => {
+      const sd = new Date(s.start_at);
+      const sKey = `${sd.getFullYear()}-${String(sd.getMonth() + 1).padStart(2, '0')}-${String(sd.getDate()).padStart(2, '0')}`;
+      return sKey === key;
+    });
   }
 
   return (
@@ -751,6 +761,8 @@ function CalendarGrid({ anchor, shifts, logs, todayStr, isManager, hasApproval, 
           const dow = i % 7;
           const isLastRow = i >= cells.length - 7;
           const clickable = isManager && !hasApproval && d;
+          const holidayName = d ? isHoliday(d) : null;
+          const isRedDay = d && (dow === 0 || !!holidayName); // 일요일 또는 공휴일
           return (
             <div
               key={i}
@@ -761,7 +773,8 @@ function CalendarGrid({ anchor, shifts, logs, todayStr, isManager, hasApproval, 
                 borderRight: dow < 6 ? '1px solid var(--border)' : undefined,
                 borderBottom: !isLastRow ? '1px solid var(--border)' : undefined,
                 background: !d ? 'var(--surface-soft)' :
-                  isToday ? 'var(--accent-soft)' : 'var(--surface)',
+                  isToday ? 'var(--accent-soft)' :
+                  holidayName ? 'var(--danger-soft)' : 'var(--surface)',
                 cursor: clickable ? 'pointer' : 'default',
                 transition: 'background var(--t-fast) var(--ease)',
                 position: 'relative',
@@ -771,7 +784,7 @@ function CalendarGrid({ anchor, shifts, logs, todayStr, isManager, hasApproval, 
                 <>
                   <div style={{
                     fontSize: 12, fontWeight: 700,
-                    color: dow === 0 ? 'var(--danger)' : dow === 6 ? 'var(--accent)' : 'var(--text)',
+                    color: isRedDay ? 'var(--danger)' : dow === 6 ? 'var(--accent)' : 'var(--text)',
                     marginBottom: 4,
                     display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                   }}>
@@ -780,6 +793,16 @@ function CalendarGrid({ anchor, shifts, logs, todayStr, isManager, hasApproval, 
                       <span style={{ fontSize: 9, fontWeight: 800, color: 'var(--accent)' }}>오늘</span>
                     )}
                   </div>
+                  {holidayName && (
+                    <div style={{
+                      fontSize: 9, fontWeight: 700,
+                      color: 'var(--danger)',
+                      marginBottom: 4,
+                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                    }} title={holidayName}>
+                      🇰🇷 {holidayName}
+                    </div>
+                  )}
                   <div className="stack" style={{ gap: 3 }}>
                     {dayShifts.slice(0, 4).map((s) => {
                       const att = matchAttendance(s, logs);
