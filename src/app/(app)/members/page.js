@@ -49,17 +49,24 @@ export default function MembersPage() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const [{ data: wps }, { data: profs }, { data: mems }] = await Promise.all([
-      supabase.from('workplaces').select('id, name').order('name'),
-      supabase.from('profiles').select('*').order('created_at', { ascending: false }),
-      supabase
-        .from('memberships')
-        .select('id, user_id, workplace_id, role, active'),
-    ]);
-    setWorkplaces(wps ?? []);
-    setAllProfiles(profs ?? []);
-    setAllMemberships(mems ?? []);
-    setLoading(false);
+    setError(null);
+    try {
+      const [wpsRes, profsRes, memsRes] = await Promise.all([
+        supabase.from('workplaces').select('id, name').order('name'),
+        supabase.from('profiles').select('*').order('created_at', { ascending: false }),
+        supabase.from('memberships').select('id, user_id, workplace_id, role, active'),
+      ]);
+      if (wpsRes.error) throw new Error('workplaces: ' + wpsRes.error.message);
+      if (profsRes.error) throw new Error('profiles: ' + profsRes.error.message);
+      if (memsRes.error) throw new Error('memberships: ' + memsRes.error.message);
+      setWorkplaces(wpsRes.data ?? []);
+      setAllProfiles(profsRes.data ?? []);
+      setAllMemberships(memsRes.data ?? []);
+    } catch (err) {
+      setError(err.message ?? '데이터 로드 실패');
+    } finally {
+      setLoading(false);
+    }
   }, [supabase]);
 
   useEffect(() => {
@@ -150,6 +157,12 @@ export default function MembersPage() {
       />
 
       <main className="fade-in page-main" style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+        {error && (
+          <div style={{ padding: 14, background: 'var(--danger-soft, #fee)', color: 'var(--danger, #c00)', borderRadius: 12, fontSize: 13 }}>
+            <strong>오류:</strong> {error}
+            <button type="button" onClick={load} className="btn btn-sm" style={{ marginLeft: 12 }}>재시도</button>
+          </div>
+        )}
         {/* 미배정 사용자 */}
         <section className="stack stack-3">
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
