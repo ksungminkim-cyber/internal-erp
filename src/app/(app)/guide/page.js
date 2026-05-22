@@ -32,79 +32,80 @@ export default function GuidePage() {
           margin: 0 auto;
           padding: 28px 32px 60px;
           font-family: 'Pretendard Variable', Pretendard, system-ui, sans-serif;
-          font-size: 13.5px;
-          line-height: 1.6;
-          letter-spacing: -0.01em;
+          font-size: 15.5px;
+          line-height: 1.78;
+          letter-spacing: -0.005em;
+          word-break: keep-all;
         }
-        .guide-page h1 { font-size: 28px; font-weight: 900; margin: 0; letter-spacing: -0.02em; color: #1a1a1a; }
-        .guide-page h2 { font-size: 20px; font-weight: 800; margin: 0 0 14px; color: #4f46e5; letter-spacing: -0.01em; padding-bottom: 6px; border-bottom: 2px solid #4f46e5; }
-        .guide-page h3 { font-size: 15px; font-weight: 800; margin: 18px 0 8px; color: #1a1a1a; display: flex; align-items: center; gap: 6px; }
-        .guide-page h4 { font-size: 13px; font-weight: 700; margin: 12px 0 6px; color: #475569; }
-        .guide-page p { margin: 0 0 8px; }
-        .guide-page ul, .guide-page ol { margin: 4px 0 10px; padding-left: 20px; }
-        .guide-page li { margin: 4px 0; }
+        .guide-page h1 { font-size: 32px; font-weight: 900; margin: 0; letter-spacing: -0.02em; color: #1a1a1a; }
+        .guide-page h2 { font-size: 24px; font-weight: 800; margin: 0 0 16px; color: #4f46e5; letter-spacing: -0.01em; padding-bottom: 8px; border-bottom: 2px solid #4f46e5; }
+        .guide-page h3 { font-size: 18px; font-weight: 800; margin: 22px 0 10px; color: #1a1a1a; display: flex; align-items: center; gap: 6px; }
+        .guide-page h4 { font-size: 16px; font-weight: 700; margin: 14px 0 8px; color: #475569; }
+        .guide-page p { margin: 0 0 10px; }
+        .guide-page ul, .guide-page ol { margin: 6px 0 12px; padding-left: 22px; }
+        .guide-page li { margin: 6px 0; }
         .guide-page strong { color: #1a1a1a; font-weight: 700; }
         .guide-cover {
-          padding: 60px 40px;
+          padding: 64px 40px;
           background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
           color: #fff;
           border-radius: 24px;
           text-align: center;
           margin-bottom: 40px;
         }
-        .guide-cover h1 { color: #fff; font-size: 44px; letter-spacing: -0.03em; }
-        .guide-cover .subtitle { font-size: 18px; opacity: 0.95; margin-top: 10px; font-weight: 500; }
-        .guide-cover .meta { font-size: 12px; opacity: 0.8; margin-top: 36px; }
+        .guide-cover h1 { color: #fff; font-size: 48px; letter-spacing: -0.03em; }
+        .guide-cover .subtitle { font-size: 20px; opacity: 0.95; margin-top: 12px; font-weight: 500; }
+        .guide-cover .meta { font-size: 14px; opacity: 0.85; margin-top: 38px; line-height: 1.7; }
         .step-box {
           background: #f8fafc;
-          border-left: 3px solid #4f46e5;
-          padding: 12px 14px;
+          border-left: 4px solid #4f46e5;
+          padding: 14px 16px;
           border-radius: 8px;
-          margin: 8px 0;
+          margin: 10px 0;
         }
         .step-number {
           display: inline-flex; align-items: center; justify-content: center;
-          width: 22px; height: 22px; border-radius: 50%;
+          width: 24px; height: 24px; border-radius: 50%;
           background: #4f46e5; color: #fff;
-          font-size: 11px; font-weight: 800;
-          margin-right: 8px;
+          font-size: 13px; font-weight: 800;
+          margin-right: 10px;
         }
         .tip-box {
           background: #fef3c7;
-          border-left: 3px solid #f59e0b;
-          padding: 10px 14px;
+          border-left: 4px solid #f59e0b;
+          padding: 12px 16px;
           border-radius: 8px;
-          margin: 10px 0;
-          font-size: 12.5px;
+          margin: 12px 0;
+          font-size: 15px;
         }
         .warn-box {
           background: #fee2e2;
-          border-left: 3px solid #dc2626;
-          padding: 10px 14px;
+          border-left: 4px solid #dc2626;
+          padding: 12px 16px;
           border-radius: 8px;
-          margin: 10px 0;
-          font-size: 12.5px;
+          margin: 12px 0;
+          font-size: 15px;
         }
         .admin-box {
           background: #ede9fe;
-          border-left: 3px solid #7c3aed;
-          padding: 10px 14px;
+          border-left: 4px solid #7c3aed;
+          padding: 12px 16px;
           border-radius: 8px;
-          margin: 10px 0;
-          font-size: 12.5px;
+          margin: 12px 0;
+          font-size: 15px;
         }
         .icon-card {
           display: flex;
           align-items: flex-start;
-          gap: 12px;
-          padding: 12px;
+          gap: 14px;
+          padding: 14px;
           background: #f8fafc;
           border-radius: 12px;
-          margin: 8px 0;
+          margin: 10px 0;
         }
         .icon-card .icon-circle {
           flex-shrink: 0;
-          width: 38px; height: 38px;
+          width: 42px; height: 42px;
           border-radius: 12px;
           background: #ede9fe;
           color: #4f46e5;
@@ -112,19 +113,19 @@ export default function GuidePage() {
         }
         .toc-item {
           display: flex; justify-content: space-between;
-          padding: 6px 10px;
-          margin: 2px 0;
+          padding: 8px 12px;
+          margin: 3px 0;
           background: #f8fafc;
           border-radius: 6px;
-          font-size: 13px;
+          font-size: 15px;
         }
         .chip-label {
           display: inline-block;
-          padding: 2px 8px;
+          padding: 3px 9px;
           background: #ede9fe;
           color: #4f46e5;
           border-radius: 10px;
-          font-size: 10px;
+          font-size: 12px;
           font-weight: 700;
           margin-left: 6px;
         }
@@ -132,12 +133,12 @@ export default function GuidePage() {
         .chip-label.daily { background: #d1fae5; color: #047857; }
         .key-action {
           display: inline-block;
-          padding: 2px 8px;
+          padding: 3px 9px;
           border: 1px solid #4f46e5;
           color: #4f46e5;
           border-radius: 6px;
           font-weight: 700;
-          font-size: 11.5px;
+          font-size: 13px;
           background: #fff;
         }
       `}</style>

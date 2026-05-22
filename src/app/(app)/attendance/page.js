@@ -22,7 +22,7 @@ const STATUS_META = {
 };
 
 export default function AttendancePage() {
-  const { user, currentWorkplaceId, supabase, loading, memberships } = useApp();
+  const { user, currentWorkplaceId, supabase, loading, memberships, isManager } = useApp();
   const [todayLogs, setTodayLogs] = useState([]);
   const [board, setBoard] = useState([]);
   const [actionLoading, setActionLoading] = useState(null);
@@ -176,9 +176,11 @@ export default function AttendancePage() {
         title="근태"
         subtitle="버튼을 눌러 출/퇴근을 기록해요"
         action={
-          <button onClick={exportMonthCsv} className="btn btn-soft btn-sm">
-            <Download size={14} /> 이달 CSV
-          </button>
+          isManager ? (
+            <button onClick={exportMonthCsv} className="btn btn-soft btn-sm">
+              <Download size={14} /> 이달 CSV
+            </button>
+          ) : undefined
         }
       />
 

@@ -86,7 +86,9 @@ export default function ChecklistsPage() {
             <div className="empty-icon"><ListTodo size={26} /></div>
             <div className="empty-title">체크리스트가 없어요</div>
             <div className="empty-desc">
-              + 버튼으로 새 체크리스트를 만들어보세요
+              {isManager
+                ? '+ 버튼으로 새 체크리스트를 만들어보세요'
+                : '매니저가 체크리스트를 만들면 여기서 확인할 수 있어요'}
             </div>
           </div>
         ) : (
@@ -99,6 +101,7 @@ export default function ChecklistsPage() {
               const pct = total ? Math.round((done / total) * 100) : 0;
               const meta = TYPE_META[t.type] ?? TYPE_META.custom;
               const TypeIcon = meta.icon;
+
               return (
                 <div
                   key={t.id}
@@ -153,9 +156,11 @@ export default function ChecklistsPage() {
         )}
       </main>
 
-      <button type="button" className="fab" onClick={() => setEditingTemplate({})} aria-label="새 체크리스트">
-        <Plus size={26} />
-      </button>
+      {isManager && (
+        <button type="button" className="fab" onClick={() => setEditingTemplate({})} aria-label="새 체크리스트">
+          <Plus size={26} />
+        </button>
+      )}
 
       {activeTemplate && (
         <ChecklistRunner
@@ -164,7 +169,7 @@ export default function ChecklistsPage() {
           supabase={supabase}
           userId={user.id}
           workplaceId={currentWorkplaceId}
-          isManager={true}
+          isManager={isManager}
           onEdit={() => { setEditingTemplate(activeTemplate); setActiveTemplate(null); }}
           onClose={() => setActiveTemplate(null)}
           onChanged={load}

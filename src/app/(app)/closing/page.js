@@ -319,16 +319,20 @@ export default function ClosingPage() {
         subtitle="매출 · 인건비 · 지출 통합 손익"
         action={
           <div style={{ display: 'flex', gap: 6 }}>
-            <Link
-              href={`/closing/print?year=${year}&month=${month + 1}`}
-              className="btn btn-soft btn-sm"
-              style={{ pointerEvents: !data || loading ? 'none' : 'auto', opacity: !data || loading ? 0.5 : 1 }}
-            >
-              <Printer size={14} /> 인쇄
-            </Link>
-            <button onClick={exportCsv} className="btn btn-soft btn-sm" disabled={!data || loading}>
-              <Download size={14} /> CSV
-            </button>
+            {isAdmin && (
+              <Link
+                href={`/closing/print?year=${year}&month=${month + 1}`}
+                className="btn btn-soft btn-sm"
+                style={{ pointerEvents: !data || loading ? 'none' : 'auto', opacity: !data || loading ? 0.5 : 1 }}
+              >
+                <Printer size={14} /> 인쇄
+              </Link>
+            )}
+            {isAdmin && (
+              <button onClick={exportCsv} className="btn btn-soft btn-sm" disabled={!data || loading}>
+                <Download size={14} /> CSV
+              </button>
+            )}
             <button onClick={() => router.back()} className="btn btn-ghost btn-icon"><ChevronLeft size={20} /></button>
           </div>
         }
@@ -417,12 +421,14 @@ export default function ClosingPage() {
                         </div>
                         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--text-muted)' }}>
                           <span>
-                            근무 <span className="num">{formatMinutes(u.minutes)}</span> ·
-                            시급 <span className="num">
-                              {u.hourly_wage > 0 ? formatCurrency(u.hourly_wage) + '원' : '미설정'}
-                            </span>
+                            근무 <span className="num">{formatMinutes(u.minutes)}</span>
+                            {isAdmin && (
+                              <> · 시급 <span className="num">
+                                {u.hourly_wage > 0 ? formatCurrency(u.hourly_wage) + '원' : '미설정'}
+                              </span></>
+                            )}
                           </span>
-                          <span className="num">기본 {formatCurrency(u.base_cost ?? 0)}</span>
+                          {isAdmin && <span className="num">기본 {formatCurrency(u.base_cost ?? 0)}</span>}
                         </div>
                         {hasPremium && (
                           <div style={{
@@ -464,7 +470,7 @@ export default function ClosingPage() {
                 </div>
               )}
 
-              {data.laborBreakdown.some((u) => u.hourly_wage === 0) && (
+              {isAdmin && data.laborBreakdown.some((u) => u.hourly_wage === 0) && (
                 <div style={{ marginTop: 10, padding: 10, background: 'var(--warning-soft)', color: '#c2410c', borderRadius: 10, fontSize: 12, display: 'flex', gap: 8 }}>
                   <AlertCircle size={14} />
                   시급이 설정되지 않은 직원은 인건비가 0원으로 계산됩니다. <strong>직원관리</strong>에서 시급을 입력해주세요.

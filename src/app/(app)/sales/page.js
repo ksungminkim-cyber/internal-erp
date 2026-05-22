@@ -94,9 +94,11 @@ export default function SalesPage() {
         hideSwitcher
         action={
           <div style={{ display: 'flex', gap: 6 }}>
-            <button onClick={exportCsv} className="btn btn-soft btn-sm" disabled={!rows.length}>
-              <Download size={14} /> CSV
-            </button>
+            {isManager && (
+              <button onClick={exportCsv} className="btn btn-soft btn-sm" disabled={!rows.length}>
+                <Download size={14} /> CSV
+              </button>
+            )}
             <button onClick={() => router.back()} className="btn btn-ghost btn-icon"><ChevronLeft size={20} /></button>
           </div>
         }

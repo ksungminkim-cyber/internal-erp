@@ -36,7 +36,8 @@ function getKindByCategory(cat) {
 
 export default function NewApprovalPage() {
   const router = useRouter();
-  const { user, currentWorkplaceId, supabase } = useApp();
+  const { user, profile, currentWorkplaceId, supabase } = useApp();
+  const drafterIsExec = profile?.is_executive === true;
 
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
@@ -54,13 +55,18 @@ export default function NewApprovalPage() {
       if (!currentWorkplaceId) return;
       const { data } = await supabase
         .from('memberships')
-        .select('user_id, role, profiles!memberships_user_id_fkey(name)')
+        .select('user_id, role, profiles!memberships_user_id_fkey(name, is_executive)')
         .eq('workplace_id', currentWorkplaceId)
         .eq('active', true)
         .in('role', ['manager', 'owner'])
         .neq('user_id', user?.id ?? '');
       setCoworkers(
-        (data ?? []).map((m) => ({ user_id: m.user_id, name: m.profiles?.name || '—', role: m.role }))
+        (data ?? []).map((m) => ({
+          user_id: m.user_id,
+          name: m.profiles?.name || '—',
+          role: m.role,
+          isExecutive: m.profiles?.is_executive === true,
+        }))
       );
     })();
   }, [supabase, currentWorkplaceId, user]);
@@ -92,6 +98,9 @@ export default function NewApprovalPage() {
     if (!title.trim()) return setError('제목을 입력해주세요.');
     if (items.some((it) => !it.description.trim() || !it.amount)) return setError('항목을 모두 입력해주세요.');
     if (approvers.length === 0) return setError('결재자를 최소 1명 지정해주세요.');
+    if (!drafterIsExec && !approvers[approvers.length - 1].isExecutive) {
+      return setError('결재선의 마지막 단계는 임원(본사 대표)이어야 합니다.');
+    }
 
     setSubmitting(true);
     try {
@@ -244,6 +253,14 @@ export default function NewApprovalPage() {
           <h2 className="h3" style={{ marginBottom: 4 }}>결재선</h2>
           <p className="text-muted" style={{ fontSize: 13, marginBottom: 14 }}>
             순서대로 승인되어야 다음 단계로 넘어가요
+            {!drafterIsExec && (
+              <>
+                <br />
+                <span style={{ color: 'var(--warning)', fontWeight: 600 }}>
+                  · 마지막 결재자는 반드시 임원(본사 대표)으로 지정
+                </span>
+              </>
+            )}
           </p>
 
           {approvers.length > 0 && (
@@ -269,8 +286,15 @@ export default function NewApprovalPage() {
                     {idx + 1}
                   </span>
                   <div style={{ flex: 1 }}>
-                    <div className="h4" style={{ fontSize: 14 }}>{a.name}</div>
-                    <div className="text-muted" style={{ fontSize: 11 }}>{a.role === 'owner' ? '대표' : '매니저'}</div>
+                    <div className="h4" style={{ fontSize: 14, display: 'flex', alignItems: 'center', gap: 6 }}>
+                      {a.name}
+                      {a.isExecutive && (
+                        <span className="tag tag-warning" style={{ fontSize: 10, padding: '2px 6px' }}>임원</span>
+                      )}
+                    </div>
+                    <div className="text-muted" style={{ fontSize: 11 }}>
+                      {idx === approvers.length - 1 ? '최종 결재 · ' : ''}{a.role === 'owner' ? '대표' : '매니저'}
+                    </div>
                   </div>
                   <button type="button" onClick={() => moveApprover(idx, -1)} disabled={idx === 0} className="btn btn-ghost btn-icon" aria-label="위로">↑</button>
                   <button type="button" onClick={() => moveApprover(idx, 1)} disabled={idx === approvers.length - 1} className="btn btn-ghost btn-icon" aria-label="아래로">↓</button>
@@ -291,11 +315,15 @@ export default function NewApprovalPage() {
                 <button
                   key={c.user_id}
                   type="button"
-                  className="tag tag-accent lg"
+                  className={`tag ${c.isExecutive ? 'tag-warning' : 'tag-accent'} lg`}
                   onClick={() => addApprover(c.user_id)}
-                  style={{ cursor: 'pointer', border: '1px dashed var(--accent)' }}
+                  style={{
+                    cursor: 'pointer',
+                    border: `1px dashed ${c.isExecutive ? 'var(--warning)' : 'var(--accent)'}`,
+                  }}
+                  title={c.isExecutive ? '임원 — 결재선 마지막에 배치 가능' : undefined}
                 >
-                  <Plus size={11} /> {c.name}
+                  <Plus size={11} /> {c.name}{c.isExecutive ? ' · 임원' : ''}
                 </button>
               ))}
             </div>
