@@ -744,9 +744,9 @@ function CalendarGrid({ anchor, shifts, logs, todayStr, isManager, hasApproval, 
       }}>
         {DOW.map((d, i) => (
           <div key={d} style={{
-            padding: '8px 4px',
+            padding: '12px 4px',
             textAlign: 'center',
-            fontSize: 11, fontWeight: 700,
+            fontSize: 14, fontWeight: 700,
             color: i === 0 ? 'var(--danger)' : i === 6 ? 'var(--accent)' : 'var(--text-secondary)',
           }}>{d}</div>
         ))}
@@ -768,8 +768,8 @@ function CalendarGrid({ anchor, shifts, logs, todayStr, isManager, hasApproval, 
               key={i}
               onClick={() => { if (clickable) onCellClick(d); }}
               style={{
-                minHeight: 80,
-                padding: 6,
+                minHeight: 110,
+                padding: 8,
                 borderRight: dow < 6 ? '1px solid var(--border)' : undefined,
                 borderBottom: !isLastRow ? '1px solid var(--border)' : undefined,
                 background: !d ? 'var(--surface-soft)' :
@@ -783,27 +783,27 @@ function CalendarGrid({ anchor, shifts, logs, todayStr, isManager, hasApproval, 
               {d && (
                 <>
                   <div style={{
-                    fontSize: 12, fontWeight: 700,
+                    fontSize: 16, fontWeight: 800,
                     color: isRedDay ? 'var(--danger)' : dow === 6 ? 'var(--accent)' : 'var(--text)',
-                    marginBottom: 4,
+                    marginBottom: 6,
                     display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                   }}>
                     <span className="num">{d.getDate()}</span>
                     {isToday && (
-                      <span style={{ fontSize: 9, fontWeight: 800, color: 'var(--accent)' }}>오늘</span>
+                      <span style={{ fontSize: 11, fontWeight: 800, color: 'var(--accent)' }}>오늘</span>
                     )}
                   </div>
                   {holidayName && (
                     <div style={{
-                      fontSize: 9, fontWeight: 700,
+                      fontSize: 11, fontWeight: 700,
                       color: 'var(--danger)',
-                      marginBottom: 4,
+                      marginBottom: 6,
                       overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                     }} title={holidayName}>
                       🇰🇷 {holidayName}
                     </div>
                   )}
-                  <div className="stack" style={{ gap: 3 }}>
+                  <div className="stack" style={{ gap: 4 }}>
                     {dayShifts.slice(0, 4).map((s) => {
                       const att = matchAttendance(s, logs);
                       const startStr = new Date(s.start_at).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false });
@@ -821,10 +821,10 @@ function CalendarGrid({ anchor, shifts, logs, todayStr, isManager, hasApproval, 
                           onClick={(e) => { e.stopPropagation(); onShiftClick(s); }}
                           title={`${s.user?.name ?? '—'} · ${startStr}${att ? ' · ' + att.label : ''}`}
                           style={{
-                            fontSize: 10, fontWeight: 600,
-                            padding: '3px 6px',
+                            fontSize: 12, fontWeight: 600,
+                            padding: '5px 8px',
                             background: bgColor, color: fgColor,
-                            borderRadius: 4,
+                            borderRadius: 6,
                             overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                             cursor: isManager && !s.approval_request_id ? 'pointer' : 'default',
                           }}
@@ -837,7 +837,7 @@ function CalendarGrid({ anchor, shifts, logs, todayStr, isManager, hasApproval, 
                       );
                     })}
                     {dayShifts.length > 4 && (
-                      <div style={{ fontSize: 9, color: 'var(--text-muted)', textAlign: 'center' }}>
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)', textAlign: 'center', fontWeight: 600 }}>
                         +{dayShifts.length - 4}
                       </div>
                     )}
@@ -850,10 +850,10 @@ function CalendarGrid({ anchor, shifts, logs, todayStr, isManager, hasApproval, 
       </div>
       {isManager && !hasApproval && (
         <div style={{
-          padding: '8px 12px',
+          padding: '10px 12px',
           background: 'var(--surface-soft)',
           borderTop: '1px solid var(--border)',
-          fontSize: 11, color: 'var(--text-muted)',
+          fontSize: 12, color: 'var(--text-muted)',
           textAlign: 'center',
         }}>
           빈 날짜를 클릭해 시프트 추가 · 기존 시프트 클릭해 수정
