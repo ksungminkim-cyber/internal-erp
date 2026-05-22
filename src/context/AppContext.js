@@ -55,8 +55,6 @@ export function AppProvider({ children, initialUser, initialProfile = null, init
       })();
     }
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      // SIGNED_OUT 일 때만 상태 초기화
-      // INITIAL_SESSION·TOKEN_REFRESHED 등 중간 상태에서 session=null 이 와도 무시
       if (event === 'SIGNED_OUT') {
         setUser(null);
         setProfile(null);
@@ -64,6 +62,11 @@ export function AppProvider({ children, initialUser, initialProfile = null, init
         setCurrentWorkplaceId(null);
         return;
       }
+      // INITIAL_SESSION·TOKEN_REFRESHED: SSR에서 이미 profile/memberships 로드 완료.
+      // 이 핸들러 안에서 supabase 쿼리를 호출하면 auth lock과 deadlock → 전 페이지 hang.
+      // 재쿼리 불필요 — 스킵.
+      if (event === 'INITIAL_SESSION' || event === 'TOKEN_REFRESHED') return;
+      // SIGNED_IN 등 실제 세션 변경 시에만 재로드
       const u = session?.user ?? null;
       if (u) {
         setUser(u);
