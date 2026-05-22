@@ -39,10 +39,12 @@ const ADMIN_LINKS = [
 ];
 
 const ROLE_META = {
-  owner:   { label: '대표',     icon: Crown },
-  manager: { label: '매니저',   icon: Shield },
-  staff:   { label: '직원',     icon: User },
-  null:    { label: '미배정',   icon: User },
+  executive: { label: '대표',     icon: Crown },
+  hq:        { label: '본사 관리자', icon: Building2 },
+  owner:     { label: '대표',     icon: Crown },
+  manager:   { label: '매니저',   icon: Shield },
+  staff:     { label: '직원',     icon: User },
+  null:      { label: '미배정',   icon: User },
 };
 
 export default function Sidebar() {
@@ -53,8 +55,12 @@ export default function Sidebar() {
   const isAdmin = profile?.is_super_admin === true || memberships.some((m) => m.role === 'owner');
 
   const isActive = (href) => pathname === href || pathname.startsWith(href + '/');
-  // super_admin이면 항상 대표 표시, 멤버십 없으면 미배정
-  const effectiveRole = profile?.is_super_admin ? 'owner' : (role ?? 'null');
+  // 임원(본사 대표) → '대표' / 본사 매니저·직원 → '본사' / 그 외 → 현재 매장 role
+  const effectiveRole = profile?.is_executive
+    ? 'executive'
+    : profile?.is_super_admin
+      ? 'hq'
+      : (role ?? 'null');
   const r = ROLE_META[effectiveRole] ?? ROLE_META.staff;
   const RoleIcon = r.icon;
 
