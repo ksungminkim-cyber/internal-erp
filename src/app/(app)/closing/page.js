@@ -8,6 +8,7 @@ import PageHeader from '@/components/PageHeader';
 import BottomSheet from '@/components/BottomSheet';
 import { formatCurrency } from '@/lib/format';
 import { downloadCsv, fmtDate } from '@/lib/csvExport';
+import { calcLabor, formatMinutes } from '@/lib/laborCalc';
 import {
   ChevronLeft, ChevronRight, Lock, Unlock, Download, Check, AlertCircle,
   Send, Printer, X, Plus, Clock, FileCheck,
@@ -158,7 +159,7 @@ export default function ClosingPage() {
     const totalOpex = expenseByKind.opex;
     const totalUtilities = expenseByKind.utilities;
 
-    // 인건비 집계 (직원별 근무시간 × 시급)
+    // 인건비 집계 (근로기준법 — 야간/연장/주휴 수당 자동 산정)
     const wageMap = new Map();
     (profilesData.data ?? []).forEach((p) => {
       wageMap.set(p.user_id, { name: p.name, hourly_wage: Number(p.hourly_wage || 0) });
@@ -171,28 +172,24 @@ export default function ClosingPage() {
     const laborBreakdown = [];
     let totalLabor = 0;
     for (const [uid, logs] of Object.entries(logsByUser)) {
-      let mins = 0;
-      let openIn = null;
-      let breakStart = null;
-      for (const l of logs) {
-        const ts = new Date(l.event_at).getTime();
-        if (l.event_type === 'clock_in') openIn = ts;
-        if (l.event_type === 'break_start' && openIn) breakStart = ts;
-        if (l.event_type === 'break_end' && breakStart) {
-          mins -= Math.floor((ts - breakStart) / 60000);
-          breakStart = null;
-        }
-        if (l.event_type === 'clock_out' && openIn) {
-          mins += Math.floor((ts - openIn) / 60000);
-          openIn = null;
-        }
-      }
-      mins = Math.max(0, mins);
       const wage = wageMap.get(uid)?.hourly_wage ?? 0;
       const name = wageMap.get(uid)?.name ?? '—';
-      const labor = Math.round((mins / 60) * wage);
-      totalLabor += labor;
-      laborBreakdown.push({ user_id: uid, name, minutes: mins, hourly_wage: wage, labor });
+      const calc = calcLabor(logs, wage);
+      totalLabor += calc.totalLabor;
+      laborBreakdown.push({
+        user_id: uid,
+        name,
+        hourly_wage: wage,
+        minutes: calc.baseMinutes,
+        night_minutes: calc.nightMinutes,
+        overtime_minutes: calc.overtimeMinutes,
+        weekly_rest_minutes: calc.weeklyRestMinutes,
+        base_cost: calc.baseCost,
+        night_premium: calc.nightPremium,
+        overtime_premium: calc.overtimePremium,
+        weekly_rest_pay: calc.weeklyRestPay,
+        labor: calc.totalLabor,
+      });
     }
     laborBreakdown.sort((a, b) => b.labor - a.labor);
 
@@ -389,40 +386,82 @@ export default function ClosingPage() {
 
             {/* 직원별 인건비 */}
             <section className="card">
-              <h2 className="h3" style={{ marginBottom: 12 }}>직원별 인건비</h2>
+              <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 12, gap: 10, flexWrap: 'wrap' }}>
+                <h2 className="h3">직원별 인건비</h2>
+                <span className="text-muted" style={{ fontSize: 11 }}>
+                  근로기준법 — 야간(22~06시) +50% / 연장(8h 초과) +50% / 주휴(주 15h 이상)
+                </span>
+              </div>
               {data.laborBreakdown.length === 0 ? (
                 <p className="text-muted" style={{ fontSize: 13 }}>이 기간 출퇴근 기록이 없습니다.</p>
               ) : (
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-                  <thead>
-                    <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                      <th style={cellHead}>직원</th>
-                      <th style={cellHeadR}>근무시간</th>
-                      <th style={cellHeadR}>시급</th>
-                      <th style={cellHeadR}>인건비</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {data.laborBreakdown.map((u) => (
-                      <tr key={u.user_id} style={{ borderBottom: '1px solid var(--border)' }}>
-                        <td style={cell}>{u.name}</td>
-                        <td style={cellR} className="num">
-                          {Math.floor(u.minutes / 60)}h {u.minutes % 60}m
-                        </td>
-                        <td style={cellR} className="num">
-                          {u.hourly_wage > 0 ? formatCurrency(u.hourly_wage) : <span className="text-muted">미설정</span>}
-                        </td>
-                        <td style={cellR} className="num" >
-                          <strong>{formatCurrency(u.labor)}</strong>
-                        </td>
-                      </tr>
-                    ))}
-                    <tr>
-                      <td style={cellTotal} colSpan={3}>합계</td>
-                      <td style={cellTotalR} className="num">{formatCurrency(data.totalLabor)}</td>
-                    </tr>
-                  </tbody>
-                </table>
+                <div className="stack stack-2">
+                  {data.laborBreakdown.map((u) => {
+                    const hasPremium = (u.night_premium ?? 0) > 0
+                      || (u.overtime_premium ?? 0) > 0
+                      || (u.weekly_rest_pay ?? 0) > 0;
+                    return (
+                      <div
+                        key={u.user_id}
+                        style={{
+                          padding: 12,
+                          borderRadius: 12,
+                          background: 'var(--surface-soft)',
+                        }}
+                      >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 10, marginBottom: 6 }}>
+                          <span style={{ fontWeight: 700 }}>{u.name}</span>
+                          <span className="num" style={{ fontWeight: 800, fontSize: 16 }}>
+                            {formatCurrency(u.labor)}<span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 2 }}>원</span>
+                          </span>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--text-muted)' }}>
+                          <span>
+                            근무 <span className="num">{formatMinutes(u.minutes)}</span> ·
+                            시급 <span className="num">
+                              {u.hourly_wage > 0 ? formatCurrency(u.hourly_wage) + '원' : '미설정'}
+                            </span>
+                          </span>
+                          <span className="num">기본 {formatCurrency(u.base_cost ?? 0)}</span>
+                        </div>
+                        {hasPremium && (
+                          <div style={{
+                            marginTop: 8, paddingTop: 8, borderTop: '1px dashed var(--border)',
+                            display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6, fontSize: 11,
+                          }}>
+                            <PremiumChip
+                              label="야간"
+                              mins={u.night_minutes}
+                              amount={u.night_premium}
+                            />
+                            <PremiumChip
+                              label="연장"
+                              mins={u.overtime_minutes}
+                              amount={u.overtime_premium}
+                            />
+                            <PremiumChip
+                              label="주휴"
+                              mins={u.weekly_rest_minutes}
+                              amount={u.weekly_rest_pay}
+                            />
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                  <div style={{
+                    marginTop: 4,
+                    padding: '12px 14px',
+                    borderRadius: 12,
+                    background: 'var(--accent-soft)',
+                    display: 'flex', justifyContent: 'space-between', alignItems: 'baseline',
+                  }}>
+                    <span style={{ fontWeight: 700, color: 'var(--accent-strong)' }}>합계</span>
+                    <span className="num" style={{ fontWeight: 800, fontSize: 18, color: 'var(--accent-strong)' }}>
+                      {formatCurrency(data.totalLabor)}<span style={{ fontSize: 12, marginLeft: 2 }}>원</span>
+                    </span>
+                  </div>
+                </div>
               )}
 
               {data.laborBreakdown.some((u) => u.hourly_wage === 0) && (
@@ -772,6 +811,29 @@ const cell = { padding: '10px 6px', fontWeight: 600 };
 const cellR = { ...cell, textAlign: 'right' };
 const cellTotal = { padding: '10px 6px', fontWeight: 800, color: 'var(--accent)' };
 const cellTotalR = { ...cellTotal, textAlign: 'right' };
+
+function PremiumChip({ label, mins, amount }) {
+  const has = (amount ?? 0) > 0;
+  return (
+    <div style={{
+      padding: '6px 8px',
+      borderRadius: 8,
+      background: has ? 'var(--accent-soft)' : 'var(--surface)',
+      opacity: has ? 1 : 0.5,
+      textAlign: 'center',
+    }}>
+      <div style={{ fontWeight: 700, fontSize: 10, color: has ? 'var(--accent-strong)' : 'var(--text-muted)' }}>
+        {label}
+      </div>
+      <div className="num" style={{ fontSize: 11, marginTop: 2 }}>
+        {formatMinutes(mins ?? 0)}
+      </div>
+      <div className="num" style={{ fontSize: 11, fontWeight: 700, marginTop: 2 }}>
+        +{formatCurrency(amount ?? 0)}
+      </div>
+    </div>
+  );
+}
 
 function Row({ label, value, color, large }) {
   return (

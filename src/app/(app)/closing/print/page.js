@@ -331,14 +331,22 @@ export default function ClosingPrintPage() {
           {/* 직원별 인건비 명세 */}
           {laborBd.length > 0 && (
             <>
-              <h3 style={{ fontSize: 13, fontWeight: 800, marginTop: 18, marginBottom: 6 }}>① 인건비 명세</h3>
+              <h3 style={{ fontSize: 13, fontWeight: 800, marginTop: 18, marginBottom: 6 }}>
+                ① 인건비 명세 <span style={{ fontWeight: 500, fontSize: 11, color: '#475569' }}>
+                  (근로기준법 — 야간 +50% / 연장 +50% / 주휴 비례)
+                </span>
+              </h3>
               <table className="print-table" style={{ marginBottom: 16 }}>
                 <thead>
                   <tr>
-                    <th style={{ width: '30%' }}>직원</th>
-                    <th style={{ width: '20%', textAlign: 'right' }}>근무시간</th>
-                    <th style={{ width: '25%', textAlign: 'right' }}>시급</th>
-                    <th style={{ width: '25%', textAlign: 'right' }}>인건비</th>
+                    <th style={{ width: '18%' }}>직원</th>
+                    <th style={{ width: '12%', textAlign: 'right' }}>근무</th>
+                    <th style={{ width: '12%', textAlign: 'right' }}>시급</th>
+                    <th style={{ width: '12%', textAlign: 'right' }}>기본</th>
+                    <th style={{ width: '11%', textAlign: 'right' }}>야간</th>
+                    <th style={{ width: '11%', textAlign: 'right' }}>연장</th>
+                    <th style={{ width: '11%', textAlign: 'right' }}>주휴</th>
+                    <th style={{ width: '13%', textAlign: 'right' }}>인건비</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -349,7 +357,17 @@ export default function ClosingPrintPage() {
                         {Math.floor((u.minutes ?? 0) / 60)}h {(u.minutes ?? 0) % 60}m
                       </td>
                       <td style={{ textAlign: 'right' }}>
-                        {(u.hourly_wage ?? 0) > 0 ? `${formatCurrency(u.hourly_wage)} 원` : '—'}
+                        {(u.hourly_wage ?? 0) > 0 ? `${formatCurrency(u.hourly_wage)}` : '—'}
+                      </td>
+                      <td style={{ textAlign: 'right' }}>{formatCurrency(u.base_cost ?? 0)}</td>
+                      <td style={{ textAlign: 'right', color: (u.night_premium ?? 0) > 0 ? '#000' : '#94a3b8' }}>
+                        {(u.night_premium ?? 0) > 0 ? `+${formatCurrency(u.night_premium)}` : '—'}
+                      </td>
+                      <td style={{ textAlign: 'right', color: (u.overtime_premium ?? 0) > 0 ? '#000' : '#94a3b8' }}>
+                        {(u.overtime_premium ?? 0) > 0 ? `+${formatCurrency(u.overtime_premium)}` : '—'}
+                      </td>
+                      <td style={{ textAlign: 'right', color: (u.weekly_rest_pay ?? 0) > 0 ? '#000' : '#94a3b8' }}>
+                        {(u.weekly_rest_pay ?? 0) > 0 ? `+${formatCurrency(u.weekly_rest_pay)}` : '—'}
                       </td>
                       <td style={{ textAlign: 'right', fontWeight: 700 }}>
                         {formatCurrency(u.labor ?? 0)} 원
@@ -357,7 +375,7 @@ export default function ClosingPrintPage() {
                     </tr>
                   ))}
                   <tr>
-                    <td colSpan={3} style={{ textAlign: 'right', fontWeight: 700, background: '#f3f4f6' }}>합계</td>
+                    <td colSpan={7} style={{ textAlign: 'right', fontWeight: 700, background: '#f3f4f6' }}>합계</td>
                     <td style={{ textAlign: 'right', fontWeight: 800, background: '#f3f4f6' }}>
                       {formatCurrency(totalLabor)} 원
                     </td>
