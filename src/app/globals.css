@@ -169,10 +169,14 @@ body {
 }
 /* mobile only utilities */
 .mobile-only { display: initial; }
-.desktop-only { display: none; }
+.desktop-only { display: none !important; }
+.mobile-only-flex { display: flex !important; }
+.desktop-only-flex { display: none !important; }
 @media (min-width: 1024px) {
   .mobile-only { display: none !important; }
-  .desktop-only { display: initial; }
+  .desktop-only { display: initial !important; }
+  .mobile-only-flex { display: none !important; }
+  .desktop-only-flex { display: flex !important; }
 }
 
 button, a[role="button"] { cursor: pointer; -webkit-user-select: none; user-select: none; }

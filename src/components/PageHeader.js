@@ -6,8 +6,8 @@ import NotificationBell from './NotificationBell';
 export default function PageHeader({ title, subtitle, action, hideSwitcher = false, large = false }) {
   const topRow = (!hideSwitcher || action) ? (
     <div
-      className="mobile-only"
-      style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, gap: 8 }}
+      className="mobile-only-flex"
+      style={{ justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, gap: 8 }}
     >
       {hideSwitcher ? <span /> : <WorkplaceSwitcher />}
       <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -30,7 +30,7 @@ export default function PageHeader({ title, subtitle, action, hideSwitcher = fal
               </p>
             )}
           </div>
-          <div className="desktop-only" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <div className="desktop-only-flex" style={{ alignItems: 'center', gap: 6 }}>
             <NotificationBell inline />
             {action}
           </div>
