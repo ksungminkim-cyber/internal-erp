@@ -1,4 +1,4 @@
-// Server Component — 데이터를 SSR에서 직접 가져오므로 클라이언트 로딩 없음
+// Server Component — SSR에서 직접 fetch, 클라이언트 로딩 없음
 import { createClient } from '@/lib/supabase/server';
 import { createClient as createServiceClient } from '@supabase/supabase-js';
 import { redirect } from 'next/navigation';
@@ -16,18 +16,28 @@ function getServiceClient() {
 
 export default async function MembersPage() {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect('/login');
+  const svc     = getServiceClient();
 
-  // 현재 사용자 권한 확인
-  const [{ data: myProfile }, { data: myMem }] = await Promise.all([
-    supabase.from('profiles').select('is_super_admin').eq('user_id', user.id).maybeSingle(),
-    supabase.from('memberships').select('role').eq('user_id', user.id).eq('active', true),
+  // ── 모든 쿼리 동시 실행 (auth + 데이터 3종) ─────────────────────────────
+  const [
+    { data: { user } },
+    wpsRes,
+    profsRes,
+    memsRes,
+  ] = await Promise.all([
+    supabase.auth.getUser(),
+    svc.from('workplaces').select('id, name').order('name'),
+    svc.from('profiles').select('*').order('created_at', { ascending: false }),
+    svc.from('memberships').select('id, user_id, workplace_id, role, active'),
   ]);
 
-  const canManage =
-    myProfile?.is_super_admin === true ||
-    (myMem ?? []).some((m) => m.role === 'owner');
+  if (!user) redirect('/login');
+
+  // ── 권한 확인: 임원(본사 대표)만 허용 ────────────────────────────────────
+  const myProfile    = (profsRes.data ?? []).find((p) => p.user_id === user.id);
+  const myActiveMems = (memsRes.data ?? []).filter((m) => m.user_id === user.id && m.active);
+  // is_executive = 본사 owner만 true. 나울·녹턴 owner 없으므로 owner role = 사실상 본사 대표
+  const canManage    = myProfile?.is_executive === true || myActiveMems.some((m) => m.role === 'owner');
 
   if (!canManage) {
     return (
@@ -37,25 +47,17 @@ export default async function MembersPage() {
           <div className="card empty">
             <div className="empty-icon"><Shield size={26} /></div>
             <div className="empty-title">접근 권한 없음</div>
-            <div className="empty-desc">대표(owner) 또는 전체 관리자만 이용할 수 있어요.</div>
+            <div className="empty-desc">대표(임원)만 이용할 수 있어요.</div>
           </div>
         </main>
       </>
     );
   }
 
-  // 서비스 롤로 전체 데이터 조회 (RLS 우회)
-  const svc = getServiceClient();
-  const [wpsRes, profsRes, memsRes] = await Promise.all([
-    svc.from('workplaces').select('id, name').order('name'),
-    svc.from('profiles').select('*').order('created_at', { ascending: false }),
-    svc.from('memberships').select('id, user_id, workplace_id, role, active'),
-  ]);
-
   return (
     <MembersClient
       workplaces={wpsRes.data ?? []}
-      profiles={profsRes.data ?? []}
+      profiles={profsRes.data   ?? []}
       memberships={memsRes.data ?? []}
       currentUserId={user.id}
     />
