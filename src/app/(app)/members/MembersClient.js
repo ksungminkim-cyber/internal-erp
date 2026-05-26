@@ -14,18 +14,18 @@ import {
 } from 'lucide-react';
 
 const ROLE_META = {
-  staff:   { label: '직원',       tag: 'tag',         icon: UserIcon },
-  manager: { label: '매니저',     tag: 'tag-accent',  icon: Shield },
-  owner:   { label: '대표(임원)', tag: 'tag-warning', icon: Crown },
+  staff:   { label: '직원',   tag: 'tag',        icon: UserIcon },
+  manager: { label: '매니저', tag: 'tag-accent', icon: Shield },
+  owner:   { label: '대표',   tag: 'tag-accent', icon: Crown },
 };
 const STORE_ROLES = [
   { key: 'manager', label: '매니저', icon: Shield },
   { key: 'staff',   label: '직원',   icon: UserIcon },
 ];
 const HQ_ROLES = [
-  { key: 'owner',   label: '대표(임원)', icon: Crown },
-  { key: 'manager', label: '관리자',     icon: Shield },
-  { key: 'staff',   label: '직원',       icon: UserIcon },
+  { key: 'owner',   label: '대표',   icon: Crown },
+  { key: 'manager', label: '관리자', icon: Shield },
+  { key: 'staff',   label: '직원',   icon: UserIcon },
 ];
 
 export default function MembersClient({ workplaces, profiles, memberships, currentUserId }) {
@@ -153,9 +153,8 @@ export default function MembersClient({ workplaces, profiles, memberships, curre
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                           <div className="h4">{p.name || '이름 없음'}</div>
                           {isMe && <span className="tag tag-accent">나</span>}
-                          {p.is_executive && <span className="tag tag-warning"><Crown size={10} /> 임원</span>}
-                          {p.is_super_admin && !p.is_executive && <span className="tag tag-accent"><Crown size={10} /> 전체관리</span>}
-                          {p.can_close_books && !p.is_super_admin && <span className="tag tag-mint">마감권한</span>}
+                          {(p.is_super_admin || p.is_executive) && <span className="tag tag-accent"><Crown size={10} /> 전체관리</span>}
+                          {p.can_close_books && !p.is_super_admin && !p.is_executive && <span className="tag tag-mint">마감권한</span>}
                         </div>
                         <div className="text-muted" style={{ fontSize: 12, marginTop: 2 }}>
                           {p.phone || '연락처 없음'}
@@ -376,8 +375,8 @@ function AssignDialog({ profile, mode, workplaces, currentMemberships, onClose, 
                   <p className="text-muted" style={{ fontSize: 11, marginTop: 8, lineHeight: 1.5 }}>
                     {w.name === '본사'
                       ? s.role === 'owner'
-                        ? '→ 임원(대표). 전 매장 접근 + 결재 최종 승인 가능.'
-                        : '→ 본사 멤버. 전 매장 접근 가능. 결재 최종은 임원만.'
+                        ? '→ 대표. 전 매장 접근 + 결재 최종 승인 가능.'
+                        : '→ 본사 멤버. 전 매장 접근 가능.'
                       : s.role === 'manager'
                         ? '→ 매니저. 결재 중간 승인 가능.'
                         : '→ 직원. 일반 업무만 가능.'}
