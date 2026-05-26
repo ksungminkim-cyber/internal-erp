@@ -298,7 +298,9 @@ function AssignDialog({ profile, mode, workplaces, currentMemberships, onClose, 
       if (!profileChanged && updates.length === 0) { onClose(); return; }
 
       await saveMemberAssignment({
-        userId: profile.user_id,
+        userId:    profile.user_id,
+        userName:  profile.name  ?? null,
+        userPhone: profile.phone ?? null,
         hourlyWage: Number(hourlyWage) || 0,
         canCloseBooks,
         profileChanged,

@@ -63,9 +63,9 @@ export async function getMembersData() {
 
 /**
  * 멤버 배정 저장
- * @param {{ userId: string, hourlyWage: number, canCloseBooks: boolean, updates: Array<{workplaceId, active, role, existingId}> }} params
+ * @param {{ userId: string, userName?: string, userPhone?: string, hourlyWage: number, canCloseBooks: boolean, updates: Array<{workplaceId, active, role, existingId}> }} params
  */
-export async function saveMemberAssignment({ userId, hourlyWage, canCloseBooks, profileChanged, updates }) {
+export async function saveMemberAssignment({ userId, userName, userPhone, hourlyWage, canCloseBooks, profileChanged, updates }) {
   // 권한 확인
   const authClient = await createServerClient();
   const { data: { user } } = await authClient.auth.getUser();
@@ -91,16 +91,22 @@ export async function saveMemberAssignment({ userId, hourlyWage, canCloseBooks, 
 
   const svc = getServiceClient();
 
-  // 프로필 변경
-  if (profileChanged) {
+  // ── 프로필 없는 auth 유저인 경우 자동 생성 (upsert) ────────────────────
+  // profiles row가 없으면 insert, 있으면 hourly_wage·can_close_books만 update
+  {
     const { error } = await svc
       .from('profiles')
-      .update({
-        hourly_wage: Number(hourlyWage) || 0,
-        can_close_books: canCloseBooks,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('user_id', userId);
+      .upsert(
+        {
+          user_id:        userId,
+          name:           userName  ?? null,
+          phone:          userPhone ?? null,
+          hourly_wage:    Number(hourlyWage) || 0,
+          can_close_books: canCloseBooks,
+          updated_at:     new Date().toISOString(),
+        },
+        { onConflict: 'user_id' }
+      );
     if (error) throw new Error('프로필 저장 실패: ' + error.message);
   }
 
