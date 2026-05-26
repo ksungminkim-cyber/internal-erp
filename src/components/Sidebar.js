@@ -50,7 +50,9 @@ const ROLE_META = {
 export default function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
-  const { profile, memberships, currentWorkplaceId, currentWorkplace, switchWorkplace, role, supabase } = useApp();
+  const { user, profile, memberships, currentWorkplaceId, currentWorkplace, switchWorkplace, role, supabase } = useApp();
+  // profile.name이 null이면 이메일 prefix로 fallback (DB 복구 전 임시 표시)
+  const displayName = profile?.name || user?.email?.split('@')[0] || '—';
   const [wpOpen, setWpOpen] = useState(false);
   const isAdmin = profile?.is_super_admin === true || memberships.some((m) => m.role === 'owner');
 
@@ -203,11 +205,11 @@ export default function Sidebar() {
                 fontWeight: 800, fontSize: 13,
               }}
             >
-              {(profile?.name ?? '?').slice(0, 1)}
+              {displayName.slice(0, 1)}
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {profile?.name ?? '—'}
+                {displayName}
               </div>
               <div className="text-muted" style={{ fontSize: 11, display: 'flex', alignItems: 'center', gap: 4 }}>
                 <RoleIcon size={10} /> {r.label}
