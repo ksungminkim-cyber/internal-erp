@@ -38,9 +38,11 @@ export default async function MembersPage() {
   // ── 권한 확인: 본사 직원(is_super_admin) + 임원 + owner ────────────────
   const myProfile    = (profsRes.data ?? []).find((p) => p.user_id === user.id);
   const myActiveMems = (memsRes.data ?? []).filter((m) => m.user_id === user.id && m.active);
-  const canManage    = myProfile?.is_executive === true
+  const hqWpId    = (wpsRes.data ?? []).find((w) => w.name === '본사')?.id;
+  const canManage = myProfile?.is_executive === true
     || myProfile?.is_super_admin === true
-    || myActiveMems.some((m) => m.role === 'owner');
+    || myActiveMems.some((m) => m.role === 'owner')
+    || (hqWpId != null && myActiveMems.some((m) => m.workplace_id === hqWpId));
 
   if (!canManage) {
     return (

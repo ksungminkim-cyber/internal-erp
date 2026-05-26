@@ -12,7 +12,8 @@ import {
 
 export default function OperationsMenu() {
   const { currentWorkplaceId, supabase, user, profile, memberships } = useApp();
-  const isAdmin = profile?.is_super_admin === true || memberships.some((m) => m.role === 'owner');
+  const isHQMember = memberships.some((m) => m.workplaces?.name === '본사');
+  const isAdmin = profile?.is_super_admin === true || isHQMember || memberships.some((m) => m.role === 'owner');
   const [stats, setStats] = useState({
     todayShifts: 0,
     handoverUnresolved: 0,

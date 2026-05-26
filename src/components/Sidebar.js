@@ -54,7 +54,8 @@ export default function Sidebar() {
   // profile.name이 null이면 이메일 prefix로 fallback (DB 복구 전 임시 표시)
   const displayName = profile?.name || user?.email?.split('@')[0] || '—';
   const [wpOpen, setWpOpen] = useState(false);
-  const isAdmin = profile?.is_super_admin === true || memberships.some((m) => m.role === 'owner');
+  const isHQMember = memberships.some((m) => m.workplaces?.name === '본사');
+  const isAdmin = profile?.is_super_admin === true || isHQMember || memberships.some((m) => m.role === 'owner');
 
   const isActive = (href) => pathname === href || pathname.startsWith(href + '/');
   // 임원(본사 대표) → '대표' / 본사 매니저·직원 → '본사' / 그 외 → 현재 매장 role

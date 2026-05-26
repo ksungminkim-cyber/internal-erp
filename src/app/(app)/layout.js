@@ -20,10 +20,10 @@ export default async function AppLayout({ children }) {
       .eq('active', true),
   ]);
 
-  // super_admin은 모든 사업장을 switcher에서 접근 가능하게
-  // (DB 마이그레이션으로 is_member_of가 super_admin을 허용하므로 workplaces 쿼리 가능)
+  // super_admin 또는 본사 소속이면 모든 사업장을 switcher에서 접근 가능하게
   let memberships = rawMemberships ?? [];
-  if (profile?.is_super_admin) {
+  const isHQ = profile?.is_super_admin || (rawMemberships ?? []).some((m) => m.workplaces?.name === '본사');
+  if (isHQ) {
     const { data: allWps } = await supabase
       .from('workplaces')
       .select('id, name, address')

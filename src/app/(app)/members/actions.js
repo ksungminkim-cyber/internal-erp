@@ -28,13 +28,14 @@ export async function getMembersData() {
 
   const { data: myMem } = await authClient
     .from('memberships')
-    .select('role')
+    .select('role, workplaces(name)')
     .eq('user_id', user.id)
     .eq('active', true);
 
   const canManage =
     myProfile?.is_super_admin === true ||
-    (myMem ?? []).some((m) => m.role === 'owner');
+    (myMem ?? []).some((m) => m.role === 'owner') ||
+    (myMem ?? []).some((m) => m.workplaces?.name === '본사');
 
   if (!canManage) throw new Error('접근 권한이 없습니다.');
 
@@ -76,13 +77,14 @@ export async function saveMemberAssignment({ userId, userName, userPhone, hourly
 
   const { data: myMem } = await authClient
     .from('memberships')
-    .select('role')
+    .select('role, workplaces(name)')
     .eq('user_id', user.id)
     .eq('active', true);
 
   const canManage =
     myProfile?.is_super_admin === true ||
-    (myMem ?? []).some((m) => m.role === 'owner');
+    (myMem ?? []).some((m) => m.role === 'owner') ||
+    (myMem ?? []).some((m) => m.workplaces?.name === '본사');
 
   if (!canManage) throw new Error('접근 권한이 없습니다.');
 

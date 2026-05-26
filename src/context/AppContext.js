@@ -32,9 +32,10 @@ export function AppProvider({ children, initialUser, initialProfile = null, init
         .eq('active', true),
     ]);
 
-    // super_admin은 모든 사업장을 switcher에서 접근 가능하게
+    // super_admin 또는 본사 소속이면 모든 사업장을 switcher에서 접근 가능하게
     let allMems = mems ?? [];
-    if (prof?.is_super_admin) {
+    const isHQ = prof?.is_super_admin || allMems.some((m) => m.workplaces?.name === '본사');
+    if (isHQ) {
       const { data: allWps } = await supabase
         .from('workplaces')
         .select('id, name, address')
