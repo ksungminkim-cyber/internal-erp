@@ -31,14 +31,37 @@ export function AppProvider({ children, initialUser, initialProfile = null, init
         .eq('user_id', uid)
         .eq('active', true),
     ]);
+
+    // super_admin은 모든 사업장을 switcher에서 접근 가능하게
+    let allMems = mems ?? [];
+    if (prof?.is_super_admin) {
+      const { data: allWps } = await supabase
+        .from('workplaces')
+        .select('id, name, address')
+        .order('name');
+      if (allWps?.length) {
+        const realWpIds = new Set(allMems.map((m) => m.workplace_id));
+        const virtualMems = allWps
+          .filter((w) => !realWpIds.has(w.id))
+          .map((w) => ({
+            id: `virtual_${w.id}`,
+            workplace_id: w.id,
+            role: 'manager',
+            active: true,
+            workplaces: w,
+          }));
+        allMems = [...allMems, ...virtualMems];
+      }
+    }
+
     setProfile(prof);
-    setMemberships(mems ?? []);
-    if (mems?.length) {
+    setMemberships(allMems);
+    if (allMems.length) {
       const stored = typeof window !== 'undefined'
         ? localStorage.getItem('erp:workplace')
         : null;
-      const validStored = mems.find((m) => m.workplace_id === stored);
-      setCurrentWorkplaceId(validStored?.workplace_id ?? mems[0].workplace_id);
+      const validStored = allMems.find((m) => m.workplace_id === stored);
+      setCurrentWorkplaceId(validStored?.workplace_id ?? allMems[0].workplace_id);
     }
   }, [supabase]);
 
