@@ -28,7 +28,7 @@ const HQ_ROLES = [
   { key: 'staff',   label: '직원',   icon: UserIcon },
 ];
 
-export default function MembersClient({ workplaces, profiles, memberships, currentUserId }) {
+export default function MembersClient({ workplaces, profiles, memberships, currentUserId, isExecutive = false }) {
   const router = useRouter();
   const [editing, setEditing] = useState(null);
   const [menuOpenId, setMenuOpenId] = useState(null);
@@ -161,47 +161,44 @@ export default function MembersClient({ workplaces, profiles, memberships, curre
                         </div>
                       </div>
 
-                      <div onClick={(e) => e.stopPropagation()} style={{ position: 'relative' }}>
-                        <button
-                          type="button"
-                          className="btn btn-ghost btn-icon"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setMenuOpenId(menuOpenId === p.user_id ? null : p.user_id);
-                          }}
-                        >
-                          <MoreVertical size={16} />
-                        </button>
-                        {menuOpenId === p.user_id && (
-                          <div style={{
-                            position: 'absolute', top: '100%', right: 0, marginTop: 4,
-                            background: 'var(--surface)', border: '1px solid var(--border)',
-                            borderRadius: 12, padding: 4,
-                            boxShadow: 'var(--sh-md)', minWidth: 160, zIndex: 30,
-                          }}>
-                            <button
-                              type="button"
-                              onClick={() => { setMenuOpenId(null); setEditing({ profile: p, mode: 'edit' }); }}
-                              style={menuItemStyle}
-                            >
-                              <Building2 size={14} /> 배정 수정
-                            </button>
-                          </div>
-                        )}
-                      </div>
+                      {isExecutive && (
+                        <div onClick={(e) => e.stopPropagation()} style={{ position: 'relative' }}>
+                          <button
+                            type="button"
+                            className="btn btn-ghost btn-icon"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setMenuOpenId(menuOpenId === p.user_id ? null : p.user_id);
+                            }}
+                          >
+                            <MoreVertical size={16} />
+                          </button>
+                          {menuOpenId === p.user_id && (
+                            <div style={{
+                              position: 'absolute', top: '100%', right: 0, marginTop: 4,
+                              background: 'var(--surface)', border: '1px solid var(--border)',
+                              borderRadius: 12, padding: 4,
+                              boxShadow: 'var(--sh-md)', minWidth: 160, zIndex: 30,
+                            }}>
+                              <button
+                                type="button"
+                                onClick={() => { setMenuOpenId(null); setEditing({ profile: p, mode: 'edit' }); }}
+                                style={menuItemStyle}
+                              >
+                                <Building2 size={14} /> 배정 수정
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
 
                     <div style={{ marginTop: 10, display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
                       {mems.map((m) => {
                         const wp = workplaces.find((w) => w.id === m.workplace_id);
-                        const r  = ROLE_META[m.role] ?? ROLE_META.staff;
-                        const RoleIcon = r.icon;
                         return (
-                          <span key={m.id} className={`tag ${r.tag} dot`}>
+                          <span key={m.id} className="tag dot">
                             <Building2 size={10} /> {wp?.name ?? '—'}
-                            <span style={{ marginLeft: 6, opacity: 0.7, display: 'inline-flex', alignItems: 'center', gap: 3 }}>
-                              <RoleIcon size={9} /> {r.label}
-                            </span>
                           </span>
                         );
                       })}

@@ -80,12 +80,17 @@ export default async function MembersPage() {
 
   const allProfiles = [...profiles, ...orphanProfiles];
 
+  // is_executive 또는 owner만 기존 배정 수정 가능
+  const isExecutive = myProfile?.is_executive === true
+    || myActiveMems.some((m) => m.role === 'owner');
+
   return (
     <MembersClient
       workplaces={wpsRes.data ?? []}
       profiles={allProfiles}
       memberships={memsRes.data ?? []}
       currentUserId={user.id}
+      isExecutive={isExecutive}
     />
   );
 }
