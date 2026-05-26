@@ -5,21 +5,18 @@ import { createClient } from '@/lib/supabase/client';
 
 const AppContext = createContext(null);
 
-export function AppProvider({ children, initialUser, initialProfile = null, initialMemberships = [] }) {
+export function AppProvider({ children, initialUser, initialProfile = null, initialMemberships = [], initialWorkplaceId = null }) {
   // 매 렌더마다 새 클라이언트 만들지 않도록 lazy init
   const [supabase] = useState(() => createClient());
   const [user, setUser] = useState(initialUser ?? null);
   const [profile, setProfile] = useState(initialProfile);
   const [memberships, setMemberships] = useState(initialMemberships);
-  // SSR + localStorage 모두 고려한 lazy init
-  const [currentWorkplaceId, setCurrentWorkplaceId] = useState(() => {
-    if (initialMemberships.length === 0) return null;
-    // 클라이언트에서만 localStorage 접근 가능
-    const stored = typeof window !== 'undefined' ? localStorage.getItem('erp:workplace') : null;
-    const validStored = stored ? initialMemberships.find((m) => m.workplace_id === stored) : null;
-    return validStored?.workplace_id ?? initialMemberships[0].workplace_id;
-  });
-  const [loading, setLoading] = useState(!initialProfile); // 초기 profile 있으면 loading false
+  // 서버 쿠키에서 읽은 initialWorkplaceId 사용 → SSR/클라이언트 동일한 값으로 시작
+  // (localStorage 기반 lazy init은 hydration 불일치를 일으켜 이중 렌더/스켈레톤 플래시 유발)
+  const [currentWorkplaceId, setCurrentWorkplaceId] = useState(
+    initialWorkplaceId ?? (initialMemberships.length > 0 ? initialMemberships[0].workplace_id : null)
+  );
+  const [loading, setLoading] = useState(false); // layout SSR에서 항상 profile 제공
 
   const loadProfileAndMemberships = useCallback(async (uid) => {
     if (!uid) return;
@@ -66,7 +63,18 @@ export function AppProvider({ children, initialUser, initialProfile = null, init
     }
   }, [supabase]);
 
-  // localStorage 사업장 선택은 useState lazy init에서 처리 (위 참조)
+  // localStorage 사업장 선택은 useState lazy init 대신 useEffect로 처리 (hydration 이후 1회)
+  useEffect(() => {
+    if (typeof window === 'undefined' || initialMemberships.length === 0) return;
+    // 쿠키(initialWorkplaceId)가 이미 반영됐으면 localStorage는 무시
+    // 쿠키가 없었던 경우에만 localStorage로 보정
+    if (initialWorkplaceId) return; // 서버에서 이미 올바른 값 전달됨
+    const stored = localStorage.getItem('erp:workplace');
+    if (!stored || stored === currentWorkplaceId) return;
+    const valid = initialMemberships.find((m) => m.workplace_id === stored);
+    if (valid) setCurrentWorkplaceId(valid.workplace_id);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // mount 1회만
 
   useEffect(() => {
     let mounted = true;
@@ -102,7 +110,11 @@ export function AppProvider({ children, initialUser, initialProfile = null, init
 
   const switchWorkplace = useCallback((wpId) => {
     setCurrentWorkplaceId(wpId);
-    if (typeof window !== 'undefined') localStorage.setItem('erp:workplace', wpId);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('erp:workplace', wpId);
+      // 쿠키에도 저장 → 다음 SSR 시 서버가 올바른 workplaceId 전달
+      document.cookie = `erp_wp=${encodeURIComponent(wpId)};path=/;max-age=31536000;SameSite=Lax`;
+    }
   }, []);
 
   const currentMembership = memberships.find((m) => m.workplace_id === currentWorkplaceId) ?? null;

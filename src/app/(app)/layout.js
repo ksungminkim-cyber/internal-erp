@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
+import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { AppProvider } from '@/context/AppContext';
 import BottomNav from '@/components/BottomNav';
@@ -43,11 +44,20 @@ export default async function AppLayout({ children }) {
     }
   }
 
+  // 쿠키에서 마지막 선택 사업장 읽기 → AppContext에 전달하여 SSR/클라이언트 hydration 일치
+  const cookieStore = await cookies();
+  const cookieWpId = cookieStore.get('erp_wp')?.value ?? null;
+  const validCookieWp = cookieWpId
+    ? memberships.find((m) => m.workplace_id === cookieWpId)
+    : null;
+  const initialWorkplaceId = validCookieWp?.workplace_id ?? memberships[0]?.workplace_id ?? null;
+
   return (
     <AppProvider
       initialUser={user}
       initialProfile={profile ?? null}
       initialMemberships={memberships}
+      initialWorkplaceId={initialWorkplaceId}
     >
       <Sidebar />
       <div className="app-shell">{children}</div>
