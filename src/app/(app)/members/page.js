@@ -63,8 +63,30 @@ export default async function MembersPage() {
   // handle_new_user 트리거 실행 전 가입자, 혹은 직접 생성된 계정은
   // auth.users에는 있지만 profiles 테이블에 row가 없을 수 있음.
   // admin.listUsers()로 전체 auth 유저를 가져와 프로필 없는 유저를 합산.
-  const profiles      = profsRes.data ?? [];
-  const authUsers     = authListRes.data?.users ?? [];
+  const profiles  = profsRes.data ?? [];
+  const authUsers = authListRes.data?.users ?? [];
+
+  // ── null 이름 자동 복구 ──────────────────────────────────────────────────
+  // 이전 upsert 버그로 name이 null이 된 프로필을 auth 메타데이터 or 이메일 prefix로 복원.
+  // 서비스 롤로 실행 — 관리자가 /members 열 때마다 조용히 수정 (idempotent).
+  const authMap = new Map(authUsers.map((u) => [u.id, u]));
+  const nullNameProfiles = profiles.filter((p) => !p.name || !p.name.trim());
+  if (nullNameProfiles.length > 0) {
+    await Promise.all(
+      nullNameProfiles.map((p) => {
+        const u = authMap.get(p.user_id);
+        if (!u) return null;
+        const restored = (u.user_metadata?.name || '').trim() || u.email?.split('@')[0] || null;
+        if (!restored) return null;
+        p.name = restored; // 렌더 즉시 반영
+        return svc.from('profiles')
+          .update({ name: restored, updated_at: new Date().toISOString() })
+          .eq('user_id', p.user_id);
+      }).filter(Boolean)
+    );
+  }
+
+  // ── orphan auth 유저 (profiles 없음) ────────────────────────────────────
   const profiledIds   = new Set(profiles.map((p) => p.user_id));
   const orphanProfiles = authUsers
     .filter((u) => !profiledIds.has(u.id))
