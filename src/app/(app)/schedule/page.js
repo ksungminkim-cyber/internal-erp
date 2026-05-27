@@ -98,8 +98,10 @@ function matchAttendance(shift, logs) {
 
 export default function SchedulePage() {
   const router = useRouter();
-  const { user, currentWorkplaceId, supabase } = useApp();
-  const isManager = true; // 전 직원 시프트 편집 허용
+  const { user, profile, currentWorkplaceId, supabase, isManager: contextIsManager, memberships } = useApp();
+  // 매니저/owner/본사 직원만 시프트 편집 가능
+  const isHQMember = memberships.some((m) => m.workplaces?.name === '본사');
+  const isManager = contextIsManager || isHQMember || profile?.is_super_admin === true;
   const [view, setView] = useState('week'); // 'week' | 'month'
   const [anchor, setAnchor] = useState(() => new Date());
   const [shifts, setShifts] = useState([]);
