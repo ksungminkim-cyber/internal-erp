@@ -104,9 +104,11 @@ export default async function MembersPage() {
 
   const allProfiles = [...profiles, ...orphanProfiles];
 
-  // is_executive 또는 owner만 기존 배정 수정 가능
+  // 기존 배정 수정 권한: 임원/대표/본사 직원/super_admin 모두 허용
   const isExecutive = myProfile?.is_executive === true
-    || myActiveMems.some((m) => m.role === 'owner');
+    || myProfile?.is_super_admin === true
+    || myActiveMems.some((m) => m.role === 'owner')
+    || (hqWpId != null && myActiveMems.some((m) => m.workplace_id === hqWpId));
 
   return (
     <MembersClient
