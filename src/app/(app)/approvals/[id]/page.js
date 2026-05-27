@@ -39,7 +39,6 @@ export default function ApprovalDetailPage({ params }) {
   const [error, setError] = useState(null);
 
   const load = useCallback(async () => {
-    setLoading(true);
     const [{ data: r }, { data: it }, { data: st }, { data: att }, { data: sh }] = await Promise.all([
       supabase
         .from('approval_requests')

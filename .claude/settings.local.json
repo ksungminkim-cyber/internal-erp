@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(Test-Path \"$env:USERPROFILE\\\\.claude\\\\projects\\\\C--Users-Mirac-internal-erp\\\\memory\\\\MEMORY.md\"; Get-ChildItem \"$env:USERPROFILE\\\\.claude\\\\projects\\\\C--Users-Mirac-internal-erp\\\\memory\" -ErrorAction SilentlyContinue)"
+    ]
+  }
+}

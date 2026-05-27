@@ -51,7 +51,6 @@ export default function ClosingPage() {
 
   const load = useCallback(async () => {
     if (!currentWorkplaceId) return;
-    setLoading(true);
     setError(null);
 
     // 기존 마감 스냅샷 확인

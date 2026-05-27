@@ -36,7 +36,6 @@ export default function RecipeDetail({ params }) {
 
   const load = useCallback(async () => {
     if (isNew) return;
-    setLoading(true);
     const { data: r } = await supabase
       .from('recipes')
       .select('*, updater:profiles!recipes_updated_by_fkey(name), workplaces(name)')

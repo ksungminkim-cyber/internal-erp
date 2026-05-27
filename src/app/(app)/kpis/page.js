@@ -35,7 +35,6 @@ export default function KpisPage() {
   const [recording, setRecording] = useState(null);
 
   const load = useCallback(async () => {
-    setLoading(true);
     const { data: ks } = await supabase
       .from('kpis')
       .select('*, workplaces(name)')

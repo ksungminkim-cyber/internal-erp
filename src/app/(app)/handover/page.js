@@ -35,7 +35,6 @@ export default function HandoverPage() {
       setLoading(false);
       return;
     }
-    setLoading(true);
     const { data } = await supabase
       .from('handover_notes')
       .select('*, author:profiles!handover_notes_author_id_fkey(name)')

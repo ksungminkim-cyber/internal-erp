@@ -133,7 +133,6 @@ export default function SchedulePage() {
 
   const load = useCallback(async () => {
     if (!currentWorkplaceId) return;
-    setLoading(true);
     const [{ data: ss }, { data: members }, { data: attLogs }] = await Promise.all([
       supabase
         .from('shifts')
@@ -884,8 +883,7 @@ function CopyPrevMonthDialog({ year, month, coworkers, workplaceId, userId, supa
 
   useEffect(() => {
     (async () => {
-      setLoading(true);
-      const { data } = await supabase
+        const { data } = await supabase
         .from('shifts')
         .select('*, user:profiles!shifts_user_id_fkey(name)')
         .eq('workplace_id', workplaceId)

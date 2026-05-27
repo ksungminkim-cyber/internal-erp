@@ -29,7 +29,6 @@ export default function RecipesPage() {
   const [scope, setScope] = useState(currentWorkplaceId);
 
   const load = useCallback(async () => {
-    setLoading(true);
     const [{ data: rec }, { data: wps }] = await Promise.all([
       supabase
         .from('recipes')

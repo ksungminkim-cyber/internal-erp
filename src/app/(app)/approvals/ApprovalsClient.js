@@ -34,7 +34,6 @@ export default function ApprovalsClient({ initialItems, ssrWorkplaceId, userId }
 
   const load = useCallback(async () => {
     if (!currentWorkplaceId || !uid) return;
-    setLoading(true);
 
     let query = supabase
       .from('approval_requests')

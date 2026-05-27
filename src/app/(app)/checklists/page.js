@@ -28,7 +28,6 @@ export default function ChecklistsPage() {
 
   const load = useCallback(async () => {
     if (!currentWorkplaceId) return;
-    setLoading(true);
     const today = todayKey();
     const [{ data: tpl }, { data: comps }] = await Promise.all([
       supabase

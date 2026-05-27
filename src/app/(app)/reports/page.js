@@ -35,7 +35,6 @@ export default function ReportsPage() {
 
   const load = useCallback(async () => {
     if (!currentWorkplaceId) return;
-    setLoading(true);
     const [
       sales, prevSales, expenses, attendance, shifts, complaints,
     ] = await Promise.all([

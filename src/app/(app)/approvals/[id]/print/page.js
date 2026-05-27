@@ -40,7 +40,6 @@ export default function PrintApprovalPage({ params }) {
   const [loading, setLoading] = useState(false);
 
   const load = useCallback(async () => {
-    setLoading(true);
     const [{ data: r }, { data: it }, { data: st }, { data: att }] = await Promise.all([
       supabase
         .from('approval_requests')

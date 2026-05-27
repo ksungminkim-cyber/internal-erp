@@ -41,7 +41,6 @@ export default function EquipmentPage() {
 
   const load = useCallback(async () => {
     if (!currentWorkplaceId) return;
-    setLoading(true);
     const { data } = await supabase
       .from('equipment')
       .select('*')

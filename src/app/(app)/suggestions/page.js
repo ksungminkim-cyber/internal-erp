@@ -38,7 +38,6 @@ export default function SuggestionsPage() {
   const [filter, setFilter] = useState(isHq ? 'open' : 'mine');
 
   const load = useCallback(async () => {
-    setLoading(true);
     const { data } = await supabase
       .from('suggestions')
       .select('*, author:profiles!suggestions_user_id_fkey(name)')

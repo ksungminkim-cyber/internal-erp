@@ -37,7 +37,6 @@ export default function ClosingPrintPage() {
 
   const load = useCallback(async () => {
     if (!currentWorkplaceId) return;
-    setLoading(true);
     const { data: c } = await supabase
       .from('month_closings')
       .select('*, closed_by_profile:profiles!month_closings_closed_by_fkey(name)')

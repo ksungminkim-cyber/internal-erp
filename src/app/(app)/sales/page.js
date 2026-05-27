@@ -25,7 +25,6 @@ export default function SalesPage() {
 
   const load = useCallback(async () => {
     if (!currentWorkplaceId) return;
-    setLoading(true);
     const { data } = await supabase
       .from('sales_daily')
       .select('*')

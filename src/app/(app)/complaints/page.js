@@ -52,7 +52,6 @@ export default function ComplaintsPage() {
 
   const load = useCallback(async () => {
     if (!currentWorkplaceId) return;
-    setLoading(true);
     const { data } = await supabase
       .from('customer_complaints')
       .select('*, reporter:profiles!customer_complaints_reporter_id_fkey(name)')

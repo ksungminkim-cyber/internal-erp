@@ -23,7 +23,6 @@ export default function InventoryPage() {
 
   const load = useCallback(async () => {
     if (!currentWorkplaceId) return;
-    setLoading(true);
     const { data } = await supabase
       .from('inventory_items')
       .select('*')
@@ -209,7 +208,6 @@ function InventoryClosingDialog({ items, supabase, userId, workplaceId, onClose 
   const [error, setError] = useState(null);
 
   const load = useCallback(async () => {
-    setLoading(true);
     const { data } = await supabase
       .from('inventory_closings')
       .select('*, closed_by_user:profiles!inventory_closings_closed_by_fkey(name)')

@@ -18,7 +18,6 @@ export default function AnnouncementsPage() {
 
   const load = useCallback(async () => {
     if (!currentWorkplaceId || !user) return;
-    setLoading(true);
     const [{ data: anns }, { data: reads }] = await Promise.all([
       supabase
         .from('announcements')

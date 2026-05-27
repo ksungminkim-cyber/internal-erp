@@ -27,7 +27,6 @@ export default function EquipmentDetail({ params }) {
   const [composing, setComposing] = useState(false);
 
   const load = useCallback(async () => {
-    setLoading(true);
     const [{ data: eq }, { data: lg }] = await Promise.all([
       supabase.from('equipment').select('*').eq('id', id).maybeSingle(),
       supabase
