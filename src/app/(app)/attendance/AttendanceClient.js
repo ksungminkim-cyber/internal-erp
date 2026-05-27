@@ -1,12 +1,12 @@
 'use client';
 
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
+import Link from 'next/link';
 import { useApp } from '@/context/AppContext';
 import PageHeader from '@/components/PageHeader';
 import Avatar from '@/components/Avatar';
 import { formatTime, formatRelative, todayBoundary } from '@/lib/format';
-import { downloadCsv, fmtDateTime } from '@/lib/csvExport';
-import { LogIn, LogOut, Coffee, Play, Sparkles, Users, Download } from 'lucide-react';
+import { LogIn, LogOut, Coffee, Play, Sparkles, Users, History } from 'lucide-react';
 
 const EVENT_LABEL = {
   clock_in: '출근',
@@ -112,35 +112,6 @@ export default function AttendanceClient({
     setActionLoading(null);
   }
 
-  async function exportMonthCsv() {
-    if (!currentWorkplaceId) return;
-    const now = new Date();
-    const start = new Date(now.getFullYear(), now.getMonth(), 1);
-    const end = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-    const { data } = await supabase
-      .from('attendance_logs')
-      .select('id, user_id, event_type, event_at, note, profiles:profiles!attendance_logs_user_id_fkey(name)')
-      .eq('workplace_id', currentWorkplaceId)
-      .gte('event_at', start.toISOString())
-      .lt('event_at', end.toISOString())
-      .order('event_at');
-    if (!data?.length) {
-      alert('이번 달 데이터가 없습니다.');
-      return;
-    }
-    const ym = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-    downloadCsv(
-      `attendance_${ym}.csv`,
-      [
-        { key: 'event_at', label: '일시', format: (v) => fmtDateTime(v) },
-        { key: 'name', label: '직원' },
-        { key: 'event_type', label: '구분', format: (v) => EVENT_LABEL[v] || v },
-        { key: 'note', label: '메모' },
-      ],
-      data.map((r) => ({ ...r, name: r.profiles?.name ?? '' }))
-    );
-  }
-
   if (!memberships?.length) {
     return (
       <>
@@ -179,11 +150,9 @@ export default function AttendanceClient({
         title="근태"
         subtitle="버튼을 눌러 출/퇴근을 기록해요"
         action={
-          isManager ? (
-            <button onClick={exportMonthCsv} className="btn btn-soft btn-sm">
-              <Download size={14} /> 이달 CSV
-            </button>
-          ) : undefined
+          <Link href="/attendance/history" className="btn btn-soft btn-sm">
+            <History size={14} /> 지난 기록
+          </Link>
         }
       />
 

@@ -135,6 +135,7 @@ export default function HomeClient({
   initialReadIds,
   ssrWorkplaceId,
   userId,
+  hqWorkplaceStatuses = null,
 }) {
   const { currentWorkplaceId, currentWorkplace, supabase, profile, memberships } = useApp();
 
@@ -374,6 +375,42 @@ export default function HomeClient({
             </Link>
           </div>
         </section>
+
+        {/* 본사: 전 매장 출근 현황 */}
+        {hqWorkplaceStatuses && hqWorkplaceStatuses.length > 0 && (
+          <section className="stack stack-3">
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+              <h2 className="h3">
+                <Users size={16} style={{ display: 'inline', marginRight: 6, verticalAlign: -2, color: 'var(--accent)' }} />
+                전 매장 출근 현황
+              </h2>
+              <span className="tag tag-accent" style={{ fontSize: 10 }}>본사</span>
+            </div>
+            <div className="grid-2">
+              {hqWorkplaceStatuses.map((wp) => (
+                <Link key={wp.id} href="/attendance" style={{ textDecoration: 'none' }}>
+                  <div className="card interactive">
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                      <div className="h4">{wp.name}</div>
+                      <span className={`tag ${wp.workingCount > 0 ? 'tag-success' : ''}`} style={{ fontSize: 11 }}>
+                        {wp.workingCount > 0 ? `${wp.workingCount}명 근무 중` : '근무자 없음'}
+                      </span>
+                    </div>
+                    {wp.workingNames.length > 0 ? (
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                        {wp.workingNames.map((name, i) => (
+                          <span key={i} className="tag dot" style={{ fontSize: 11 }}>{name}</span>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-muted" style={{ fontSize: 12 }}>오늘 출근 기록 {wp.totalToday}건</div>
+                    )}
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </section>
+        )}
 
         {/* 날씨 위젯 */}
         <WeatherWidget />

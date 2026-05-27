@@ -126,6 +126,41 @@ export default async function HomePage() {
     handoverUnresolved: handover.count ?? 0,
   };
 
+  // ── 본사/super_admin 이면 전 매장 출근 현황 추가 조회 ──
+  const [{ data: myProfile }, { data: myMems }] = await Promise.all([
+    supabase.from('profiles').select('is_super_admin').eq('user_id', user.id).maybeSingle(),
+    supabase.from('memberships').select('workplaces(name)').eq('user_id', user.id).eq('active', true),
+  ]);
+  const isHQ = myProfile?.is_super_admin === true
+    || (myMems ?? []).some((m) => m.workplaces?.name === '본사');
+
+  let hqWorkplaceStatuses = null;
+  if (isHQ) {
+    const { data: allWps } = await supabase
+      .from('workplaces')
+      .select('id, name')
+      .neq('name', '본사')
+      .order('name');
+    if (allWps?.length) {
+      hqWorkplaceStatuses = await Promise.all(
+        allWps.map(async (wp) => {
+          const { data: brd } = await supabase
+            .from('attendance_current_status')
+            .select('user_id, status, name')
+            .eq('workplace_id', wp.id);
+          const working = (brd ?? []).filter((b) => b.status === 'working' || b.status === 'on_break');
+          return {
+            id: wp.id,
+            name: wp.name,
+            workingCount: working.length,
+            workingNames: working.map((b) => b.name).filter(Boolean),
+            totalToday: (brd ?? []).length,
+          };
+        })
+      );
+    }
+  }
+
   return (
     <HomeClient
       initialStats={initialStats}
@@ -133,6 +168,7 @@ export default async function HomePage() {
       initialReadIds={[...readIds]}
       ssrWorkplaceId={wpId}
       userId={user.id}
+      hqWorkplaceStatuses={hqWorkplaceStatuses}
     />
   );
 }
