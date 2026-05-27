@@ -458,16 +458,11 @@ input[type="password"], input[type="date"], input[type="time"], textarea, select
 .stagger > *:nth-child(5) { animation-delay: 200ms; }
 .stagger > *:nth-child(6) { animation-delay: 250ms; }
 
-/* ─── Skeleton ─── */
+/* ─── Skeleton 비활성화 ─── */
+/* 새로고침 시 회색 박스 깜빡임을 막기 위해 display:none.
+   페이지 컨텐츠가 빈 상태로 즉시 렌더되고 데이터 도착하면 자연스럽게 채워짐. */
 .skeleton {
-  background: linear-gradient(90deg, var(--surface-soft) 0%, var(--surface-strong) 50%, var(--surface-soft) 100%);
-  background-size: 200% 100%;
-  animation: shimmer 1.4s infinite linear;
-  border-radius: var(--r-sm);
-}
-@keyframes shimmer {
-  0%   { background-position: 200% 0; }
-  100% { background-position: -200% 0; }
+  display: none !important;
 }
 
 /* ─── 헤더 ─── */
