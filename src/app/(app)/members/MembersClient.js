@@ -7,10 +7,10 @@ import Avatar from '@/components/Avatar';
 import BottomSheet from '@/components/BottomSheet';
 import { formatRelative, formatCurrency } from '@/lib/format';
 import { downloadCsv } from '@/lib/csvExport';
-import { saveMemberAssignment } from './actions';
+import { saveMemberAssignment, retireMember, unretireMember } from './actions';
 import {
   ChevronLeft, UserPlus, X, Crown, Shield, User as UserIcon,
-  MoreVertical, Building2, Sparkles, Download,
+  MoreVertical, Building2, Sparkles, Download, UserMinus, UserCheck,
 } from 'lucide-react';
 
 const ROLE_META = {
@@ -151,10 +151,13 @@ export default function MembersClient({ workplaces, profiles, memberships, curre
                       <Avatar name={p.name} userId={p.user_id} />
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                          <div className="h4">{p.name || '이름 없음'}</div>
+                          <div className="h4" style={{ textDecoration: p.retired_at ? 'line-through' : undefined, opacity: p.retired_at ? 0.6 : 1 }}>
+                            {p.name || '이름 없음'}
+                          </div>
                           {isMe && <span className="tag tag-accent">나</span>}
-                          {(p.is_super_admin || p.is_executive) && <span className="tag tag-accent"><Crown size={10} /> 전체관리</span>}
-                          {p.can_close_books && !p.is_super_admin && !p.is_executive && <span className="tag tag-mint">마감권한</span>}
+                          {p.retired_at && <span className="tag tag-danger" style={{ fontSize: 10 }}>퇴사 {new Date(p.retired_at).toISOString().slice(0, 10)}</span>}
+                          {(p.is_super_admin || p.is_executive) && !p.retired_at && <span className="tag tag-accent"><Crown size={10} /> 전체관리</span>}
+                          {p.can_close_books && !p.is_super_admin && !p.is_executive && !p.retired_at && <span className="tag tag-mint">마감권한</span>}
                         </div>
                         <div className="text-muted" style={{ fontSize: 12, marginTop: 2 }}>
                           {p.phone || '연락처 없음'}
@@ -178,7 +181,7 @@ export default function MembersClient({ workplaces, profiles, memberships, curre
                               position: 'absolute', top: '100%', right: 0, marginTop: 4,
                               background: 'var(--surface)', border: '1px solid var(--border)',
                               borderRadius: 12, padding: 4,
-                              boxShadow: 'var(--sh-md)', minWidth: 160, zIndex: 30,
+                              boxShadow: 'var(--sh-md)', minWidth: 180, zIndex: 30,
                             }}>
                               <button
                                 type="button"
@@ -187,6 +190,34 @@ export default function MembersClient({ workplaces, profiles, memberships, curre
                               >
                                 <Building2 size={14} /> 배정 수정
                               </button>
+                              {p.retired_at ? (
+                                <button
+                                  type="button"
+                                  onClick={async () => {
+                                    setMenuOpenId(null);
+                                    if (!confirm('퇴사 처리를 해제할까요?')) return;
+                                    await unretireMember(p.user_id);
+                                    router.refresh();
+                                  }}
+                                  style={menuItemStyle}
+                                >
+                                  <UserCheck size={14} color="var(--success)" /> 복직 처리
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={async () => {
+                                    setMenuOpenId(null);
+                                    const reason = prompt(`${p.name || '직원'}님을 퇴사 처리합니다.\n사유 (선택):`);
+                                    if (reason === null) return; // cancel
+                                    await retireMember(p.user_id, reason || null);
+                                    router.refresh();
+                                  }}
+                                  style={menuItemStyle}
+                                >
+                                  <UserMinus size={14} color="var(--danger)" /> 퇴사 처리
+                                </button>
+                              )}
                             </div>
                           )}
                         </div>

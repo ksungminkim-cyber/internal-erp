@@ -143,7 +143,7 @@ export default function SchedulePage() {
         .order('start_at'),
       supabase
         .from('memberships')
-        .select('user_id, role, profiles!memberships_user_id_fkey(name)')
+        .select('user_id, role, profiles!memberships_user_id_fkey(name, hourly_wage, retired_at)')
         .eq('workplace_id', currentWorkplaceId)
         .eq('active', true)
         .order('role'),
@@ -156,7 +156,17 @@ export default function SchedulePage() {
     ]);
     setShifts(ss ?? []);
     setLogs(attLogs ?? []);
-    setCoworkers((members ?? []).map((m) => ({ user_id: m.user_id, name: m.profiles?.name || '—', role: m.role })));
+    // 퇴사자 제외 + hourly_wage 포함
+    setCoworkers(
+      (members ?? [])
+        .filter((m) => !m.profiles?.retired_at)
+        .map((m) => ({
+          user_id: m.user_id,
+          name: m.profiles?.name || '—',
+          role: m.role,
+          hourly_wage: Number(m.profiles?.hourly_wage ?? 0),
+        }))
+    );
     setLoading(false);
   }, [supabase, currentWorkplaceId, periodStart, periodEnd]);
 
@@ -466,6 +476,15 @@ function ShiftEditor({ shift, initial, coworkers, workplaceId, userId, supabase,
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
 
+  // 예상 시간/인건비 계산
+  const pickedUser = coworkers.find((c) => c.user_id === userPick);
+  const hoursDiff = (() => {
+    if (!startAt || !endAt) return 0;
+    const ms = new Date(endAt).getTime() - new Date(startAt).getTime();
+    return Math.max(0, ms / 3600000);
+  })();
+  const estimatedWage = Math.round(hoursDiff * Number(pickedUser?.hourly_wage ?? 0));
+
   async function save() {
     setError(null);
     if (!userPick) return setError('근무자를 선택해주세요.');
@@ -484,7 +503,17 @@ function ShiftEditor({ shift, initial, coworkers, workplaceId, userId, supabase,
       ? supabase.from('shifts').update({ ...payload, updated_at: new Date().toISOString() }).eq('id', shift.id)
       : supabase.from('shifts').insert(payload);
     const { error } = await op;
-    if (error) { setError(error.message); setSaving(false); return; }
+    if (error) {
+      // DB 트리거의 충돌 에러를 친절하게
+      const msg = String(error.message || '');
+      if (msg.includes('시프트 충돌')) {
+        setError('이 직원은 같은 시간대에 다른 시프트가 이미 있습니다. 시간을 확인해주세요.');
+      } else {
+        setError(msg);
+      }
+      setSaving(false);
+      return;
+    }
     onSaved();
   }
 
@@ -529,6 +558,26 @@ function ShiftEditor({ shift, initial, coworkers, workplaceId, userId, supabase,
 
       <label className="label" style={{ marginTop: 12 }}>메모</label>
       <textarea className="input" rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} style={{ resize: 'vertical' }} />
+
+      {/* 예상 인건비 미리보기 */}
+      {userPick && hoursDiff > 0 && (
+        <div style={{
+          marginTop: 12, padding: '12px 14px',
+          background: 'var(--accent-soft)', borderRadius: 12,
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+        }}>
+          <div>
+            <div className="text-muted" style={{ fontSize: 11, fontWeight: 700, letterSpacing: 0.04, textTransform: 'uppercase' }}>예상 인건비</div>
+            <div className="num" style={{ fontSize: 18, fontWeight: 800, color: 'var(--accent-strong)', marginTop: 2 }}>
+              {estimatedWage.toLocaleString()}원
+            </div>
+          </div>
+          <div className="text-muted" style={{ fontSize: 11, textAlign: 'right' }}>
+            {hoursDiff.toFixed(1)}h × {Number(pickedUser?.hourly_wage ?? 0).toLocaleString()}원
+            {!pickedUser?.hourly_wage && <div style={{ color: 'var(--warning)' }}>시급 미설정</div>}
+          </div>
+        </div>
+      )}
 
       {error && (
         <div style={{ marginTop: 12, padding: 10, background: 'var(--danger-soft)', color: 'var(--danger)', borderRadius: 10, fontSize: 13 }}>

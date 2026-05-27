@@ -148,3 +148,85 @@ export async function saveMemberAssignment({ userId, userName, userPhone, hourly
       .eq('user_id', userId);
   }
 }
+
+/**
+ * 직원 퇴사 처리
+ * - profiles.retired_at, retired_reason 설정
+ * - DB 트리거가 자동으로 memberships.active = false 처리
+ */
+export async function retireMember(userId, reason) {
+  const authClient = await createServerClient();
+  const { data: { user } } = await authClient.auth.getUser();
+  if (!user) throw new Error('로그인이 필요합니다.');
+
+  const { data: myProfile } = await authClient
+    .from('profiles')
+    .select('is_super_admin, is_executive')
+    .eq('user_id', user.id)
+    .maybeSingle();
+
+  const { data: myMem } = await authClient
+    .from('memberships')
+    .select('role, workplaces(name)')
+    .eq('user_id', user.id)
+    .eq('active', true);
+
+  const canManage =
+    myProfile?.is_super_admin === true ||
+    myProfile?.is_executive === true ||
+    (myMem ?? []).some((m) => m.role === 'owner') ||
+    (myMem ?? []).some((m) => m.workplaces?.name === '본사');
+
+  if (!canManage) throw new Error('접근 권한이 없습니다.');
+
+  const svc = getServiceClient();
+  const { error } = await svc
+    .from('profiles')
+    .update({
+      retired_at: new Date().toISOString(),
+      retired_reason: reason ?? null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('user_id', userId);
+  if (error) throw new Error('퇴사 처리 실패: ' + error.message);
+}
+
+/**
+ * 복직 처리 (퇴사 취소)
+ */
+export async function unretireMember(userId) {
+  const authClient = await createServerClient();
+  const { data: { user } } = await authClient.auth.getUser();
+  if (!user) throw new Error('로그인이 필요합니다.');
+
+  const { data: myProfile } = await authClient
+    .from('profiles')
+    .select('is_super_admin, is_executive')
+    .eq('user_id', user.id)
+    .maybeSingle();
+
+  const { data: myMem } = await authClient
+    .from('memberships')
+    .select('role, workplaces(name)')
+    .eq('user_id', user.id)
+    .eq('active', true);
+
+  const canManage =
+    myProfile?.is_super_admin === true ||
+    myProfile?.is_executive === true ||
+    (myMem ?? []).some((m) => m.role === 'owner') ||
+    (myMem ?? []).some((m) => m.workplaces?.name === '본사');
+
+  if (!canManage) throw new Error('접근 권한이 없습니다.');
+
+  const svc = getServiceClient();
+  const { error } = await svc
+    .from('profiles')
+    .update({
+      retired_at: null,
+      retired_reason: null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('user_id', userId);
+  if (error) throw new Error('복직 처리 실패: ' + error.message);
+}
