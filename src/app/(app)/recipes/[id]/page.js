@@ -115,7 +115,7 @@ export default function RecipeDetail({ params }) {
       <>
         <PageHeader
           title={name || '—'}
-          subtitle={`${category} · ${workplaceName || '전사 공유'}`}
+          subtitle={`${category} · ${workplaceName || '공통'}`}
           hideSwitcher
           action={
             <button onClick={() => router.back()} className="btn btn-ghost btn-icon"><ChevronLeft size={20} /></button>
@@ -219,13 +219,13 @@ export default function RecipeDetail({ params }) {
 
           <label className="label" style={{ marginTop: 12 }}>적용 매장</label>
           <select className="input" value={workplaceId} onChange={(e) => setWorkplaceId(e.target.value)}>
-            <option value="">전사 공유 (모든 매장)</option>
+            <option value="">공통 (나울 + 녹턴 모두 표시)</option>
             {memberships.filter((m) => m.workplaces?.name !== '본사').map((m) => (
               <option key={m.workplace_id} value={m.workplace_id}>{m.workplaces?.name}</option>
             ))}
           </select>
           <p className="text-muted" style={{ fontSize: 11, marginTop: 4 }}>
-            특정 매장 전용으로 만들거나 모든 매장에서 보이도록 전사 공유 선택
+            한 매장 전용으로 만들거나, 양쪽 매장 모두에서 보이도록 &ldquo;공통&rdquo; 선택
           </p>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 12 }}>
