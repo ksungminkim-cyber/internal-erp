@@ -409,6 +409,17 @@ export default function ApprovalDetailPage({ params }) {
             기안 취소
           </button>
         )}
+
+        {/* 반려된 본인 기안 → 재기안 (revision_of로 연결) */}
+        {req.status === 'rejected' && req.drafter_id === user?.id && (
+          <Link
+            href={`/approvals/new?revision_of=${req.id}`}
+            className="btn btn-primary btn-lg"
+            style={{ textDecoration: 'none', justifyContent: 'center' }}
+          >
+            ↻ 수정 후 재기안
+          </Link>
+        )}
       </main>
     </>
   );

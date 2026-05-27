@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useApp } from '@/context/AppContext';
 import PageHeader from '@/components/PageHeader';
 import { formatCurrency } from '@/lib/format';
@@ -36,6 +36,8 @@ function getKindByCategory(cat) {
 
 export default function NewApprovalPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const revisionOfId = searchParams.get('revision_of');
   const { user, profile, currentWorkplaceId, supabase } = useApp();
   const drafterIsExec = profile?.is_executive === true;
 
@@ -47,6 +49,36 @@ export default function NewApprovalPage() {
   const [files, setFiles] = useState([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
+  const [revisionInfo, setRevisionInfo] = useState(null);
+
+  // 재기안 모드: 이전 결재 데이터 미리 채우기
+  useEffect(() => {
+    if (!revisionOfId || !user) return;
+    (async () => {
+      const { data: prev } = await supabase
+        .from('approval_requests')
+        .select('id, title, body, total_amount, revision_count, expense_items(*)')
+        .eq('id', revisionOfId)
+        .maybeSingle();
+      if (prev) {
+        setTitle(prev.title || '');
+        setBody(prev.body || '');
+        if (prev.expense_items?.length) {
+          setItems(prev.expense_items.map((it) => ({
+            description: it.description || '',
+            category: it.category || '식자재',
+            amount: String(it.amount ?? ''),
+            vendor: it.vendor || '',
+            product_url: it.product_url || '',
+          })));
+        }
+        setRevisionInfo({
+          id: prev.id,
+          count: (prev.revision_count ?? 0) + 1,
+        });
+      }
+    })();
+  }, [revisionOfId, user, supabase]);
 
   const total = items.reduce((sum, it) => sum + (parseFloat(it.amount) || 0), 0);
 
@@ -113,6 +145,8 @@ export default function NewApprovalPage() {
           title: title.trim(),
           body: body.trim() || null,
           total_amount: total,
+          revision_of: revisionInfo?.id ?? null,
+          revision_count: revisionInfo?.count ?? 0,
         })
         .select('id')
         .single();
@@ -162,8 +196,8 @@ export default function NewApprovalPage() {
   return (
     <>
       <PageHeader
-        title="새 기안"
-        subtitle="지출결의서를 작성해요"
+        title={revisionInfo ? `재기안 (${revisionInfo.count}회차)` : '새 기안'}
+        subtitle={revisionInfo ? '반려된 내용을 수정해 다시 결재 올리기' : '지출결의서를 작성해요'}
         hideSwitcher
         action={
           <button onClick={() => router.back()} className="btn btn-ghost btn-icon" aria-label="뒤로">
