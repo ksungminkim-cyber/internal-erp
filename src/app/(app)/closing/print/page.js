@@ -32,7 +32,7 @@ export default function ClosingPrintPage() {
   const [approval, setApproval] = useState(null);
   const [steps, setSteps] = useState([]);
   const [closedBy, setClosedBy] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [notFound, setNotFound] = useState(false);
 
   const load = useCallback(async () => {

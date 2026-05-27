@@ -46,7 +46,7 @@ export default function ComplaintsPage() {
   const router = useRouter();
   const { user, currentWorkplaceId, supabase } = useApp();
   const [items, setItems] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [filter, setFilter] = useState('open');
   const [editing, setEditing] = useState(null);
 

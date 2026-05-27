@@ -22,7 +22,7 @@ export default function RecipesPage() {
   const { supabase, isManager, currentWorkplaceId, currentWorkplace, memberships } = useApp();
   const [items, setItems] = useState([]);
   const [workplaces, setWorkplaces] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('all');
   // scope: 매장 id (본사 제외)

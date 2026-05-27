@@ -12,7 +12,7 @@ export default function AnnouncementsPage() {
   const { user, currentWorkplaceId, supabase, isManager } = useApp();
   const [items, setItems] = useState([]);
   const [readIds, setReadIds] = useState(new Set());
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [editing, setEditing] = useState(null);
   const [menuOpenId, setMenuOpenId] = useState(null);
 

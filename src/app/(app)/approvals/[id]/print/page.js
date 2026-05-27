@@ -37,7 +37,7 @@ export default function PrintApprovalPage({ params }) {
   const [items, setItems] = useState([]);
   const [steps, setSteps] = useState([]);
   const [attachments, setAttachments] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);

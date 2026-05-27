@@ -24,7 +24,7 @@ export default function HandoverPage() {
   const router = useRouter();
   const { user, currentWorkplaceId, supabase } = useApp();
   const [items, setItems] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [composing, setComposing] = useState(false);
   const [filter, setFilter] = useState('all');
 

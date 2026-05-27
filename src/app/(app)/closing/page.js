@@ -38,7 +38,7 @@ export default function ClosingPage() {
   const defaultDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
   const [year, setYear] = useState(defaultDate.getFullYear());
   const [month, setMonth] = useState(defaultDate.getMonth());
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [data, setData] = useState(null);
   const [existingClosing, setExistingClosing] = useState(null);
   const [closingApproval, setClosingApproval] = useState(null);

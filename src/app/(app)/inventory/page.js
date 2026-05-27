@@ -14,7 +14,7 @@ export default function InventoryPage() {
   const router = useRouter();
   const { user, currentWorkplaceId, supabase } = useApp();
   const [items, setItems] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState('all');
   const [editing, setEditing] = useState(null);
@@ -204,7 +204,7 @@ function InventoryClosingDialog({ items, supabase, userId, workplaceId, onClose 
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [closings, setClosings] = useState([]);
   const [notes, setNotes] = useState('');
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
 

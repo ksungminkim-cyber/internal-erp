@@ -36,7 +36,7 @@ export default function EquipmentPage() {
   const router = useRouter();
   const { currentWorkplaceId, supabase } = useApp();
   const [items, setItems] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [editing, setEditing] = useState(null);
 
   const load = useCallback(async () => {

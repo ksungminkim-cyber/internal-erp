@@ -109,7 +109,7 @@ export default function SchedulePage() {
   const [coworkers, setCoworkers] = useState([]);
   const [editing, setEditing] = useState(null);
   const [submittingApproval, setSubmittingApproval] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
 
   const periodStart = useMemo(() => {
     return view === 'week' ? startOfWeek(anchor) : startOfMonth(anchor);
@@ -868,7 +868,7 @@ function CalendarGrid({ anchor, shifts, logs, todayStr, isManager, hasApproval, 
 
 // ============== 지난달 복사 다이얼로그 ==============
 function CopyPrevMonthDialog({ year, month, coworkers, workplaceId, userId, supabase, onClose, onSaved }) {
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [prevShifts, setPrevShifts] = useState([]);
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [saving, setSaving] = useState(false);

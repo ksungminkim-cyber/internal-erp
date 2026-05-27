@@ -32,7 +32,7 @@ export default function SuggestionsPage() {
   const isHq = profile?.is_super_admin === true;
 
   const [items, setItems] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [composing, setComposing] = useState(false);
   const [responding, setResponding] = useState(null);
   const [filter, setFilter] = useState(isHq ? 'open' : 'mine');

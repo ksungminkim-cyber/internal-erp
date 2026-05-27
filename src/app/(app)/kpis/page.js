@@ -30,7 +30,7 @@ export default function KpisPage() {
 
   const [kpis, setKpis] = useState([]);
   const [recordsMap, setRecordsMap] = useState({});
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [editing, setEditing] = useState(null);
   const [recording, setRecording] = useState(null);
 

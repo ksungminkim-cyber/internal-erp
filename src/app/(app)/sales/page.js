@@ -16,7 +16,7 @@ export default function SalesPage() {
   const router = useRouter();
   const { user, currentWorkplaceId, supabase, isManager } = useApp();
   const [rows, setRows] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [editing, setEditing] = useState(null);
   const [showGuide, setShowGuide] = useState(false);
 

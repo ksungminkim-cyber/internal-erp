@@ -23,7 +23,7 @@ export default function EquipmentDetail({ params }) {
   const { user, currentWorkplaceId, supabase } = useApp();
   const [equipment, setEquipment] = useState(null);
   const [logs, setLogs] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [composing, setComposing] = useState(false);
 
   const load = useCallback(async () => {

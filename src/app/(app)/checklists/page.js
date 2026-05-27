@@ -22,7 +22,7 @@ export default function ChecklistsPage() {
   const { user, currentWorkplaceId, supabase, isManager } = useApp();
   const [templates, setTemplates] = useState([]);
   const [completions, setCompletions] = useState({}); // template_id -> completion row
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [activeTemplate, setActiveTemplate] = useState(null);
   const [editingTemplate, setEditingTemplate] = useState(null);
 

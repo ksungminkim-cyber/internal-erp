@@ -33,7 +33,7 @@ export default function ApprovalDetailPage({ params }) {
   const [steps, setSteps] = useState([]);
   const [attachments, setAttachments] = useState([]);
   const [shifts, setShifts] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [comment, setComment] = useState('');
   const [acting, setActing] = useState(false);
   const [error, setError] = useState(null);

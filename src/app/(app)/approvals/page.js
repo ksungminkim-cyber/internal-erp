@@ -26,7 +26,7 @@ export default function ApprovalsListPage() {
   const { user, currentWorkplaceId, supabase } = useApp();
   const [tab, setTab] = useState('inbox');
   const [items, setItems] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
 
