@@ -46,12 +46,14 @@ declare
   v_year int;
   v_month int;
   v_ts timestamptz;
+  v_row jsonb;
 begin
-  v_workplace := coalesce(new.workplace_id, old.workplace_id);
-  v_ts := case
-    when tg_table_name = 'attendance_logs' then coalesce(new.event_at, old.event_at)
-    when tg_table_name = 'sales_daily'     then coalesce(new.sales_date::timestamptz, old.sales_date::timestamptz)
-    when tg_table_name = 'approval_requests' then coalesce(new.submitted_at, old.submitted_at)
+  v_row := coalesce(to_jsonb(new), to_jsonb(old));
+  v_workplace := (v_row->>'workplace_id')::uuid;
+  v_ts := case tg_table_name
+    when 'attendance_logs'   then (v_row->>'event_at')::timestamptz
+    when 'sales_daily'       then (v_row->>'sales_date')::timestamptz
+    when 'approval_requests' then (v_row->>'submitted_at')::timestamptz
     else now()
   end;
   v_year  := extract(year from v_ts);
