@@ -35,42 +35,59 @@ export default function ApprovalsClient({ initialItems, ssrWorkplaceId, userId }
   const load = useCallback(async () => {
     if (!currentWorkplaceId || !uid) return;
 
-    let query = supabase
+    // 1) 결재 본문 (profiles JOIN 없이 — RLS 충돌 회피)
+    let q1 = supabase
       .from('approval_requests')
-      .select(`
-        id, title, status, total_amount, current_step, submitted_at, drafter_id, doc_type,
-        drafter:profiles!approval_requests_drafter_id_fkey(name),
-        approval_steps(id, step_order, approver_id, status)
-      `)
+      .select('id, title, status, total_amount, current_step, submitted_at, drafter_id, doc_type, workplace_id')
       .eq('workplace_id', currentWorkplaceId)
       .order('submitted_at', { ascending: false })
       .limit(200);
-
-    if (tab === 'mine') query = query.eq('drafter_id', uid);
-    if (dateFrom) query = query.gte('submitted_at', dateFrom);
+    if (tab === 'mine') q1 = q1.eq('drafter_id', uid);
+    if (dateFrom) q1 = q1.gte('submitted_at', dateFrom);
     if (dateTo) {
       const endDate = new Date(dateTo);
       endDate.setHours(23, 59, 59, 999);
-      query = query.lte('submitted_at', endDate.toISOString());
+      q1 = q1.lte('submitted_at', endDate.toISOString());
+    }
+    const { data: reqs, error } = await q1;
+    if (error) { console.error(error); setItems([]); setLoading(false); return; }
+
+    // 2) 결재 단계
+    const requestIds = (reqs ?? []).map((r) => r.id);
+    const { data: steps } = requestIds.length > 0
+      ? await supabase.from('approval_steps').select('id, request_id, step_order, approver_id, status').in('request_id', requestIds)
+      : { data: [] };
+    const stepsByReq = new Map();
+    (steps ?? []).forEach((s) => {
+      if (!stepsByReq.has(s.request_id)) stepsByReq.set(s.request_id, []);
+      stepsByReq.get(s.request_id).push(s);
+    });
+
+    // 3) drafter 이름 별도 조회
+    const drafterIds = [...new Set((reqs ?? []).map((r) => r.drafter_id).filter(Boolean))];
+    let drafterMap = new Map();
+    if (drafterIds.length > 0) {
+      const { data: profs } = await supabase.from('profiles').select('user_id, name').in('user_id', drafterIds);
+      drafterMap = new Map((profs ?? []).map((p) => [p.user_id, p.name]));
     }
 
-    const { data, error } = await query;
-    if (error) {
-      console.error(error);
-      setItems([]);
-    } else {
-      let list = data ?? [];
-      if (tab === 'inbox') {
-        list = list.filter(
-          (r) =>
-            r.status === 'pending' &&
-            r.approval_steps?.some(
-              (s) => s.step_order === r.current_step && s.approver_id === uid && s.status === 'waiting'
-            )
-        );
-      }
-      setItems(list);
+    const enriched = (reqs ?? []).map((r) => ({
+      ...r,
+      drafter: { name: drafterMap.get(r.drafter_id) ?? null },
+      approval_steps: stepsByReq.get(r.id) ?? [],
+    }));
+
+    let list = enriched;
+    if (tab === 'inbox') {
+      list = list.filter(
+        (r) =>
+          r.status === 'pending' &&
+          r.approval_steps?.some(
+            (s) => s.step_order === r.current_step && s.approver_id === uid && s.status === 'waiting'
+          )
+      );
     }
+    setItems(list);
     setLoading(false);
   }, [supabase, currentWorkplaceId, uid, tab, dateFrom, dateTo]);
 

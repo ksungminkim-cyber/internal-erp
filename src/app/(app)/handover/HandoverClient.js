@@ -34,14 +34,25 @@ export default function HandoverClient({ initialItems, ssrWorkplaceId, userId })
       setItems([]);
       return;
     }
-    const { data } = await supabase
+    // 1) 노트만 조회 (profiles JOIN 없이 — RLS 충돌 회피)
+    const { data: notes } = await supabase
       .from('handover_notes')
-      .select('*, author:profiles!handover_notes_author_id_fkey(name)')
+      .select('id, workplace_id, author_id, shift_type, note_date, content, flags, resolved, resolved_by, resolved_at, created_at')
       .eq('workplace_id', currentWorkplaceId)
       .order('note_date', { ascending: false })
       .order('created_at', { ascending: false })
       .limit(50);
-    setItems(data ?? []);
+    // 2) author 이름 별도 조회
+    const authorIds = [...new Set((notes ?? []).map((n) => n.author_id).filter(Boolean))];
+    let authorMap = new Map();
+    if (authorIds.length > 0) {
+      const { data: profs } = await supabase
+        .from('profiles')
+        .select('user_id, name')
+        .in('user_id', authorIds);
+      authorMap = new Map((profs ?? []).map((p) => [p.user_id, p.name]));
+    }
+    setItems((notes ?? []).map((n) => ({ ...n, author: { name: authorMap.get(n.author_id) ?? null } })));
   }, [supabase, currentWorkplaceId]);
 
   // SSR과 workplace 일치하면 첫 로드 생략
