@@ -520,10 +520,11 @@ export default function ClosingPage() {
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
                       <Check size={16} color="var(--success)" />
                       <strong>마감 확정됨</strong>
+                      <span className="tag tag-danger" style={{ fontSize: 10 }}>🔒 데이터 변경 차단</span>
                     </div>
                     <p className="text-muted" style={{ fontSize: 12, marginBottom: 12 }}>
-                      이 스냅샷은 마감 시점 데이터로 저장되어 있습니다.
-                      이후 데이터가 변경되어도 이 화면은 마감 당시 수치를 유지합니다.
+                      마감 후 이 월의 매출·근태·지출 수정이 자동 차단됩니다.
+                      &ldquo;마감 해제&rdquo; 시 잠금이 풀리며 다시 수정 가능합니다.
                     </p>
 
                     {/* 마감 결재 상태 */}

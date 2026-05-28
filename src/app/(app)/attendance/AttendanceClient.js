@@ -108,7 +108,14 @@ export default function AttendanceClient({
       workplace_id: currentWorkplaceId,
       event_type: eventType,
     });
-    if (error) setError(error.message);
+    if (error) {
+      const msg = String(error.message || '');
+      if (msg.includes('마감 잠금')) {
+        setError('마감된 월에는 출퇴근 기록을 추가할 수 없습니다. 관리자에게 문의하세요.');
+      } else {
+        setError(msg);
+      }
+    }
     setActionLoading(null);
   }
 

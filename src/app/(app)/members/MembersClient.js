@@ -7,10 +7,11 @@ import Avatar from '@/components/Avatar';
 import BottomSheet from '@/components/BottomSheet';
 import { formatRelative, formatCurrency } from '@/lib/format';
 import { downloadCsv } from '@/lib/csvExport';
+import Link from 'next/link';
 import { saveMemberAssignment, retireMember, unretireMember } from './actions';
 import {
   ChevronLeft, UserPlus, X, Crown, Shield, User as UserIcon,
-  MoreVertical, Building2, Sparkles, Download, UserMinus, UserCheck,
+  MoreVertical, Building2, Sparkles, Download, UserMinus, UserCheck, BarChart3,
 } from 'lucide-react';
 
 const ROLE_META = {
@@ -183,6 +184,13 @@ export default function MembersClient({ workplaces, profiles, memberships, curre
                               borderRadius: 12, padding: 4,
                               boxShadow: 'var(--sh-md)', minWidth: 180, zIndex: 30,
                             }}>
+                              <Link
+                                href={`/members/${p.user_id}`}
+                                onClick={() => setMenuOpenId(null)}
+                                style={{ ...menuItemStyle, textDecoration: 'none', color: 'var(--text)' }}
+                              >
+                                <BarChart3 size={14} /> 통계 보기
+                              </Link>
                               <button
                                 type="button"
                                 onClick={() => { setMenuOpenId(null); setEditing({ profile: p, mode: 'edit' }); }}

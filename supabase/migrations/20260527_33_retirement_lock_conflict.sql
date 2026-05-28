@@ -62,7 +62,7 @@ begin
     where workplace_id = v_workplace
       and year = v_year
       and month = v_month
-      and locked_at is not null
+      and (locked = true or locked_at is not null)
   ) then
     raise exception '% 년 % 월은 마감 잠금됨 - 변경 불가', v_year, v_month;
   end if;
