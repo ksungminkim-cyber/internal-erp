@@ -84,22 +84,61 @@ export default function NewApprovalPage() {
 
   useEffect(() => {
     (async () => {
-      if (!currentWorkplaceId) return;
-      const { data } = await supabase
-        .from('memberships')
-        .select('user_id, role, profiles!memberships_user_id_fkey(name, is_executive)')
-        .eq('workplace_id', currentWorkplaceId)
-        .eq('active', true)
-        .in('role', ['manager', 'owner'])
-        .neq('user_id', user?.id ?? '');
-      setCoworkers(
-        (data ?? []).map((m) => ({
-          user_id: m.user_id,
-          name: m.profiles?.name || '—',
-          role: m.role,
-          isExecutive: m.profiles?.is_executive === true,
-        }))
+      if (!currentWorkplaceId || !user) return;
+      // ── 결재자 후보: 현재 매장 매니저/대표 + 본사 active 멤버 전원 ──
+      const [{ data: storeMems }, { data: hqMems }] = await Promise.all([
+        supabase
+          .from('memberships')
+          .select('user_id, role')
+          .eq('workplace_id', currentWorkplaceId)
+          .eq('active', true)
+          .in('role', ['manager', 'owner'])
+          .neq('user_id', user.id),
+        supabase
+          .from('memberships')
+          .select('user_id, role, workplaces!inner(name)')
+          .eq('workplaces.name', '본사')
+          .eq('active', true)
+          .neq('user_id', user.id),
+      ]);
+
+      // 중복 제거 (user_id 기준, 본사 멤버 우선)
+      const merged = new Map();
+      (storeMems ?? []).forEach((m) =>
+        merged.set(m.user_id, { user_id: m.user_id, role: m.role, source: 'store' })
       );
+      (hqMems ?? []).forEach((m) =>
+        merged.set(m.user_id, { user_id: m.user_id, role: m.role, source: 'hq' })
+      );
+
+      // profiles 별도 조회 (RLS 우회)
+      const uids = [...merged.keys()];
+      let profMap = new Map();
+      if (uids.length > 0) {
+        const { data: profs } = await supabase
+          .from('profiles')
+          .select('user_id, name, is_executive')
+          .in('user_id', uids);
+        profMap = new Map((profs ?? []).map((p) => [p.user_id, p]));
+      }
+
+      const list = [...merged.values()].map((m) => {
+        const p = profMap.get(m.user_id);
+        return {
+          user_id: m.user_id,
+          name: p?.name || '—',
+          role: m.role,
+          isExecutive: p?.is_executive === true,
+          source: m.source, // 'store' | 'hq'
+        };
+      });
+      // 본사 → 대표/매니저 순 정렬
+      list.sort((a, b) => {
+        if (a.source !== b.source) return a.source === 'hq' ? -1 : 1;
+        const rank = { owner: 0, manager: 1, staff: 2 };
+        return (rank[a.role] ?? 9) - (rank[b.role] ?? 9);
+      });
+      setCoworkers(list);
     })();
   }, [supabase, currentWorkplaceId, user]);
 
@@ -342,24 +381,55 @@ export default function NewApprovalPage() {
 
           <label className="label">결재자 추가</label>
           {coworkers.length === 0 ? (
-            <p className="text-muted" style={{ fontSize: 13 }}>같은 사업장의 매니저/대표가 없어요</p>
+            <p className="text-muted" style={{ fontSize: 13 }}>지정 가능한 결재자가 없어요 (매장 매니저·대표 또는 본사 직원)</p>
           ) : (
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-              {coworkers.filter((c) => !approvers.find((a) => a.user_id === c.user_id)).map((c) => (
-                <button
-                  key={c.user_id}
-                  type="button"
-                  className={`tag ${c.isExecutive ? 'tag-warning' : 'tag-accent'} lg`}
-                  onClick={() => addApprover(c.user_id)}
-                  style={{
-                    cursor: 'pointer',
-                    border: `1px dashed ${c.isExecutive ? 'var(--warning)' : 'var(--accent)'}`,
-                  }}
-                  title={c.isExecutive ? '임원 — 결재선 마지막에 배치 가능' : undefined}
-                >
-                  <Plus size={11} /> {c.name}{c.isExecutive ? ' · 임원' : ''}
-                </button>
-              ))}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {/* 본사 직원 */}
+              {coworkers.filter((c) => c.source === 'hq' && !approvers.find((a) => a.user_id === c.user_id)).length > 0 && (
+                <div>
+                  <div className="text-muted" style={{ fontSize: 11, fontWeight: 700, letterSpacing: 0.04, textTransform: 'uppercase', marginBottom: 4 }}>
+                    본사
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                    {coworkers.filter((c) => c.source === 'hq' && !approvers.find((a) => a.user_id === c.user_id)).map((c) => (
+                      <button
+                        key={c.user_id}
+                        type="button"
+                        className={`tag ${c.isExecutive ? 'tag-warning' : 'tag-accent'} lg`}
+                        onClick={() => addApprover(c.user_id)}
+                        style={{
+                          cursor: 'pointer',
+                          border: `1px dashed ${c.isExecutive ? 'var(--warning)' : 'var(--accent)'}`,
+                        }}
+                        title={c.isExecutive ? '임원 — 결재선 마지막에 배치 가능' : undefined}
+                      >
+                        <Plus size={11} /> {c.name}{c.isExecutive ? ' · 대표' : c.role === 'owner' ? ' · 대표' : ' · 본사'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {/* 매장 매니저/대표 */}
+              {coworkers.filter((c) => c.source === 'store' && !approvers.find((a) => a.user_id === c.user_id)).length > 0 && (
+                <div>
+                  <div className="text-muted" style={{ fontSize: 11, fontWeight: 700, letterSpacing: 0.04, textTransform: 'uppercase', marginBottom: 4 }}>
+                    매장
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                    {coworkers.filter((c) => c.source === 'store' && !approvers.find((a) => a.user_id === c.user_id)).map((c) => (
+                      <button
+                        key={c.user_id}
+                        type="button"
+                        className="tag tag-accent lg"
+                        onClick={() => addApprover(c.user_id)}
+                        style={{ cursor: 'pointer', border: '1px dashed var(--accent)' }}
+                      >
+                        <Plus size={11} /> {c.name} · {c.role === 'owner' ? '대표' : '매니저'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </section>
