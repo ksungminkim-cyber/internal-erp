@@ -7,6 +7,7 @@ import PageHeader from '@/components/PageHeader';
 import Avatar from '@/components/Avatar';
 import { formatTime, formatRelative, todayBoundary } from '@/lib/format';
 import { LogIn, LogOut, Coffee, Play, Sparkles, Users, History } from 'lucide-react';
+import { recordAttendance, getTodayAttendance } from './actions';
 
 const EVENT_LABEL = {
   clock_in: '출근',
@@ -70,34 +71,15 @@ export default function AttendanceClient({
 
   const loadData = useCallback(async () => {
     if (!currentWorkplaceId) return;
-    const since = todayBoundary();
-
-    // profile JOIN 분리 (RLS 충돌 회피)
-    const [{ data: logs }, { data: brd }] = await Promise.all([
-      supabase
-        .from('attendance_logs')
-        .select('id, user_id, event_type, event_at, note')
-        .eq('workplace_id', currentWorkplaceId)
-        .gte('event_at', since)
-        .order('event_at', { ascending: false }),
-      supabase
-        .from('attendance_current_status')
-        .select('*')
-        .eq('workplace_id', currentWorkplaceId)
-        .order('event_at', { ascending: false }),
-    ]);
-
-    // 이름 별도 조회
-    const ids = [...new Set((logs ?? []).map((l) => l.user_id).filter(Boolean))];
-    let nameMap = new Map();
-    if (ids.length > 0) {
-      const { data: profs } = await supabase.from('profiles').select('user_id, name').in('user_id', ids);
-      nameMap = new Map((profs ?? []).map((p) => [p.user_id, p.name]));
+    // 서버 액션(서비스 롤)으로 조회 — RLS 충돌 회피
+    try {
+      const { logs, board: brd } = await getTodayAttendance(currentWorkplaceId);
+      setTodayLogs(logs ?? []);
+      setBoard(brd ?? []);
+    } catch {
+      // 조회 실패 시 화면 유지
     }
-
-    setTodayLogs((logs ?? []).map((l) => ({ ...l, profiles: { name: nameMap.get(l.user_id) ?? null } })));
-    setBoard(brd ?? []);
-  }, [supabase, currentWorkplaceId]);
+  }, [currentWorkplaceId]);
 
   // workplace가 SSR과 다를 때(전환)만 재로드. 초기 데이터는 SSR로 받음.
   const initialSkipped = useRef(false);
@@ -149,23 +131,8 @@ export default function AttendanceClient({
     setActionLoading(eventType);
     setError(null);
     try {
-      const { error } = await supabase.from('attendance_logs').insert({
-        user_id: uid,
-        workplace_id: currentWorkplaceId,
-        event_type: eventType,
-      });
-      if (error) {
-        const msg = String(error.message || '');
-        if (msg.includes('마감 잠금')) {
-          setError('마감된 월에는 출퇴근 기록을 추가할 수 없습니다.');
-        } else if (msg.includes('row-level security') || msg.includes('policy')) {
-          setError('권한 부족 — 이 매장의 멤버가 아닙니다. 관리자에게 문의하세요.');
-        } else {
-          setError(msg);
-        }
-      } else {
-        await loadData();
-      }
+      await recordAttendance(currentWorkplaceId, eventType);
+      await loadData();
     } catch (err) {
       setError(String(err?.message || err));
     } finally {
