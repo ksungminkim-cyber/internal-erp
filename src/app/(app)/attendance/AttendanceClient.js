@@ -115,6 +115,9 @@ export default function AttendanceClient({
       } else {
         setError(msg);
       }
+    } else {
+      // Realtime에 의존하지 말고 즉시 갱신 (Realtime 비활성화 환경 대응)
+      await loadData();
     }
     setActionLoading(null);
   }
