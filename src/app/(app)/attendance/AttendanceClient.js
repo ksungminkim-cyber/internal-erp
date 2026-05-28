@@ -107,28 +107,46 @@ export default function AttendanceClient({
     return () => { supabase.removeChannel(channel); };
   }, [supabase, currentWorkplaceId, loadData]);
 
+  // 현재 매장의 실제 멤버인지 확인 (가상 멤버십 제외 — 본사 직원이 다른 매장 들어간 케이스)
+  const isRealMemberHere = memberships.some(
+    (m) => m.workplace_id === currentWorkplaceId && !String(m.id ?? '').startsWith('virtual_')
+  );
+
   async function record(eventType) {
     const uid = user?.id ?? userId;
-    if (!uid || !currentWorkplaceId) return;
+    if (!uid || !currentWorkplaceId) {
+      setError('사업장이 선택되지 않았습니다.');
+      return;
+    }
+    if (!isRealMemberHere) {
+      setError('이 매장의 정식 직원이 아니어서 출퇴근 기록을 남길 수 없습니다. 본인 매장을 선택하세요.');
+      return;
+    }
     setActionLoading(eventType);
     setError(null);
-    const { error } = await supabase.from('attendance_logs').insert({
-      user_id: uid,
-      workplace_id: currentWorkplaceId,
-      event_type: eventType,
-    });
-    if (error) {
-      const msg = String(error.message || '');
-      if (msg.includes('마감 잠금')) {
-        setError('마감된 월에는 출퇴근 기록을 추가할 수 없습니다. 관리자에게 문의하세요.');
+    try {
+      const { error } = await supabase.from('attendance_logs').insert({
+        user_id: uid,
+        workplace_id: currentWorkplaceId,
+        event_type: eventType,
+      });
+      if (error) {
+        const msg = String(error.message || '');
+        if (msg.includes('마감 잠금')) {
+          setError('마감된 월에는 출퇴근 기록을 추가할 수 없습니다.');
+        } else if (msg.includes('row-level security') || msg.includes('policy')) {
+          setError('권한 부족 — 이 매장의 멤버가 아닙니다. 관리자에게 문의하세요.');
+        } else {
+          setError(msg);
+        }
       } else {
-        setError(msg);
+        await loadData();
       }
-    } else {
-      // Realtime에 의존하지 말고 즉시 갱신 (Realtime 비활성화 환경 대응)
-      await loadData();
+    } catch (err) {
+      setError(String(err?.message || err));
+    } finally {
+      setActionLoading(null);
     }
-    setActionLoading(null);
   }
 
   if (!memberships?.length) {
@@ -202,19 +220,26 @@ export default function AttendanceClient({
             {workedText}
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: buttons.length === 1 ? '1fr' : '1fr 1fr', gap: 10, marginTop: 20 }}>
-            {buttons.map((b) => (
-              <button
-                key={b.type}
-                className={`btn ${b.cls} btn-lg`}
-                onClick={() => record(b.type)}
-                disabled={!!actionLoading}
-              >
-                <b.icon size={18} />
-                {actionLoading === b.type ? '기록 중...' : b.label}
-              </button>
-            ))}
-          </div>
+          {!isRealMemberHere ? (
+            <div style={{ marginTop: 20, padding: 14, background: 'rgba(255,255,255,0.1)', borderRadius: 12, fontSize: 13, color: 'rgba(255,255,255,0.9)' }}>
+              본인이 정식 직원으로 배정된 매장에서만 출퇴근 기록을 남길 수 있습니다.
+              <br />사이드바에서 본인 매장을 선택하세요.
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: buttons.length === 1 ? '1fr' : '1fr 1fr', gap: 10, marginTop: 20 }}>
+              {buttons.map((b) => (
+                <button
+                  key={b.type}
+                  className={`btn ${b.cls} btn-lg`}
+                  onClick={() => record(b.type)}
+                  disabled={!!actionLoading}
+                >
+                  <b.icon size={18} />
+                  {actionLoading === b.type ? '기록 중...' : b.label}
+                </button>
+              ))}
+            </div>
+          )}
 
           {error && (
             <div style={{ marginTop: 12, padding: '10px 12px', background: 'rgba(255,93,93,0.18)', color: '#fff', borderRadius: 10, fontSize: 13, fontWeight: 600 }}>
