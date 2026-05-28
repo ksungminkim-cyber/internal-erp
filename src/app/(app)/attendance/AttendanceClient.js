@@ -27,7 +27,7 @@ export default function AttendanceClient({
   ssrWorkplaceId,
   userId,
 }) {
-  const { user, currentWorkplaceId, supabase, memberships, isManager } = useApp();
+  const { user, profile, currentWorkplaceId, supabase, memberships, isManager } = useApp();
   const [todayLogs, setTodayLogs] = useState(initialLogs ?? []);
   const [board, setBoard]         = useState(initialBoard ?? []);
   const [actionLoading, setActionLoading] = useState(null);
@@ -49,8 +49,24 @@ export default function AttendanceClient({
 
   const workedMinutes = useMemo(() => {
     if (!firstClockIn) return 0;
-    return Math.max(0, Math.floor((Date.now() - new Date(firstClockIn.event_at).getTime()) / 60000));
-  }, [firstClockIn]);
+    const start = new Date(firstClockIn.event_at).getTime();
+    if (myStatus === 'off') {
+      // 퇴근 후: 마지막 clock_out 시각까지로 고정
+      const outs = todayMine.filter((l) => l.event_type === 'clock_out');
+      const lastOut = outs[0]; // 정렬 desc — 가장 최근
+      if (lastOut) return Math.max(0, Math.floor((new Date(lastOut.event_at).getTime() - start) / 60000));
+    }
+    return Math.max(0, Math.floor((Date.now() - start) / 60000));
+  }, [firstClockIn, myStatus, todayMine]);
+
+  // 본인 + 보드(view)에서 이름 매핑 — 클라이언트 RLS 우회
+  const nameByUserId = useMemo(() => {
+    const m = new Map();
+    (board ?? []).forEach((b) => { if (b.user_id && b.name) m.set(b.user_id, b.name); });
+    const uid = user?.id ?? userId;
+    if (uid && profile?.name) m.set(uid, profile.name);
+    return m;
+  }, [board, profile?.name, user?.id, userId]);
 
   const loadData = useCallback(async () => {
     if (!currentWorkplaceId) return;
@@ -122,6 +138,14 @@ export default function AttendanceClient({
       setError('이 매장의 정식 직원이 아니어서 출퇴근 기록을 남길 수 없습니다. 본인 매장을 선택하세요.');
       return;
     }
+    // 중복 방어: 직전 5초 내 동일 event_type 차단
+    if (latestMine && latestMine.event_type === eventType) {
+      const elapsedMs = Date.now() - new Date(latestMine.event_at).getTime();
+      if (elapsedMs < 5000) {
+        setError('방금 같은 기록이 있습니다. 잠시 후 다시 시도해주세요.');
+        return;
+      }
+    }
     setActionLoading(eventType);
     setError(null);
     try {
@@ -177,7 +201,11 @@ export default function AttendanceClient({
 
   const hh = Math.floor(workedMinutes / 60);
   const mm = workedMinutes % 60;
-  const workedText = firstClockIn ? `${hh}시간 ${mm}분 근무` : '오늘 출근 전';
+  const workedText = !firstClockIn
+    ? '오늘 출근 전'
+    : myStatus === 'off'
+      ? `오늘 ${hh}시간 ${mm}분 근무 완료`
+      : `${hh}시간 ${mm}분 근무 중`;
 
   const meta = STATUS_META[myStatus];
 
@@ -298,7 +326,7 @@ export default function AttendanceClient({
               {todayLogs.map((l) => (
                 <div key={l.id} className="card compact" style={{ padding: 12, display: 'flex', alignItems: 'center', gap: 12 }}>
                   <span className="num" style={{ fontSize: 15, fontWeight: 800, width: 56 }}>{formatTime(l.event_at)}</span>
-                  <span style={{ flex: 1, fontSize: 14, fontWeight: 600 }}>{l.profiles?.name || '—'}</span>
+                  <span style={{ flex: 1, fontSize: 14, fontWeight: 600 }}>{nameByUserId.get(l.user_id) || l.profiles?.name || '—'}</span>
                   <span className="tag">{EVENT_LABEL[l.event_type]}</span>
                 </div>
               ))}
