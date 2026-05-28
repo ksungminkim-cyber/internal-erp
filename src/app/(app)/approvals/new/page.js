@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useApp } from '@/context/AppContext';
+import { getApproverCandidates } from '../actions';
 import PageHeader from '@/components/PageHeader';
 import { formatCurrency } from '@/lib/format';
 import { Plus, Trash2, X, ChevronDown, ChevronLeft } from 'lucide-react';
@@ -83,64 +84,19 @@ export default function NewApprovalPage() {
   const total = items.reduce((sum, it) => sum + (parseFloat(it.amount) || 0), 0);
 
   useEffect(() => {
+    let cancelled = false;
     (async () => {
       if (!currentWorkplaceId || !user) return;
-      // ── 결재자 후보: 현재 매장 매니저/대표 + 본사 active 멤버 전원 ──
-      const [{ data: storeMems }, { data: hqMems }] = await Promise.all([
-        supabase
-          .from('memberships')
-          .select('user_id, role')
-          .eq('workplace_id', currentWorkplaceId)
-          .eq('active', true)
-          .in('role', ['manager', 'owner'])
-          .neq('user_id', user.id),
-        supabase
-          .from('memberships')
-          .select('user_id, role, workplaces!inner(name)')
-          .eq('workplaces.name', '본사')
-          .eq('active', true)
-          .neq('user_id', user.id),
-      ]);
-
-      // 중복 제거 (user_id 기준, 본사 멤버 우선)
-      const merged = new Map();
-      (storeMems ?? []).forEach((m) =>
-        merged.set(m.user_id, { user_id: m.user_id, role: m.role, source: 'store' })
-      );
-      (hqMems ?? []).forEach((m) =>
-        merged.set(m.user_id, { user_id: m.user_id, role: m.role, source: 'hq' })
-      );
-
-      // profiles 별도 조회 (RLS 우회)
-      const uids = [...merged.keys()];
-      let profMap = new Map();
-      if (uids.length > 0) {
-        const { data: profs } = await supabase
-          .from('profiles')
-          .select('user_id, name, is_executive')
-          .in('user_id', uids);
-        profMap = new Map((profs ?? []).map((p) => [p.user_id, p]));
+      // 서버 액션으로 결재자 후보 조회 (서비스 롤 — 본사 직원 프로필 RLS 우회)
+      try {
+        const list = await getApproverCandidates(currentWorkplaceId);
+        if (!cancelled) setCoworkers(list);
+      } catch (e) {
+        if (!cancelled) setCoworkers([]);
       }
-
-      const list = [...merged.values()].map((m) => {
-        const p = profMap.get(m.user_id);
-        return {
-          user_id: m.user_id,
-          name: p?.name || '—',
-          role: m.role,
-          isExecutive: p?.is_executive === true,
-          source: m.source, // 'store' | 'hq'
-        };
-      });
-      // 본사 → 대표/매니저 순 정렬
-      list.sort((a, b) => {
-        if (a.source !== b.source) return a.source === 'hq' ? -1 : 1;
-        const rank = { owner: 0, manager: 1, staff: 2 };
-        return (rank[a.role] ?? 9) - (rank[b.role] ?? 9);
-      });
-      setCoworkers(list);
     })();
-  }, [supabase, currentWorkplaceId, user]);
+    return () => { cancelled = true; };
+  }, [currentWorkplaceId, user]);
 
   function updateItem(idx, key, value) {
     setItems((prev) => prev.map((it, i) => (i === idx ? { ...it, [key]: value } : it)));
