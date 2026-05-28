@@ -9,6 +9,7 @@ import Avatar from '@/components/Avatar';
 import BottomSheet from '@/components/BottomSheet';
 import { Plus, ChevronLeft, ChevronRight, X, Trash2, Send, CheckCircle2, AlertCircle, Lock, FileText, Copy } from 'lucide-react';
 import { isHoliday } from '@/lib/holidays';
+import { getScheduleData } from './actions';
 
 const DOW = ['일', '월', '화', '수', '목', '금', '토'];
 
@@ -133,42 +134,21 @@ export default function SchedulePage() {
 
   const load = useCallback(async () => {
     if (!currentWorkplaceId) return;
-    const [{ data: ss }, { data: members }, { data: attLogs }] = await Promise.all([
-      supabase
-        .from('shifts')
-        .select('*, user:profiles!shifts_user_id_fkey(name), approval_request_id')
-        .eq('workplace_id', currentWorkplaceId)
-        .gte('start_at', periodStart.toISOString())
-        .lt('start_at', periodEnd.toISOString())
-        .order('start_at'),
-      supabase
-        .from('memberships')
-        .select('user_id, role, profiles!memberships_user_id_fkey(name, hourly_wage, retired_at)')
-        .eq('workplace_id', currentWorkplaceId)
-        .eq('active', true)
-        .order('role'),
-      supabase
-        .from('attendance_logs')
-        .select('id, user_id, event_type, event_at')
-        .eq('workplace_id', currentWorkplaceId)
-        .gte('event_at', periodStart.toISOString())
-        .lt('event_at', periodEnd.toISOString()),
-    ]);
-    setShifts(ss ?? []);
-    setLogs(attLogs ?? []);
-    // 퇴사자 제외 + hourly_wage 포함
-    setCoworkers(
-      (members ?? [])
-        .filter((m) => !m.profiles?.retired_at)
-        .map((m) => ({
-          user_id: m.user_id,
-          name: m.profiles?.name || '—',
-          role: m.role,
-          hourly_wage: Number(m.profiles?.hourly_wage ?? 0),
-        }))
-    );
+    // 서버 액션(서비스 롤)으로 조회 — profile JOIN RLS 충돌 회피 + 직원 이름 정확
+    try {
+      const { shifts: ss, logs: attLogs, coworkers: cw } = await getScheduleData(
+        currentWorkplaceId,
+        periodStart.toISOString(),
+        periodEnd.toISOString()
+      );
+      setShifts(ss ?? []);
+      setLogs(attLogs ?? []);
+      setCoworkers(cw ?? []);
+    } catch {
+      setShifts([]); setLogs([]); setCoworkers([]);
+    }
     setLoading(false);
-  }, [supabase, currentWorkplaceId, periodStart, periodEnd]);
+  }, [currentWorkplaceId, periodStart, periodEnd]);
 
   useEffect(() => { load(); }, [load]);
 
