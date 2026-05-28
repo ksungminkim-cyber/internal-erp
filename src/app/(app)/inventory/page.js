@@ -208,9 +208,10 @@ function InventoryClosingDialog({ items, supabase, userId, workplaceId, onClose 
   const [error, setError] = useState(null);
 
   const load = useCallback(async () => {
+    // profile JOIN 분리 — RLS 충돌 회피
     const { data } = await supabase
       .from('inventory_closings')
-      .select('*, closed_by_user:profiles!inventory_closings_closed_by_fkey(name)')
+      .select('id, workplace_id, year, month, snapshot, item_count, low_stock_count, closed_by, closed_at')
       .eq('workplace_id', workplaceId)
       .order('year', { ascending: false })
       .order('month', { ascending: false })
@@ -308,7 +309,7 @@ function InventoryClosingDialog({ items, supabase, userId, workplaceId, onClose 
                 <div style={{ flex: 1 }}>
                   <div className="h4" style={{ fontSize: 13 }}>{c.year}년 {c.month}월</div>
                   <div className="text-muted" style={{ fontSize: 11 }}>
-                    품목 {c.item_count}개 · 부족 {c.low_stock_count}개 · {c.closed_by_user?.name || '—'} · {c.closed_at?.slice(0, 10)}
+                    품목 {c.item_count}개 · 부족 {c.low_stock_count}개 · {c.closed_at?.slice(0, 10)}
                   </div>
                 </div>
                 <button type="button" onClick={() => deleteClosing(c.id)} className="btn btn-ghost btn-icon">

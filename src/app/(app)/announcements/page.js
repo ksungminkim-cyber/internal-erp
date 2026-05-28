@@ -18,16 +18,23 @@ export default function AnnouncementsPage() {
 
   const load = useCallback(async () => {
     if (!currentWorkplaceId || !user) return;
+    // profile JOIN 없이 본문만 (RLS 충돌 회피) + 별도 조회로 author 매핑
     const [{ data: anns }, { data: reads }] = await Promise.all([
       supabase
         .from('announcements')
-        .select('id, title, body, pinned, created_at, updated_at, author_id, author:profiles!announcements_author_id_fkey(name)')
+        .select('id, title, body, pinned, created_at, updated_at, author_id')
         .eq('workplace_id', currentWorkplaceId)
         .order('pinned', { ascending: false })
         .order('created_at', { ascending: false }),
       supabase.from('announcement_reads').select('announcement_id').eq('user_id', user.id),
     ]);
-    setItems(anns ?? []);
+    const authorIds = [...new Set((anns ?? []).map((a) => a.author_id).filter(Boolean))];
+    let authorMap = new Map();
+    if (authorIds.length > 0) {
+      const { data: profs } = await supabase.from('profiles').select('user_id, name').in('user_id', authorIds);
+      authorMap = new Map((profs ?? []).map((p) => [p.user_id, p.name]));
+    }
+    setItems((anns ?? []).map((a) => ({ ...a, author: { name: authorMap.get(a.author_id) ?? null } })));
     setReadIds(new Set((reads ?? []).map((r) => r.announcement_id)));
     setLoading(false);
   }, [supabase, currentWorkplaceId, user]);

@@ -52,13 +52,20 @@ export default function ComplaintsPage() {
 
   const load = useCallback(async () => {
     if (!currentWorkplaceId) return;
-    const { data } = await supabase
+    // profile JOIN 분리 — RLS 충돌 회피
+    const { data: complaints } = await supabase
       .from('customer_complaints')
-      .select('*, reporter:profiles!customer_complaints_reporter_id_fkey(name)')
+      .select('*')
       .eq('workplace_id', currentWorkplaceId)
       .order('occurred_at', { ascending: false })
       .limit(100);
-    setItems(data ?? []);
+    const reporterIds = [...new Set((complaints ?? []).map((c) => c.reporter_id).filter(Boolean))];
+    let nameMap = new Map();
+    if (reporterIds.length > 0) {
+      const { data: profs } = await supabase.from('profiles').select('user_id, name').in('user_id', reporterIds);
+      nameMap = new Map((profs ?? []).map((p) => [p.user_id, p.name]));
+    }
+    setItems((complaints ?? []).map((c) => ({ ...c, reporter: { name: nameMap.get(c.reporter_id) ?? null } })));
     setLoading(false);
   }, [supabase, currentWorkplaceId]);
 
