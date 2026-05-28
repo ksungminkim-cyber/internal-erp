@@ -8,6 +8,7 @@ import Avatar from '@/components/Avatar';
 import BottomSheet from '@/components/BottomSheet';
 import { formatRelative } from '@/lib/format';
 import { Plus, ChevronLeft, X, CheckCircle2, Package, Wrench, Users, Coins, Sparkles, ClipboardCheck } from 'lucide-react';
+import { getHandoverNotes, toggleHandoverResolved, createHandoverNote } from './actions';
 
 const SHIFT_LABEL = { open: '오픈', mid: '미들', close: '마감' };
 const SHIFT_TAG   = { open: 'tag-mint', mid: 'tag-accent', close: 'tag-violet' };
@@ -34,26 +35,14 @@ export default function HandoverClient({ initialItems, ssrWorkplaceId, userId })
       setItems([]);
       return;
     }
-    // 1) 노트만 조회 (profiles JOIN 없이 — RLS 충돌 회피)
-    const { data: notes } = await supabase
-      .from('handover_notes')
-      .select('id, workplace_id, author_id, shift_type, note_date, content, flags, resolved, resolved_by, resolved_at, created_at')
-      .eq('workplace_id', currentWorkplaceId)
-      .order('note_date', { ascending: false })
-      .order('created_at', { ascending: false })
-      .limit(50);
-    // 2) author 이름 별도 조회
-    const authorIds = [...new Set((notes ?? []).map((n) => n.author_id).filter(Boolean))];
-    let authorMap = new Map();
-    if (authorIds.length > 0) {
-      const { data: profs } = await supabase
-        .from('profiles')
-        .select('user_id, name')
-        .in('user_id', authorIds);
-      authorMap = new Map((profs ?? []).map((p) => [p.user_id, p.name]));
+    // 서버 액션(서비스 롤)으로 조회 — 작성자 이름 RLS 우회
+    try {
+      const data = await getHandoverNotes(currentWorkplaceId);
+      setItems(data);
+    } catch {
+      setItems([]);
     }
-    setItems((notes ?? []).map((n) => ({ ...n, author: { name: authorMap.get(n.author_id) ?? null } })));
-  }, [supabase, currentWorkplaceId]);
+  }, [currentWorkplaceId]);
 
   // SSR과 workplace 일치하면 첫 로드 생략
   const initialSkipped = useRef(false);
@@ -79,14 +68,12 @@ export default function HandoverClient({ initialItems, ssrWorkplaceId, userId })
 
   async function toggleResolved(note) {
     const next = !note.resolved;
-    await supabase
-      .from('handover_notes')
-      .update({
-        resolved: next,
-        resolved_by: next ? uid : null,
-        resolved_at: next ? new Date().toISOString() : null,
-      })
-      .eq('id', note.id);
+    try {
+      await toggleHandoverResolved(note.id, next);
+      await load();
+    } catch (e) {
+      // 무시 — Realtime 또는 다음 로드에서 갱신
+    }
   }
 
   const filtered = filter === 'unresolved' ? items.filter((i) => !i.resolved) : items;
@@ -212,16 +199,13 @@ function HandoverComposer({ supabase, userId, workplaceId, onClose, onSaved }) {
     setError(null);
     if (!content.trim()) return setError('내용을 입력해주세요.');
     setSaving(true);
-    const { error } = await supabase.from('handover_notes').insert({
-      workplace_id: workplaceId,
-      author_id: userId,
-      shift_type: shiftType,
-      note_date: new Date().toISOString().slice(0, 10),
-      content: content.trim(),
-      flags,
-    });
-    if (error) { setError(error.message); setSaving(false); return; }
-    onSaved();
+    try {
+      await createHandoverNote({ workplaceId, shiftType, content, flags });
+      onSaved();
+    } catch (err) {
+      setError(String(err?.message || err));
+      setSaving(false);
+    }
   }
 
   return (
