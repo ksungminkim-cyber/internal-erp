@@ -94,7 +94,11 @@ function matchAttendance(shift, logs) {
     }
   }
 
-  return { status, label, tag };
+  return {
+    status, label, tag,
+    clockInAt: clockIn.event_at,
+    clockOutAt: clockOut?.event_at ?? null,
+  };
 }
 
 export default function SchedulePage() {
@@ -434,9 +438,16 @@ function ShiftBlock({ shift, attendance, onEdit }) {
           {shift.status !== 'scheduled' && <span className={`tag ${meta.tag}`}>{meta.label}</span>}
         </div>
         <div className="text-muted num" style={{ fontSize: 12, marginTop: 2 }}>
-          {start} - {end}
+          계획 {start} - {end}
           {shift.role_label && <span className="tag" style={{ marginLeft: 8 }}>{shift.role_label}</span>}
         </div>
+        {/* 실제 출퇴근 기록 */}
+        {attendance && (
+          <div className="num" style={{ fontSize: 12, marginTop: 2, color: 'var(--accent-strong)' }}>
+            실제 {fmtTime(attendance.clockInAt)}
+            {attendance.clockOutAt ? ` - ${fmtTime(attendance.clockOutAt)}` : ' - 근무중'}
+          </div>
+        )}
       </div>
       {attendance && (
         <span className={`tag ${attendance.tag} dot`}>{attendance.label}</span>
