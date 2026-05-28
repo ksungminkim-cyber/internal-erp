@@ -56,10 +56,11 @@ export default function AttendanceClient({
     if (!currentWorkplaceId) return;
     const since = todayBoundary();
 
+    // profile JOIN 분리 (RLS 충돌 회피)
     const [{ data: logs }, { data: brd }] = await Promise.all([
       supabase
         .from('attendance_logs')
-        .select('id, user_id, event_type, event_at, note, profiles:profiles!attendance_logs_user_id_fkey(name)')
+        .select('id, user_id, event_type, event_at, note')
         .eq('workplace_id', currentWorkplaceId)
         .gte('event_at', since)
         .order('event_at', { ascending: false }),
@@ -70,7 +71,15 @@ export default function AttendanceClient({
         .order('event_at', { ascending: false }),
     ]);
 
-    setTodayLogs(logs ?? []);
+    // 이름 별도 조회
+    const ids = [...new Set((logs ?? []).map((l) => l.user_id).filter(Boolean))];
+    let nameMap = new Map();
+    if (ids.length > 0) {
+      const { data: profs } = await supabase.from('profiles').select('user_id, name').in('user_id', ids);
+      nameMap = new Map((profs ?? []).map((p) => [p.user_id, p.name]));
+    }
+
+    setTodayLogs((logs ?? []).map((l) => ({ ...l, profiles: { name: nameMap.get(l.user_id) ?? null } })));
     setBoard(brd ?? []);
   }, [supabase, currentWorkplaceId]);
 

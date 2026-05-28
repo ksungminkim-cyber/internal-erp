@@ -1,15 +1,24 @@
 // Server Component — 출퇴근 로그/보드를 SSR로 미리 로드
+// profile JOIN 분리 (RLS 충돌 회피) — 서비스 롤로 안전하게 조회
 import { createClient } from '@/lib/supabase/server';
+import { createClient as createServiceClient } from '@supabase/supabase-js';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import AttendanceClient from './AttendanceClient';
+
+function getServiceClient() {
+  return createServiceClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.SUPABASE_SERVICE_ROLE_KEY,
+    { auth: { autoRefreshToken: false, persistSession: false } }
+  );
+}
 
 export default async function AttendancePage() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect('/login');
 
-  // 쿠키에서 workplace 결정
   const cookieStore = await cookies();
   const cookieWpId = cookieStore.get('erp_wp')?.value ?? null;
   let wpId = cookieWpId;
@@ -36,23 +45,38 @@ export default async function AttendancePage() {
   }
   todayStart.setHours(BUSINESS_DAY_START_HOUR, 0, 0, 0);
 
+  const svc = getServiceClient();
+
   const [{ data: logs }, { data: brd }] = await Promise.all([
-    supabase
+    svc
       .from('attendance_logs')
-      .select('id, user_id, event_type, event_at, note, profiles:profiles!attendance_logs_user_id_fkey(name)')
+      .select('id, user_id, event_type, event_at, note')
       .eq('workplace_id', wpId)
       .gte('event_at', todayStart.toISOString())
       .order('event_at', { ascending: false }),
-    supabase
+    svc
       .from('attendance_current_status')
       .select('*')
       .eq('workplace_id', wpId)
       .order('event_at', { ascending: false }),
   ]);
 
+  // 이름 별도 조회 + 매핑
+  const ids = [...new Set((logs ?? []).map((l) => l.user_id).filter(Boolean))];
+  let nameMap = new Map();
+  if (ids.length > 0) {
+    const { data: profs } = await svc.from('profiles').select('user_id, name').in('user_id', ids);
+    nameMap = new Map((profs ?? []).map((p) => [p.user_id, p.name]));
+  }
+
+  const enrichedLogs = (logs ?? []).map((l) => ({
+    ...l,
+    profiles: { name: nameMap.get(l.user_id) ?? null },
+  }));
+
   return (
     <AttendanceClient
-      initialLogs={logs ?? []}
+      initialLogs={enrichedLogs}
       initialBoard={brd ?? []}
       ssrWorkplaceId={wpId}
       userId={user.id}
