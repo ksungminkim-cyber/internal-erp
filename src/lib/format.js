@@ -37,8 +37,14 @@ export function formatCurrency(n) {
   return new Intl.NumberFormat('ko-KR').format(Math.round(n));
 }
 
+// 영업일 기준 시작 시각 — 야간 근무자(22시 출근 → 새벽 퇴근) 처리
+// 자정~새벽 6시 사이에 호출되면 전날 06시부터의 데이터를 가져오도록.
 export function todayBoundary() {
   const d = new Date();
-  d.setHours(0, 0, 0, 0);
+  const BUSINESS_DAY_START_HOUR = 6;
+  if (d.getHours() < BUSINESS_DAY_START_HOUR) {
+    d.setDate(d.getDate() - 1);
+  }
+  d.setHours(BUSINESS_DAY_START_HOUR, 0, 0, 0);
   return d.toISOString();
 }

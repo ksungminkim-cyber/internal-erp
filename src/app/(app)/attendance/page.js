@@ -28,9 +28,13 @@ export default async function AttendancePage() {
     return <AttendanceClient initialLogs={[]} initialBoard={[]} ssrWorkplaceId={null} userId={user.id} />;
   }
 
-  // today boundary — UTC 기준으로 한국 시간 자정 계산
-  const now = new Date();
-  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
+  // 영업일 기준 시작 (자정~새벽 6시는 전일로 간주 → 야간 근무자 처리)
+  const BUSINESS_DAY_START_HOUR = 6;
+  const todayStart = new Date();
+  if (todayStart.getHours() < BUSINESS_DAY_START_HOUR) {
+    todayStart.setDate(todayStart.getDate() - 1);
+  }
+  todayStart.setHours(BUSINESS_DAY_START_HOUR, 0, 0, 0);
 
   const [{ data: logs }, { data: brd }] = await Promise.all([
     supabase
