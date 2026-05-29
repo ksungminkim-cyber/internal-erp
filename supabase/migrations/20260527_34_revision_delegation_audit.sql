@@ -121,26 +121,27 @@ declare
   v_entity_id text;
   v_workplace uuid;
   v_changes jsonb;
+  v_new jsonb;
+  v_old jsonb;
 begin
+  v_new := case when tg_op <> 'DELETE' then to_jsonb(new) else null end;
+  v_old := case when tg_op <> 'INSERT' then to_jsonb(old) else null end;
   v_action := lower(tg_op);
-  v_entity_id := case tg_op
-    when 'DELETE' then coalesce(old.id::text, '')
-    else coalesce(new.id::text, '')
-  end;
-  v_workplace := case
-    when tg_table_name = 'profiles' then null
-    else coalesce(
-      case tg_op when 'DELETE' then null else (to_jsonb(new) ->> 'workplace_id')::uuid end,
-      case tg_op when 'INSERT' then null else (to_jsonb(old) ->> 'workplace_id')::uuid end
-    )
-  end;
+
+  -- id 컬럼 없는 테이블(profiles=user_id PK) 대응: id 우선, 없으면 user_id
+  v_entity_id := coalesce(
+    (coalesce(v_new, v_old) ->> 'id'),
+    (coalesce(v_new, v_old) ->> 'user_id'),
+    ''
+  );
+  v_workplace := nullif(coalesce(v_new ->> 'workplace_id', v_old ->> 'workplace_id'), '')::uuid;
 
   if tg_op = 'UPDATE' then
-    v_changes := jsonb_build_object('before', to_jsonb(old), 'after', to_jsonb(new));
+    v_changes := jsonb_build_object('before', v_old, 'after', v_new);
   elsif tg_op = 'INSERT' then
-    v_changes := jsonb_build_object('after', to_jsonb(new));
+    v_changes := jsonb_build_object('after', v_new);
   else
-    v_changes := jsonb_build_object('before', to_jsonb(old));
+    v_changes := jsonb_build_object('before', v_old);
   end if;
 
   insert into audit_logs(user_id, action, entity, entity_id, workplace_id, changes)
