@@ -6,6 +6,7 @@ import { useApp } from '@/context/AppContext';
 import PageHeader from '@/components/PageHeader';
 import Avatar from '@/components/Avatar';
 import { formatCurrency } from '@/lib/format';
+import { getProfileNames } from '@/app/_actions/names';
 import {
   ChevronLeft, ChevronRight, TrendingUp, TrendingDown, Calendar,
   Users, DollarSign, MessageCircle, Clock, FileText, Package,
@@ -60,7 +61,7 @@ export default function ReportsPage() {
         .lt('submitted_at', end.toISOString()),
       supabase
         .from('attendance_logs')
-        .select('user_id, event_type, event_at, profiles:profiles!attendance_logs_user_id_fkey(name)')
+        .select('user_id, event_type, event_at')
         .eq('workplace_id', currentWorkplaceId)
         .gte('event_at', start.toISOString())
         .lt('event_at', end.toISOString())
@@ -109,10 +110,12 @@ export default function ReportsPage() {
     const expenseTop = Object.entries(expenseByCat).sort((a, b) => b[1] - a[1]);
 
     // Attendance hours (clock_in to clock_out pairs, by user)
+    const attRows = attendance.data ?? [];
+    const attNames = await getProfileNames(attRows.map((l) => l.user_id));
     const logsByUser = {};
-    (attendance.data ?? []).forEach((l) => {
+    attRows.forEach((l) => {
       const uid = l.user_id;
-      if (!logsByUser[uid]) logsByUser[uid] = { name: l.profiles?.name ?? '—', logs: [] };
+      if (!logsByUser[uid]) logsByUser[uid] = { name: attNames[uid] ?? '—', logs: [] };
       logsByUser[uid].logs.push(l);
     });
     const userHours = Object.entries(logsByUser).map(([uid, { name, logs }]) => {

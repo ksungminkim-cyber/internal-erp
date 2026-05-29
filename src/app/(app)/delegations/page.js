@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useApp } from '@/context/AppContext';
 import PageHeader from '@/components/PageHeader';
+import { getProfileNames } from '@/app/_actions/names';
 import { ChevronLeft, Plus, X, Trash2, UserCheck } from 'lucide-react';
 
 export default function DelegationsPage() {
@@ -18,18 +19,31 @@ export default function DelegationsPage() {
     const [{ data: dels }, { data: mems }] = await Promise.all([
       supabase
         .from('approval_delegations')
-        .select('*, delegator:profiles!approval_delegations_delegator_id_fkey(name), delegate:profiles!approval_delegations_delegate_id_fkey(name)')
+        .select('*')
         .eq('delegator_id', user.id)
         .order('created_at', { ascending: false }),
       supabase
         .from('memberships')
-        .select('user_id, profiles!memberships_user_id_fkey(name)')
+        .select('user_id')
         .eq('workplace_id', currentWorkplaceId)
         .eq('active', true)
         .neq('user_id', user.id),
     ]);
-    setList(dels ?? []);
-    setCoworkers((mems ?? []).map((m) => ({ user_id: m.user_id, name: m.profiles?.name || '—' })));
+    // 위임자/피위임자/동료 이름 공용 액션으로 매핑 (RLS 무관)
+    const memRows = mems ?? [];
+    const delRows = dels ?? [];
+    const ids = [
+      ...memRows.map((m) => m.user_id),
+      ...delRows.map((d) => d.delegate_id),
+      ...delRows.map((d) => d.delegator_id),
+    ];
+    const names = await getProfileNames(ids);
+    setList(delRows.map((d) => ({
+      ...d,
+      delegate: { name: names[d.delegate_id] ?? null },
+      delegator: { name: names[d.delegator_id] ?? null },
+    })));
+    setCoworkers(memRows.map((m) => ({ user_id: m.user_id, name: names[m.user_id] || '—' })));
   }, [user, supabase, currentWorkplaceId]);
 
   useEffect(() => { load(); }, [load]);

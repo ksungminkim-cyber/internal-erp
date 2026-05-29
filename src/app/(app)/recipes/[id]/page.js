@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useApp } from '@/context/AppContext';
 import PageHeader from '@/components/PageHeader';
 import { formatCurrency, formatRelative } from '@/lib/format';
+import { getProfileNames } from '@/app/_actions/names';
 import { ChevronLeft, Edit3, BookOpen, Plus, Trash2 } from 'lucide-react';
 
 const CATEGORY_OPTIONS = ['에스프레소', '브루잉', '라떼/베리에이션', '논커피', '디저트', '베이커리', '기타'];
@@ -38,7 +39,7 @@ export default function RecipeDetail({ params }) {
     if (isNew) return;
     const { data: r } = await supabase
       .from('recipes')
-      .select('*, updater:profiles!recipes_updated_by_fkey(name), workplaces(name)')
+      .select('*, workplaces(name)')
       .eq('id', id)
       .maybeSingle();
     if (r) {
@@ -52,7 +53,10 @@ export default function RecipeDetail({ params }) {
       setSteps(r.steps?.length ? r.steps : ['']);
       setWorkplaceId(r.workplace_id ?? '');
       setWorkplaceName(r.workplaces?.name ?? '');
-      setUpdatedBy(r.updater?.name);
+      if (r.updated_by) {
+        const names = await getProfileNames([r.updated_by]);
+        setUpdatedBy(names[r.updated_by] ?? null);
+      }
       setUpdatedAt(r.updated_at);
     }
     setLoading(false);

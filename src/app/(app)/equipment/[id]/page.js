@@ -7,6 +7,7 @@ import PageHeader from '@/components/PageHeader';
 import Avatar from '@/components/Avatar';
 import BottomSheet from '@/components/BottomSheet';
 import { formatDateTime, formatCurrency, formatRelative } from '@/lib/format';
+import { getProfileNames } from '@/app/_actions/names';
 import { ChevronLeft, Plus, X, Wrench, AlertTriangle, CheckCircle2, ScanLine, Sparkles } from 'lucide-react';
 
 const LOG_TYPE_META = {
@@ -31,12 +32,14 @@ export default function EquipmentDetail({ params }) {
       supabase.from('equipment').select('*').eq('id', id).maybeSingle(),
       supabase
         .from('equipment_logs')
-        .select('*, user:profiles!equipment_logs_user_id_fkey(name)')
+        .select('*')
         .eq('equipment_id', id)
         .order('performed_at', { ascending: false }),
     ]);
     setEquipment(eq);
-    setLogs(lg ?? []);
+    const rows = lg ?? [];
+    const names = await getProfileNames(rows.map((r) => r.user_id));
+    setLogs(rows.map((r) => ({ ...r, user: { name: names[r.user_id] ?? null } })));
     setLoading(false);
   }, [supabase, id]);
 

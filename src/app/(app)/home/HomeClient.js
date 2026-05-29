@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useApp } from '@/context/AppContext';
 import PageHeader from '@/components/PageHeader';
 import { formatRelative, formatCurrency, todayBoundary } from '@/lib/format';
+import { getProfileNames } from '@/app/_actions/names';
 import {
   Clock, FileText, Megaphone, Users, ChevronRight, Plus, Sparkles,
   Calendar, ClipboardCheck, Package, TrendingUp, AlertTriangle,
@@ -163,7 +164,7 @@ export default function HomeClient({
         .eq('status', 'waiting'),
       supabase
         .from('announcements')
-        .select('id, title, created_at, pinned, author:profiles!announcements_author_id_fkey(name)')
+        .select('id, title, created_at, pinned, author_id')
         .eq('workplace_id', currentWorkplaceId)
         .order('pinned', { ascending: false })
         .order('created_at', { ascending: false })
@@ -209,7 +210,10 @@ export default function HomeClient({
     const readIds  = new Set((reads.data ?? []).map((r) => r.announcement_id));
     const lowStock = (inv.data ?? []).filter((i) => Number(i.current_qty) < Number(i.min_qty)).length;
 
-    setRecentAnnouncements(anns.data ?? []);
+    // 공지 작성자 이름 — 공용 액션으로 매핑 (RLS 무관)
+    const annRows = anns.data ?? [];
+    const annNames = await getProfileNames(annRows.map((a) => a.author_id));
+    setRecentAnnouncements(annRows.map((a) => ({ ...a, author: { name: annNames[a.author_id] ?? null } })));
     setAnnouncementReadIds(readIds);
     setStats({
       working:            (board.data ?? []).filter((b) => b.status === 'working' || b.status === 'on_break').length,

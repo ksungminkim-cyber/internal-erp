@@ -7,6 +7,7 @@ import PageHeader from '@/components/PageHeader';
 import Avatar from '@/components/Avatar';
 import BottomSheet from '@/components/BottomSheet';
 import { formatRelative } from '@/lib/format';
+import { getProfileNames } from '@/app/_actions/names';
 import {
   ChevronLeft, Plus, X, MessageSquare, Lock, EyeOff, Send, CheckCircle2, Clock, XCircle,
 } from 'lucide-react';
@@ -38,12 +39,15 @@ export default function SuggestionsPage() {
   const [filter, setFilter] = useState(isHq ? 'open' : 'mine');
 
   const load = useCallback(async () => {
+    // profile JOIN 제거 → 공용 액션으로 이름 매핑 (RLS 무관)
     const { data } = await supabase
       .from('suggestions')
-      .select('*, author:profiles!suggestions_user_id_fkey(name)')
+      .select('*')
       .order('created_at', { ascending: false })
       .limit(100);
-    setItems(data ?? []);
+    const rows = data ?? [];
+    const names = await getProfileNames(rows.map((r) => r.user_id));
+    setItems(rows.map((r) => ({ ...r, author: { name: names[r.user_id] ?? null } })));
     setLoading(false);
   }, [supabase]);
 

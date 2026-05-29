@@ -7,6 +7,7 @@ import { useApp } from '@/context/AppContext';
 import PageHeader from '@/components/PageHeader';
 import BottomSheet from '@/components/BottomSheet';
 import { formatCurrency } from '@/lib/format';
+import { getProfileNames } from '@/app/_actions/names';
 import {
   ChevronLeft, Target, Plus, X, Send, FileText, Trash2, Edit3, TrendingUp,
 } from 'lucide-react';
@@ -216,12 +217,14 @@ function KpiEditor({ kpi, memberships, currentWorkplaceId, isSuperAdmin, userId,
     (async () => {
       const { data } = await supabase
         .from('memberships')
-        .select('user_id, role, profiles!memberships_user_id_fkey(name)')
+        .select('user_id, role')
         .eq('workplace_id', workplaceId)
         .eq('active', true)
         .in('role', ['manager', 'owner'])
         .neq('user_id', userId);
-      setCandidates((data ?? []).map((m) => ({ user_id: m.user_id, name: m.profiles?.name ?? '—', role: m.role })));
+      const rows = data ?? [];
+      const names = await getProfileNames(rows.map((m) => m.user_id));
+      setCandidates(rows.map((m) => ({ user_id: m.user_id, name: names[m.user_id] ?? '—', role: m.role })));
     })();
   }, [supabase, workplaceId, userId]);
 
