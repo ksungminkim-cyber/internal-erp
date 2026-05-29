@@ -81,18 +81,23 @@ export default function RecipeDetail({ params }) {
       updated_by: user.id,
       updated_at: new Date().toISOString(),
     };
-    const op = isNew
-      ? supabase.from('recipes').insert({ ...payload, created_by: user.id }).select('id').single()
-      : supabase.from('recipes').update(payload).eq('id', id);
-    const res = await op;
-    if (res.error) { setError(res.error.message); setSaving(false); return; }
-    if (isNew && res.data?.id) {
-      router.replace(`/recipes/${res.data.id}`);
-    } else {
-      setEditing(false);
-      load();
+    try {
+      const op = isNew
+        ? supabase.from('recipes').insert({ ...payload, created_by: user.id }).select('id').single()
+        : supabase.from('recipes').update(payload).eq('id', id);
+      const res = await op;
+      if (res.error) { setError(res.error.message); return; }
+      if (isNew && res.data?.id) {
+        router.replace(`/recipes/${res.data.id}`);
+      } else {
+        setEditing(false);
+        load();
+      }
+    } catch (e) {
+      setError(String(e?.message || e));
+    } finally {
+      setSaving(false);
     }
-    setSaving(false);
   }
 
   async function archive() {

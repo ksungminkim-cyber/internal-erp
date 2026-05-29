@@ -223,37 +223,47 @@ export default function ClosingPage() {
     if (!confirm(`${year}년 ${month + 1}월 마감을 확정하시겠습니까? 확정 후에도 데이터 수정은 가능하지만 이 스냅샷은 보존됩니다.`)) return;
     setActing(true);
     setError(null);
-    const { error } = await supabase.from('month_closings').upsert({
-      workplace_id: currentWorkplaceId,
-      year, month: month + 1,
-      total_revenue: data.totalRevenue,
-      total_labor: data.totalLabor,
-      total_expense: data.totalExpense,
-      net_profit: data.netProfit,
-      revenue_breakdown: data.revenueBreakdown,
-      labor_breakdown: data.laborBreakdown,
-      expense_breakdown: data.expenseBreakdown,
-      locked: true,
-      closed_by: user.id,
-      closed_at: new Date().toISOString(),
-    }, { onConflict: 'workplace_id,year,month' });
-    if (error) { setError(error.message); setActing(false); return; }
-    await load();
-    setActing(false);
+    try {
+      const { error } = await supabase.from('month_closings').upsert({
+        workplace_id: currentWorkplaceId,
+        year, month: month + 1,
+        total_revenue: data.totalRevenue,
+        total_labor: data.totalLabor,
+        total_expense: data.totalExpense,
+        net_profit: data.netProfit,
+        revenue_breakdown: data.revenueBreakdown,
+        labor_breakdown: data.laborBreakdown,
+        expense_breakdown: data.expenseBreakdown,
+        locked: true,
+        closed_by: user.id,
+        closed_at: new Date().toISOString(),
+      }, { onConflict: 'workplace_id,year,month' });
+      if (error) { setError(error.message); return; }
+      await load();
+    } catch (e) {
+      setError(String(e?.message || e));
+    } finally {
+      setActing(false);
+    }
   }
 
   async function unlockClose() {
     if (!confirm('마감을 해제하시겠습니까? 다시 실시간 집계가 표시됩니다.')) return;
     setActing(true);
-    const { error } = await supabase
-      .from('month_closings')
-      .delete()
-      .eq('workplace_id', currentWorkplaceId)
-      .eq('year', year)
-      .eq('month', month + 1);
-    if (error) { setError(error.message); setActing(false); return; }
-    await load();
-    setActing(false);
+    try {
+      const { error } = await supabase
+        .from('month_closings')
+        .delete()
+        .eq('workplace_id', currentWorkplaceId)
+        .eq('year', year)
+        .eq('month', month + 1);
+      if (error) { setError(error.message); return; }
+      await load();
+    } catch (e) {
+      setError(String(e?.message || e));
+    } finally {
+      setActing(false);
+    }
   }
 
   function exportCsv() {

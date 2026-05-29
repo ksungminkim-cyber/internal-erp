@@ -86,24 +86,34 @@ export default function ApprovalDetailPage({ params }) {
   async function decide(stepId, decision) {
     setActing(true);
     setError(null);
-    const { error } = await supabase
-      .from('approval_steps')
-      .update({ status: decision, comment: comment.trim() || null })
-      .eq('id', stepId);
-    if (error) setError(error.message);
-    else setComment('');
-    setActing(false);
+    try {
+      const { error } = await supabase
+        .from('approval_steps')
+        .update({ status: decision, comment: comment.trim() || null })
+        .eq('id', stepId);
+      if (error) setError(error.message);
+      else setComment('');
+    } catch (e) {
+      setError(String(e?.message || e));
+    } finally {
+      setActing(false);
+    }
   }
 
   async function cancelRequest() {
     if (!confirm('이 기안을 취소하시겠습니까?')) return;
     setActing(true);
-    const { error } = await supabase
-      .from('approval_requests')
-      .update({ status: 'cancelled', decided_at: new Date().toISOString() })
-      .eq('id', id);
-    if (error) setError(error.message);
-    setActing(false);
+    try {
+      const { error } = await supabase
+        .from('approval_requests')
+        .update({ status: 'cancelled', decided_at: new Date().toISOString() })
+        .eq('id', id);
+      if (error) setError(error.message);
+    } catch (e) {
+      setError(String(e?.message || e));
+    } finally {
+      setActing(false);
+    }
   }
 
   async function downloadAttachment(att) {
