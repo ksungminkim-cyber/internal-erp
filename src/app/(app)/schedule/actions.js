@@ -24,6 +24,17 @@ export async function getScheduleData(workplaceId, periodStartISO, periodEndISO)
 
   const svc = getServiceClient();
 
+  // ── 요청자가 시급을 볼 권한이 있는지 (매니저/대표/본사/super_admin) ──
+  const [{ data: myProfile }, { data: myMems }] = await Promise.all([
+    svc.from('profiles').select('is_super_admin, is_executive').eq('user_id', user.id).maybeSingle(),
+    svc.from('memberships').select('role, workplaces(name)').eq('user_id', user.id).eq('active', true),
+  ]);
+  const canSeeWage =
+    myProfile?.is_super_admin === true ||
+    myProfile?.is_executive === true ||
+    (myMems ?? []).some((m) => m.role === 'manager' || m.role === 'owner') ||
+    (myMems ?? []).some((m) => m.workplaces?.name === '본사');
+
   const [{ data: shifts }, { data: members }, { data: logs }] = await Promise.all([
     svc
       .from('shifts')
@@ -73,8 +84,9 @@ export async function getScheduleData(workplaceId, periodStartISO, periodEndISO)
       user_id: m.user_id,
       name: profMap.get(m.user_id)?.name || '—',
       role: m.role,
-      hourly_wage: Number(profMap.get(m.user_id)?.hourly_wage ?? 0),
+      // 시급은 권한자에게만 노출 (일반 직원에게는 마스킹)
+      hourly_wage: canSeeWage ? Number(profMap.get(m.user_id)?.hourly_wage ?? 0) : 0,
     }));
 
-  return { shifts: enrichedShifts, logs: logs ?? [], coworkers };
+  return { shifts: enrichedShifts, logs: logs ?? [], coworkers, canSeeWage };
 }
