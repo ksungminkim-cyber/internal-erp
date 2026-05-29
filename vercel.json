@@ -1,8 +1,0 @@
-{
-  "regions": ["icn1"],
-  "functions": {
-    "src/app/**/*": {
-      "maxDuration": 10
-    }
-  }
-}
