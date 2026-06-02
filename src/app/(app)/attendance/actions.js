@@ -95,3 +95,39 @@ export async function getTodayAttendance(workplaceId) {
     board: board ?? [],
   };
 }
+
+/**
+ * 과거 출퇴근 기록 조회 (기간 + 매장 + 본인필터)
+ * 서비스 롤로 직접 조회 — RLS/네트워크 hang 회피.
+ */
+export async function getAttendanceHistory(workplaceId, fromDate, toDate, mineOnly) {
+  const authClient = await createServerClient();
+  const { data: { user } } = await authClient.auth.getUser();
+  if (!user) throw new Error('로그인이 필요합니다.');
+  if (!workplaceId) return [];
+
+  const svc = getServiceClient();
+  const start = new Date(fromDate);
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(toDate);
+  end.setHours(23, 59, 59, 999);
+
+  let q = svc
+    .from('attendance_logs')
+    .select('id, user_id, event_type, event_at, note')
+    .eq('workplace_id', workplaceId)
+    .gte('event_at', start.toISOString())
+    .lte('event_at', end.toISOString())
+    .order('event_at', { ascending: false })
+    .limit(2000);
+  if (mineOnly) q = q.eq('user_id', user.id);
+
+  const { data } = await q;
+  const ids = [...new Set((data ?? []).map((l) => l.user_id).filter(Boolean))];
+  let nameMap = new Map();
+  if (ids.length > 0) {
+    const { data: profs } = await svc.from('profiles').select('user_id, name').in('user_id', ids);
+    nameMap = new Map((profs ?? []).map((p) => [p.user_id, p.name]));
+  }
+  return (data ?? []).map((l) => ({ ...l, profiles: { name: nameMap.get(l.user_id) ?? null } }));
+}

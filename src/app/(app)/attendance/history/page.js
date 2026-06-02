@@ -8,6 +8,7 @@ import PageHeader from '@/components/PageHeader';
 import { formatTime } from '@/lib/format';
 import { downloadCsv, fmtDateTime } from '@/lib/csvExport';
 import { ChevronLeft, Download, Calendar, Users } from 'lucide-react';
+import { getAttendanceHistory } from '../actions';
 
 const EVENT_LABEL = {
   clock_in: '출근',
@@ -38,33 +39,15 @@ export default function AttendanceHistoryPage() {
   const load = useCallback(async () => {
     if (!currentWorkplaceId || !user) return;
     setLoading(true);
-    const start = new Date(from);
-    start.setHours(0, 0, 0, 0);
-    const end = new Date(to);
-    end.setHours(23, 59, 59, 999);
-
-    // profile JOIN 분리 (RLS 충돌 회피)
-    let q = supabase
-      .from('attendance_logs')
-      .select('id, user_id, event_type, event_at, note')
-      .eq('workplace_id', currentWorkplaceId)
-      .gte('event_at', start.toISOString())
-      .lte('event_at', end.toISOString())
-      .order('event_at', { ascending: false })
-      .limit(2000);
-
-    if (userFilter === 'mine') q = q.eq('user_id', user.id);
-
-    const { data } = await q;
-    const ids = [...new Set((data ?? []).map((l) => l.user_id).filter(Boolean))];
-    let nameMap = new Map();
-    if (ids.length > 0) {
-      const { data: profs } = await supabase.from('profiles').select('user_id, name').in('user_id', ids);
-      nameMap = new Map((profs ?? []).map((p) => [p.user_id, p.name]));
+    try {
+      const data = await getAttendanceHistory(currentWorkplaceId, from, to, userFilter === 'mine');
+      setLogs(data ?? []);
+    } catch {
+      setLogs([]);
+    } finally {
+      setLoading(false);
     }
-    setLogs((data ?? []).map((l) => ({ ...l, profiles: { name: nameMap.get(l.user_id) ?? null } })));
-    setLoading(false);
-  }, [supabase, currentWorkplaceId, user, from, to, userFilter]);
+  }, [currentWorkplaceId, user, from, to, userFilter]);
 
   useEffect(() => { load(); }, [load]);
 
