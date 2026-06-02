@@ -9,7 +9,7 @@ import Avatar from '@/components/Avatar';
 import BottomSheet from '@/components/BottomSheet';
 import { Plus, ChevronLeft, ChevronRight, X, Trash2, Send, CheckCircle2, AlertCircle, Lock, FileText, Copy } from 'lucide-react';
 import { isHoliday } from '@/lib/holidays';
-import { getScheduleData } from './actions';
+import { getScheduleData, saveShift, deleteShift } from './actions';
 
 const DOW = ['일', '월', '화', '수', '목', '금', '토'];
 
@@ -481,39 +481,35 @@ function ShiftEditor({ shift, initial, coworkers, workplaceId, userId, supabase,
     if (!userPick) return setError('근무자를 선택해주세요.');
     if (!startAt || !endAt) return setError('시간을 입력해주세요.');
     setSaving(true);
-    const payload = {
-      workplace_id: workplaceId,
-      user_id: userPick,
-      start_at: new Date(startAt).toISOString(),
-      end_at: new Date(endAt).toISOString(),
-      role_label: roleLabel || null,
-      notes: notes || null,
-      created_by: userId,
-    };
-    const op = isEdit
-      ? supabase.from('shifts').update({ ...payload, updated_at: new Date().toISOString() }).eq('id', shift.id)
-      : supabase.from('shifts').insert(payload);
-    const { error } = await op;
-    if (error) {
-      // DB 트리거의 충돌 에러를 친절하게
-      const msg = String(error.message || '');
-      if (msg.includes('시프트 충돌')) {
-        setError('이 직원은 같은 시간대에 다른 시프트가 이미 있습니다. 시간을 확인해주세요.');
-      } else {
-        setError(msg);
-      }
+    try {
+      await saveShift({
+        id: shift?.id ?? null,
+        workplaceId,
+        userId: userPick,
+        startAt: new Date(startAt).toISOString(),
+        endAt: new Date(endAt).toISOString(),
+        roleLabel,
+        notes,
+      });
+      onSaved();
+    } catch (e) {
+      setError(String(e?.message || e));
+    } finally {
       setSaving(false);
-      return;
     }
-    onSaved();
   }
 
   async function del() {
     if (!confirm('이 시프트를 삭제하시겠습니까?')) return;
     setSaving(true);
-    const { error } = await supabase.from('shifts').delete().eq('id', shift.id);
-    if (error) { setError(error.message); setSaving(false); return; }
-    onSaved();
+    try {
+      await deleteShift(shift.id);
+      onSaved();
+    } catch (e) {
+      setError(String(e?.message || e));
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (

@@ -90,3 +90,52 @@ export async function getScheduleData(workplaceId, periodStartISO, periodEndISO)
 
   return { shifts: enrichedShifts, logs: logs ?? [], coworkers, canSeeWage };
 }
+
+/**
+ * 시프트 저장 (신규/수정) — 서비스 롤
+ */
+export async function saveShift({ id, workplaceId, userId, startAt, endAt, roleLabel, notes }) {
+  const authClient = await createServerClient();
+  const { data: { user } } = await authClient.auth.getUser();
+  if (!user) throw new Error('로그인이 필요합니다.');
+  if (!workplaceId || !userId || !startAt || !endAt) throw new Error('필수 항목 누락');
+
+  const svc = getServiceClient();
+  const payload = {
+    workplace_id: workplaceId,
+    user_id: userId,
+    start_at: startAt,
+    end_at: endAt,
+    role_label: roleLabel || null,
+    notes: notes || null,
+    created_by: user.id,
+  };
+
+  const { error } = id
+    ? await svc.from('shifts').update({ ...payload, updated_at: new Date().toISOString() }).eq('id', id)
+    : await svc.from('shifts').insert(payload);
+
+  if (error) {
+    const msg = String(error.message || '');
+    if (msg.includes('시프트 충돌')) {
+      throw new Error('이 직원은 같은 시간대에 다른 시프트가 이미 있습니다.');
+    }
+    throw new Error(msg);
+  }
+  return { ok: true };
+}
+
+/**
+ * 시프트 삭제 — 서비스 롤
+ */
+export async function deleteShift(id) {
+  const authClient = await createServerClient();
+  const { data: { user } } = await authClient.auth.getUser();
+  if (!user) throw new Error('로그인이 필요합니다.');
+  if (!id) throw new Error('시프트 ID 누락');
+
+  const svc = getServiceClient();
+  const { error } = await svc.from('shifts').delete().eq('id', id);
+  if (error) throw new Error(error.message);
+  return { ok: true };
+}
