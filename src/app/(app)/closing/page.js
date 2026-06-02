@@ -9,6 +9,7 @@ import BottomSheet from '@/components/BottomSheet';
 import { formatCurrency } from '@/lib/format';
 import { downloadCsv, fmtDate } from '@/lib/csvExport';
 import { calcLabor, formatMinutes } from '@/lib/laborCalc';
+import { safeMutate } from '@/lib/safeMutate';
 import {
   ChevronLeft, ChevronRight, Lock, Unlock, Download, Check, AlertCircle,
   Send, Printer, X, Plus, Clock, FileCheck,
@@ -224,7 +225,7 @@ export default function ClosingPage() {
     setActing(true);
     setError(null);
     try {
-      const { error } = await supabase.from('month_closings').upsert({
+      const { error } = await safeMutate(supabase.from('month_closings').upsert({
         workplace_id: currentWorkplaceId,
         year, month: month + 1,
         total_revenue: data.totalRevenue,
@@ -237,7 +238,7 @@ export default function ClosingPage() {
         locked: true,
         closed_by: user.id,
         closed_at: new Date().toISOString(),
-      }, { onConflict: 'workplace_id,year,month' });
+      }, { onConflict: 'workplace_id,year,month' }));
       if (error) { setError(error.message); return; }
       await load();
     } catch (e) {
@@ -251,12 +252,12 @@ export default function ClosingPage() {
     if (!confirm('마감을 해제하시겠습니까? 다시 실시간 집계가 표시됩니다.')) return;
     setActing(true);
     try {
-      const { error } = await supabase
+      const { error } = await safeMutate(supabase
         .from('month_closings')
         .delete()
         .eq('workplace_id', currentWorkplaceId)
         .eq('year', year)
-        .eq('month', month + 1);
+        .eq('month', month + 1));
       if (error) { setError(error.message); return; }
       await load();
     } catch (e) {
@@ -641,10 +642,10 @@ export default function ClosingPage() {
           onSaved={async (requestId) => {
             setShowApprovalDialog(false);
             // 마감 스냅샷에 결재 ID 연결
-            await supabase
+            await safeMutate(supabase
               .from('month_closings')
               .update({ approval_request_id: requestId })
-              .eq('id', existingClosing.id);
+              .eq('id', existingClosing.id));
             await load();
             router.push(`/approvals/${requestId}`);
           }}
@@ -698,7 +699,7 @@ function SubmitClosingApproval({
     if (approvers.length === 0) return setError('결재자를 최소 1명 지정해주세요.');
     setSaving(true);
     try {
-      const { data: req, error: e1 } = await supabase
+      const { data: req, error: e1 } = await safeMutate(supabase
         .from('approval_requests')
         .insert({
           workplace_id: workplaceId,
@@ -711,23 +712,24 @@ function SubmitClosingApproval({
           period_month: month,
         })
         .select('id')
-        .single();
+        .single());
       if (e1) throw e1;
       const requestId = req.id;
 
-      const { error: e2 } = await supabase.from('approval_steps').insert(
+      const { error: e2 } = await safeMutate(supabase.from('approval_steps').insert(
         approvers.map((a, i) => ({
           request_id: requestId,
           step_order: i + 1,
           approver_id: a.user_id,
           status: 'waiting',
         }))
-      );
+      ));
       if (e2) throw e2;
 
       onSaved(requestId);
     } catch (err) {
-      setError(err.message);
+      setError(String(err?.message || err));
+    } finally {
       setSaving(false);
     }
   }

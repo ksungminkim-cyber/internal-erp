@@ -6,6 +6,7 @@ import { useApp } from '@/context/AppContext';
 import PageHeader from '@/components/PageHeader';
 import { formatCurrency, formatRelative } from '@/lib/format';
 import { getProfileNames } from '@/app/_actions/names';
+import { safeMutate } from '@/lib/safeMutate';
 import { ChevronLeft, Edit3, BookOpen, Plus, Trash2 } from 'lucide-react';
 
 const CATEGORY_OPTIONS = ['에스프레소', '브루잉', '라떼/베리에이션', '논커피', '디저트', '베이커리', '기타'];
@@ -89,7 +90,7 @@ export default function RecipeDetail({ params }) {
       const op = isNew
         ? supabase.from('recipes').insert({ ...payload, created_by: user.id }).select('id').single()
         : supabase.from('recipes').update(payload).eq('id', id);
-      const res = await op;
+      const res = await safeMutate(op);
       if (res.error) { setError(res.error.message); return; }
       if (isNew && res.data?.id) {
         router.replace(`/recipes/${res.data.id}`);
@@ -107,9 +108,15 @@ export default function RecipeDetail({ params }) {
   async function archive() {
     if (!confirm('이 레시피를 보관 처리할까요?')) return;
     setSaving(true);
-    const { error } = await supabase.from('recipes').update({ active: false }).eq('id', id);
-    if (error) { setError(error.message); setSaving(false); return; }
-    router.replace('/recipes');
+    try {
+      const { error } = await safeMutate(supabase.from('recipes').update({ active: false }).eq('id', id));
+      if (error) { setError(error.message); return; }
+      router.replace('/recipes');
+    } catch (e) {
+      setError(String(e?.message || e));
+    } finally {
+      setSaving(false);
+    }
   }
 
   if (loading) {

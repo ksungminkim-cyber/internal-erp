@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useApp } from '@/context/AppContext';
 import PageHeader from '@/components/PageHeader';
 import { getProfileNames } from '@/app/_actions/names';
+import { safeMutate } from '@/lib/safeMutate';
 import { ChevronLeft, Plus, X, Trash2, UserCheck } from 'lucide-react';
 
 export default function DelegationsPage() {
@@ -50,14 +51,24 @@ export default function DelegationsPage() {
 
   async function deactivate(id) {
     if (!confirm('이 위임을 비활성화할까요?')) return;
-    await supabase.from('approval_delegations').update({ active: false }).eq('id', id);
-    load();
+    try {
+      const { error } = await safeMutate(supabase.from('approval_delegations').update({ active: false }).eq('id', id));
+      if (error) { alert(error.message); return; }
+      load();
+    } catch (e) {
+      alert(String(e?.message || e));
+    }
   }
 
   async function removeOne(id) {
     if (!confirm('이 위임을 삭제할까요?')) return;
-    await supabase.from('approval_delegations').delete().eq('id', id);
-    load();
+    try {
+      const { error } = await safeMutate(supabase.from('approval_delegations').delete().eq('id', id));
+      if (error) { alert(error.message); return; }
+      load();
+    } catch (e) {
+      alert(String(e?.message || e));
+    }
   }
 
   const today = new Date().toISOString().slice(0, 10);
@@ -150,16 +161,22 @@ function DelegationDialog({ coworkers, userId, workplaceId, supabase, onClose, o
     setError(null);
     if (!delegateId) return setError('피위임자를 선택해주세요.');
     setSaving(true);
-    const { error } = await supabase.from('approval_delegations').insert({
-      delegator_id: userId,
-      delegate_id: delegateId,
-      workplace_id: workplaceId,
-      start_at: startAt,
-      end_at: endAt || null,
-      reason: reason || null,
-    });
-    if (error) { setError(error.message); setSaving(false); return; }
-    onSaved();
+    try {
+      const { error } = await safeMutate(supabase.from('approval_delegations').insert({
+        delegator_id: userId,
+        delegate_id: delegateId,
+        workplace_id: workplaceId,
+        start_at: startAt,
+        end_at: endAt || null,
+        reason: reason || null,
+      }));
+      if (error) { setError(error.message); return; }
+      onSaved();
+    } catch (e) {
+      setError(String(e?.message || e));
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (

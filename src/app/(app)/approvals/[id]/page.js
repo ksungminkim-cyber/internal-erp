@@ -7,6 +7,7 @@ import { useApp } from '@/context/AppContext';
 import PageHeader from '@/components/PageHeader';
 import Avatar from '@/components/Avatar';
 import { formatDateTime, formatCurrency } from '@/lib/format';
+import { safeMutate } from '@/lib/safeMutate';
 import { CheckCircle2, XCircle, Clock, ChevronLeft, Paperclip, Download, Sparkles, Printer } from 'lucide-react';
 
 const STATUS_META = {
@@ -87,10 +88,10 @@ export default function ApprovalDetailPage({ params }) {
     setActing(true);
     setError(null);
     try {
-      const { error } = await supabase
+      const { error } = await safeMutate(supabase
         .from('approval_steps')
         .update({ status: decision, comment: comment.trim() || null })
-        .eq('id', stepId);
+        .eq('id', stepId));
       if (error) setError(error.message);
       else setComment('');
     } catch (e) {
@@ -104,10 +105,10 @@ export default function ApprovalDetailPage({ params }) {
     if (!confirm('이 기안을 취소하시겠습니까?')) return;
     setActing(true);
     try {
-      const { error } = await supabase
+      const { error } = await safeMutate(supabase
         .from('approval_requests')
         .update({ status: 'cancelled', decided_at: new Date().toISOString() })
-        .eq('id', id);
+        .eq('id', id));
       if (error) setError(error.message);
     } catch (e) {
       setError(String(e?.message || e));

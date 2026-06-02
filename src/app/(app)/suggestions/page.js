@@ -8,6 +8,7 @@ import Avatar from '@/components/Avatar';
 import BottomSheet from '@/components/BottomSheet';
 import { formatRelative } from '@/lib/format';
 import { getProfileNames } from '@/app/_actions/names';
+import { safeMutate } from '@/lib/safeMutate';
 import {
   ChevronLeft, Plus, X, MessageSquare, Lock, EyeOff, Send, CheckCircle2, Clock, XCircle,
 } from 'lucide-react';
@@ -192,16 +193,22 @@ function SuggestionComposer({ supabase, userId, onClose, onSaved }) {
     setError(null);
     if (!title.trim() || !body.trim()) return setError('제목과 내용을 모두 입력해주세요.');
     setSaving(true);
-    const { error } = await supabase.from('suggestions').insert({
-      user_id: userId,
-      workplace_id: currentWorkplaceId || null,
-      category,
-      title: title.trim(),
-      body: body.trim(),
-      anonymous,
-    });
-    if (error) { setError(error.message); setSaving(false); return; }
-    onSaved();
+    try {
+      const { error } = await safeMutate(supabase.from('suggestions').insert({
+        user_id: userId,
+        workplace_id: currentWorkplaceId || null,
+        category,
+        title: title.trim(),
+        body: body.trim(),
+        anonymous,
+      }));
+      if (error) { setError(error.message); return; }
+      onSaved();
+    } catch (e) {
+      setError(String(e?.message || e));
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -271,18 +278,24 @@ function ResponseDialog({ suggestion, supabase, userId, onClose, onSaved }) {
   async function save() {
     setError(null);
     setSaving(true);
-    const { error } = await supabase
-      .from('suggestions')
-      .update({
-        status,
-        response: response.trim() || null,
-        responded_by: userId,
-        responded_at: response.trim() ? new Date().toISOString() : null,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', suggestion.id);
-    if (error) { setError(error.message); setSaving(false); return; }
-    onSaved();
+    try {
+      const { error } = await safeMutate(supabase
+        .from('suggestions')
+        .update({
+          status,
+          response: response.trim() || null,
+          responded_by: userId,
+          responded_at: response.trim() ? new Date().toISOString() : null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', suggestion.id));
+      if (error) { setError(error.message); return; }
+      onSaved();
+    } catch (e) {
+      setError(String(e?.message || e));
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (

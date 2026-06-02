@@ -8,6 +8,7 @@ import Avatar from '@/components/Avatar';
 import BottomSheet from '@/components/BottomSheet';
 import { formatDateTime, formatCurrency, formatRelative } from '@/lib/format';
 import { getProfileNames } from '@/app/_actions/names';
+import { safeMutate } from '@/lib/safeMutate';
 import { ChevronLeft, Plus, X, Wrench, AlertTriangle, CheckCircle2, ScanLine, Sparkles } from 'lucide-react';
 
 const LOG_TYPE_META = {
@@ -184,18 +185,24 @@ function LogComposer({ equipmentId, workplaceId, userId, supabase, onClose, onSa
     setError(null);
     if (!title.trim()) return setError('제목을 입력해주세요.');
     setSaving(true);
-    const { error } = await supabase.from('equipment_logs').insert({
-      equipment_id: equipmentId,
-      workplace_id: workplaceId,
-      user_id: userId,
-      log_type: logType,
-      title: title.trim(),
-      description: description.trim() || null,
-      cost: Number(cost) || null,
-      next_check_at: nextCheckAt || null,
-    });
-    if (error) { setError(error.message); setSaving(false); return; }
-    onSaved();
+    try {
+      const { error } = await safeMutate(supabase.from('equipment_logs').insert({
+        equipment_id: equipmentId,
+        workplace_id: workplaceId,
+        user_id: userId,
+        log_type: logType,
+        title: title.trim(),
+        description: description.trim() || null,
+        cost: Number(cost) || null,
+        next_check_at: nextCheckAt || null,
+      }));
+      if (error) { setError(error.message); return; }
+      onSaved();
+    } catch (e) {
+      setError(String(e?.message || e));
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (

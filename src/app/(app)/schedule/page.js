@@ -10,6 +10,7 @@ import BottomSheet from '@/components/BottomSheet';
 import { Plus, ChevronLeft, ChevronRight, X, Trash2, Send, CheckCircle2, AlertCircle, Lock, FileText, Copy } from 'lucide-react';
 import { isHoliday } from '@/lib/holidays';
 import { getScheduleData, saveShift, deleteShift } from './actions';
+import { safeMutate } from '@/lib/safeMutate';
 
 const DOW = ['일', '월', '화', '수', '목', '금', '토'];
 
@@ -618,7 +619,7 @@ function SubmitScheduleApproval({ year, month, shiftCount, coworkers, userId, wo
     if (approvers.length === 0) return setError('결재자를 최소 1명 지정해주세요.');
     setSaving(true);
     try {
-      const { data: req, error: e1 } = await supabase
+      const { data: req, error: e1 } = await safeMutate(supabase
         .from('approval_requests')
         .insert({
           workplace_id: workplaceId,
@@ -631,34 +632,35 @@ function SubmitScheduleApproval({ year, month, shiftCount, coworkers, userId, wo
           period_month: month,
         })
         .select('id')
-        .single();
+        .single());
       if (e1) throw e1;
       const requestId = req.id;
 
       // 결재선
-      const { error: e2 } = await supabase.from('approval_steps').insert(
+      const { error: e2 } = await safeMutate(supabase.from('approval_steps').insert(
         approvers.map((a, i) => ({
           request_id: requestId,
           step_order: i + 1,
           approver_id: a.user_id,
           status: 'waiting',
         }))
-      );
+      ));
       if (e2) throw e2;
 
       // 모든 시프트를 이 결재에 묶기
       const shiftIds = shifts.map((s) => s.id);
       if (shiftIds.length > 0) {
-        const { error: e3 } = await supabase
+        const { error: e3 } = await safeMutate(supabase
           .from('shifts')
           .update({ approval_request_id: requestId })
-          .in('id', shiftIds);
+          .in('id', shiftIds));
         if (e3) throw e3;
       }
 
       onSaved(requestId);
     } catch (err) {
-      setError(err.message);
+      setError(String(err?.message || err));
+    } finally {
       setSaving(false);
     }
   }
@@ -969,9 +971,15 @@ function CopyPrevMonthDialog({ year, month, coworkers, workplaceId, userId, supa
         status: 'scheduled',
       };
     });
-    const { error } = await supabase.from('shifts').insert(newRows);
-    if (error) { setError(error.message); setSaving(false); return; }
-    onSaved();
+    try {
+      const { error } = await safeMutate(supabase.from('shifts').insert(newRows));
+      if (error) { setError(error.message); return; }
+      onSaved();
+    } catch (e) {
+      setError(String(e?.message || e));
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (

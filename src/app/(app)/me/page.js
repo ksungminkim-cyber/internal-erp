@@ -6,6 +6,7 @@ import { useApp } from '@/context/AppContext';
 import PageHeader from '@/components/PageHeader';
 import Avatar from '@/components/Avatar';
 import { formatCurrency } from '@/lib/format';
+import { safeMutate } from '@/lib/safeMutate';
 import { LogOut, Save, Building2, Crown, User as UserIcon, Shield, Wallet, KeyRound, Eye, EyeOff } from 'lucide-react';
 
 const ROLE_META = {
@@ -35,17 +36,22 @@ export default function MePage() {
   async function saveProfile(e) {
     e.preventDefault();
     setSaving(true); setError(null); setInfo(null);
-    const { error } = await supabase
+    try {
+    const { error } = await safeMutate(supabase
       .from('profiles')
       .update({ name: name.trim(), phone: phone.trim() || null, updated_at: new Date().toISOString() })
-      .eq('user_id', user.id);
+      .eq('user_id', user.id));
     if (error) setError(error.message);
     else {
       setInfo('저장되었습니다');
       refresh?.();
       setTimeout(() => setInfo(null), 2000);
     }
-    setSaving(false);
+    } catch (err) {
+      setError(String(err?.message || err));
+    } finally {
+      setSaving(false);
+    }
   }
 
   async function changePassword(e) {
@@ -55,13 +61,13 @@ export default function MePage() {
       if (pwNew.length < 8) throw new Error('새 비밀번호는 8자 이상이어야 합니다');
       if (pwNew !== pwNew2) throw new Error('새 비밀번호가 일치하지 않습니다');
       // 현재 비밀번호 검증 (재인증)
-      const { error: signErr } = await supabase.auth.signInWithPassword({
+      const { error: signErr } = await safeMutate(supabase.auth.signInWithPassword({
         email: user.email,
         password: pwOld,
-      });
+      }));
       if (signErr) throw new Error('현재 비밀번호가 올바르지 않습니다');
       // 비밀번호 변경
-      const { error: updErr } = await supabase.auth.updateUser({ password: pwNew });
+      const { error: updErr } = await safeMutate(supabase.auth.updateUser({ password: pwNew }));
       if (updErr) throw new Error(updErr.message);
       setPwOld(''); setPwNew(''); setPwNew2('');
       setPwInfo('비밀번호가 변경되었습니다');

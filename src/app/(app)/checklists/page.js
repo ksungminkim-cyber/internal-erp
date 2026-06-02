@@ -7,6 +7,7 @@ import PageHeader from '@/components/PageHeader';
 import BottomSheet from '@/components/BottomSheet';
 import { ChevronLeft, ListTodo, Check, Plus, X, Trash2, Edit3, Sun, Moon, Repeat, Calendar } from 'lucide-react';
 import { isChecklistDueToday, frequencyLabel } from '@/lib/checklist';
+import { safeMutate } from '@/lib/safeMutate';
 
 const TYPE_META = {
   open:    { label: '오픈',  icon: Sun,    tag: 'tag-warning' },
@@ -205,18 +206,29 @@ function ChecklistRunner({ template, completion, supabase, userId, workplaceId, 
     setItems(newItems);
     setSaving(true);
     const completedCount = Object.values(newItems).filter((v) => v?.checked).length;
-    await supabase.from('checklist_completions').upsert({
-      template_id: template.id,
-      workplace_id: workplaceId,
-      completion_date: todayKey(),
-      items: newItems,
-      completed_count: completedCount,
-      total_count: total,
-      last_updated_by: userId,
-      last_updated_at: new Date().toISOString(),
-    }, { onConflict: 'template_id,completion_date' });
-    setSaving(false);
-    onChanged?.();
+    try {
+      const { error } = await safeMutate(supabase.from('checklist_completions').upsert({
+        template_id: template.id,
+        workplace_id: workplaceId,
+        completion_date: todayKey(),
+        items: newItems,
+        completed_count: completedCount,
+        total_count: total,
+        last_updated_by: userId,
+        last_updated_at: new Date().toISOString(),
+      }, { onConflict: 'template_id,completion_date' }));
+      if (error) {
+        setItems(items); // 실패 시 롤백
+        alert(error.message);
+        return;
+      }
+      onChanged?.();
+    } catch (e) {
+      setItems(items); // 실패 시 롤백
+      alert(String(e?.message || e));
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -336,33 +348,35 @@ function ChecklistEditor({ template, supabase, workplaceId, onClose, onSaved }) 
       };
       let templateId = template?.id;
       if (isEdit) {
-        const { error } = await supabase
+        const { error } = await safeMutate(supabase
           .from('checklist_templates')
           .update(meta)
-          .eq('id', templateId);
+          .eq('id', templateId));
         if (error) throw error;
-        await supabase.from('checklist_items').delete().eq('template_id', templateId);
+        const { error: eDel } = await safeMutate(supabase.from('checklist_items').delete().eq('template_id', templateId));
+        if (eDel) throw eDel;
       } else {
-        const { data, error } = await supabase
+        const { data, error } = await safeMutate(supabase
           .from('checklist_templates')
           .insert({ workplace_id: workplaceId, ...meta })
           .select('id')
-          .single();
+          .single());
         if (error) throw error;
         templateId = data.id;
       }
-      const { error: e2 } = await supabase.from('checklist_items').insert(
+      const { error: e2 } = await safeMutate(supabase.from('checklist_items').insert(
         validItems.map((it, idx) => ({
           template_id: templateId,
           text: it.text.trim(),
           order_idx: idx,
           required: it.required ?? true,
         }))
-      );
+      ));
       if (e2) throw e2;
       onSaved();
     } catch (err) {
-      setError(err.message);
+      setError(String(err?.message || err));
+    } finally {
       setSaving(false);
     }
   }
@@ -370,12 +384,18 @@ function ChecklistEditor({ template, supabase, workplaceId, onClose, onSaved }) 
   async function deleteTemplate() {
     if (!confirm('이 체크리스트를 삭제하시겠습니까?')) return;
     setSaving(true);
-    const { error } = await supabase
-      .from('checklist_templates')
-      .update({ active: false })
-      .eq('id', template.id);
-    if (error) { setError(error.message); setSaving(false); return; }
-    onSaved();
+    try {
+      const { error } = await safeMutate(supabase
+        .from('checklist_templates')
+        .update({ active: false })
+        .eq('id', template.id));
+      if (error) { setError(error.message); return; }
+      onSaved();
+    } catch (e) {
+      setError(String(e?.message || e));
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (

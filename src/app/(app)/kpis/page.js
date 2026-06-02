@@ -8,6 +8,7 @@ import PageHeader from '@/components/PageHeader';
 import BottomSheet from '@/components/BottomSheet';
 import { formatCurrency } from '@/lib/format';
 import { getProfileNames } from '@/app/_actions/names';
+import { safeMutate } from '@/lib/safeMutate';
 import {
   ChevronLeft, Target, Plus, X, Send, FileText, Trash2, Edit3, TrendingUp,
 } from 'lucide-react';
@@ -244,7 +245,7 @@ function KpiEditor({ kpi, memberships, currentWorkplaceId, isSuperAdmin, userId,
       // 신규 등록일 경우만 결재 생성 (편집은 결재 별도)
       if (!isEdit) {
         if (approvers.length === 0) return setError('결재자를 1명 이상 지정해주세요.');
-        const { data: req, error: e1 } = await supabase
+        const { data: req, error: e1 } = await safeMutate(supabase
           .from('approval_requests')
           .insert({
             workplace_id: workplaceId || null,
@@ -255,18 +256,18 @@ function KpiEditor({ kpi, memberships, currentWorkplaceId, isSuperAdmin, userId,
             total_amount: Number(target) || 0,
           })
           .select('id')
-          .single();
+          .single());
         if (e1) throw e1;
         approvalId = req.id;
 
-        const { error: e2 } = await supabase.from('approval_steps').insert(
+        const { error: e2 } = await safeMutate(supabase.from('approval_steps').insert(
           approvers.map((a, i) => ({
             request_id: approvalId,
             step_order: i + 1,
             approver_id: a.user_id,
             status: 'waiting',
           }))
-        );
+        ));
         if (e2) throw e2;
       }
 
@@ -281,15 +282,16 @@ function KpiEditor({ kpi, memberships, currentWorkplaceId, isSuperAdmin, userId,
         approval_request_id: approvalId ?? kpi?.approval_request_id ?? null,
       };
       if (isEdit) {
-        const { error } = await supabase.from('kpis').update({ ...payload, updated_at: new Date().toISOString() }).eq('id', kpi.id);
+        const { error } = await safeMutate(supabase.from('kpis').update({ ...payload, updated_at: new Date().toISOString() }).eq('id', kpi.id));
         if (error) throw error;
       } else {
-        const { error } = await supabase.from('kpis').insert({ ...payload, created_by: userId });
+        const { error } = await safeMutate(supabase.from('kpis').insert({ ...payload, created_by: userId }));
         if (error) throw error;
       }
       onSaved(approvalId);
     } catch (err) {
-      setError(err.message);
+      setError(String(err?.message || err));
+    } finally {
       setSaving(false);
     }
   }
@@ -297,9 +299,15 @@ function KpiEditor({ kpi, memberships, currentWorkplaceId, isSuperAdmin, userId,
   async function archive() {
     if (!confirm('이 지표를 보관 처리할까요?')) return;
     setSaving(true);
-    const { error } = await supabase.from('kpis').update({ active: false }).eq('id', kpi.id);
-    if (error) { setError(error.message); setSaving(false); return; }
-    onSaved();
+    try {
+      const { error } = await safeMutate(supabase.from('kpis').update({ active: false }).eq('id', kpi.id));
+      if (error) { setError(error.message); return; }
+      onSaved();
+    } catch (e) {
+      setError(String(e?.message || e));
+    } finally {
+      setSaving(false);
+    }
   }
 
   // 사업장 옵션: 본인이 매니저/대표인 사업장 + (super_admin이면 전사)
@@ -436,16 +444,22 @@ function KpiRecorder({ kpi, userId, supabase, onClose, onSaved }) {
     setError(null);
     if (!actualValue) return setError('실적값을 입력해주세요.');
     setSaving(true);
-    const { error } = await supabase.from('kpi_records').insert({
-      kpi_id: kpi.id,
-      period_start: periodStart,
-      period_end: periodEnd,
-      actual_value: Number(actualValue),
-      notes: notes.trim() || null,
-      recorded_by: userId,
-    });
-    if (error) { setError(error.message); setSaving(false); return; }
-    onSaved();
+    try {
+      const { error } = await safeMutate(supabase.from('kpi_records').insert({
+        kpi_id: kpi.id,
+        period_start: periodStart,
+        period_end: periodEnd,
+        actual_value: Number(actualValue),
+        notes: notes.trim() || null,
+        recorded_by: userId,
+      }));
+      if (error) { setError(error.message); return; }
+      onSaved();
+    } catch (e) {
+      setError(String(e?.message || e));
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
