@@ -258,9 +258,13 @@ function InventoryClosingDialog({ items, supabase, userId, workplaceId, onClose 
 
   async function deleteClosing(id) {
     if (!confirm('이 마감 기록을 삭제하시겠습니까?')) return;
-    const { error } = await supabase.from('inventory_closings').delete().eq('id', id);
-    if (error) { alert(error.message); return; }
-    load();
+    try {
+      const { error } = await safeMutate(supabase.from('inventory_closings').delete().eq('id', id));
+      if (error) { alert(error.message); return; }
+      load();
+    } catch (e) {
+      alert(String(e?.message || e));
+    }
   }
 
   return (
@@ -389,23 +393,35 @@ function InventoryEditor({ item, supabase, workplaceId, onClose, onSaved }) {
       vendor: vendor.trim() || null,
       notes: notes.trim() || null,
     };
-    const op = isEdit
-      ? supabase.from('inventory_items').update({ ...payload, updated_at: new Date().toISOString() }).eq('id', item.id)
-      : supabase.from('inventory_items').insert(payload);
-    const { error } = await op;
-    if (error) { setError(error.message); setSaving(false); return; }
-    onSaved();
+    try {
+      const op = isEdit
+        ? supabase.from('inventory_items').update({ ...payload, updated_at: new Date().toISOString() }).eq('id', item.id)
+        : supabase.from('inventory_items').insert(payload);
+      const { error } = await safeMutate(op);
+      if (error) { setError(error.message); return; }
+      onSaved();
+    } catch (e) {
+      setError(String(e?.message || e));
+    } finally {
+      setSaving(false);
+    }
   }
 
   async function archive() {
     if (!confirm('이 품목을 보관 처리할까요? (목록에서 사라집니다)')) return;
     setSaving(true);
-    const { error } = await supabase
-      .from('inventory_items')
-      .update({ archived: true })
-      .eq('id', item.id);
-    if (error) { setError(error.message); setSaving(false); return; }
-    onSaved();
+    try {
+      const { error } = await safeMutate(supabase
+        .from('inventory_items')
+        .update({ archived: true })
+        .eq('id', item.id));
+      if (error) { setError(error.message); return; }
+      onSaved();
+    } catch (e) {
+      setError(String(e?.message || e));
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -482,16 +498,22 @@ function InventoryAdjust({ item, supabase, userId, workplaceId, onClose, onSaved
     if (!n || n === 0) return setError('수량을 입력해주세요.');
     setSaving(true);
     const delta = type === 'restock' ? Math.abs(n) : -Math.abs(n);
-    const { error } = await supabase.from('inventory_transactions').insert({
-      item_id: item.id,
-      workplace_id: workplaceId,
-      user_id: userId,
-      type,
-      qty_delta: delta,
-      note: note.trim() || null,
-    });
-    if (error) { setError(error.message); setSaving(false); return; }
-    onSaved();
+    try {
+      const { error } = await safeMutate(supabase.from('inventory_transactions').insert({
+        item_id: item.id,
+        workplace_id: workplaceId,
+        user_id: userId,
+        type,
+        qty_delta: delta,
+        note: note.trim() || null,
+      }));
+      if (error) { setError(error.message); return; }
+      onSaved();
+    } catch (e) {
+      setError(String(e?.message || e));
+    } finally {
+      setSaving(false);
+    }
   }
 
   const TYPE_LABEL = { restock: '입고', use: '사용', adjust: '조정', discard: '폐기' };

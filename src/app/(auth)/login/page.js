@@ -3,6 +3,7 @@
 import { Suspense, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
+import { safeMutate } from '@/lib/safeMutate';
 import { ArrowRight, Sparkles } from 'lucide-react';
 
 function LoginForm() {
@@ -27,15 +28,15 @@ function LoginForm() {
     const supabase = createClient();
     try {
       if (mode === 'signin') {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        const { error } = await safeMutate(supabase.auth.signInWithPassword({ email, password }));
         if (error) throw error;
         router.replace(next);
         router.refresh();
       } else {
-        const { data, error } = await supabase.auth.signUp({
+        const { data, error } = await safeMutate(supabase.auth.signUp({
           email, password,
           options: { data: { name, phone } },
-        });
+        }));
         if (error) throw error;
         if (data.user && !data.session) {
           setInfo('이메일 인증 메일을 확인해주세요');

@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, useRef, useId } from 'react';
 import Link from 'next/link';
 import { useApp } from '@/context/AppContext';
 import { formatRelative } from '@/lib/format';
+import { safeMutate } from '@/lib/safeMutate';
 import { Bell, Check, CheckCheck } from 'lucide-react';
 
 const TYPE_LABEL = {
@@ -62,14 +63,18 @@ export default function NotificationBell({ inline = false }) {
 
   async function markRead(id) {
     setItems((prev) => prev.map((n) => n.id === id ? { ...n, read_at: new Date().toISOString() } : n));
-    await supabase.from('notifications').update({ read_at: new Date().toISOString() }).eq('id', id);
+    try {
+      await safeMutate(supabase.from('notifications').update({ read_at: new Date().toISOString() }).eq('id', id));
+    } catch { /* 읽음 표시 실패는 조용히 무시 (낙관적 업데이트 유지) */ }
   }
 
   async function markAllRead() {
     const ids = unread.map((n) => n.id);
     if (ids.length === 0) return;
     setItems((prev) => prev.map((n) => ids.includes(n.id) ? { ...n, read_at: new Date().toISOString() } : n));
-    await supabase.from('notifications').update({ read_at: new Date().toISOString() }).in('id', ids);
+    try {
+      await safeMutate(supabase.from('notifications').update({ read_at: new Date().toISOString() }).in('id', ids));
+    } catch { /* 읽음 표시 실패는 조용히 무시 (낙관적 업데이트 유지) */ }
   }
 
   return (

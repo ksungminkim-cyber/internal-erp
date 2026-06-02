@@ -63,14 +63,20 @@ export default function AnnouncementsPage() {
   async function markRead(id) {
     if (readIds.has(id)) return;
     setReadIds((prev) => new Set([...prev, id]));
-    await supabase.from('announcement_reads').insert({ announcement_id: id, user_id: user.id });
+    try {
+      await safeMutate(supabase.from('announcement_reads').insert({ announcement_id: id, user_id: user.id }));
+    } catch { /* 읽음 표시 실패는 조용히 무시 (낙관적 업데이트 유지) */ }
   }
 
   async function deleteAnnouncement(id) {
     if (!confirm('이 공지를 삭제하시겠습니까?')) return;
-    const { error } = await supabase.from('announcements').delete().eq('id', id);
-    if (error) alert(error.message);
-    else load();
+    try {
+      const { error } = await safeMutate(supabase.from('announcements').delete().eq('id', id));
+      if (error) alert(error.message);
+      else load();
+    } catch (e) {
+      alert(String(e?.message || e));
+    }
   }
 
   function canEdit(item) {
