@@ -6,6 +6,7 @@ import PageHeader from '@/components/PageHeader';
 import Avatar from '@/components/Avatar';
 import BottomSheet from '@/components/BottomSheet';
 import { formatRelative } from '@/lib/format';
+import { safeMutate } from '@/lib/safeMutate';
 import { Plus, Pin, Megaphone, X, MoreVertical, Edit3, Trash2 } from 'lucide-react';
 
 export default function AnnouncementsPage() {
@@ -228,22 +229,28 @@ function AnnouncementEditor({ item, supabase, userId, workplaceId, onClose, onSa
     setError(null);
     if (!title.trim() || !body.trim()) return setError('제목과 내용을 모두 입력해주세요.');
     setSaving(true);
-    const payload = {
-      title: title.trim(),
-      body: body.trim(),
-      pinned,
-      updated_at: new Date().toISOString(),
-    };
-    const op = isEdit
-      ? supabase.from('announcements').update(payload).eq('id', item.id)
-      : supabase.from('announcements').insert({
-          ...payload,
-          workplace_id: workplaceId,
-          author_id: userId,
-        });
-    const { error } = await op;
-    if (error) { setError(error.message); setSaving(false); return; }
-    onSaved();
+    try {
+      const payload = {
+        title: title.trim(),
+        body: body.trim(),
+        pinned,
+        updated_at: new Date().toISOString(),
+      };
+      const op = isEdit
+        ? supabase.from('announcements').update(payload).eq('id', item.id)
+        : supabase.from('announcements').insert({
+            ...payload,
+            workplace_id: workplaceId,
+            author_id: userId,
+          });
+      const { error } = await safeMutate(op);
+      if (error) { setError(error.message); return; }
+      onSaved();
+    } catch (e) {
+      setError(String(e?.message || e));
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (

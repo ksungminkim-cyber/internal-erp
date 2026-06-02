@@ -7,6 +7,7 @@ import PageHeader from '@/components/PageHeader';
 import Avatar from '@/components/Avatar';
 import BottomSheet from '@/components/BottomSheet';
 import { formatDateTime, formatRelative } from '@/lib/format';
+import { safeMutate } from '@/lib/safeMutate';
 import {
   ChevronLeft, Plus, X, MessageCircle, Phone, MessageSquare, Star,
   Users as UsersIcon, AlertCircle, CheckCircle2, Clock,
@@ -234,12 +235,18 @@ function ComplaintEditor({ complaint, supabase, userId, workplaceId, onClose, on
       resolved_by: status === 'resolved' ? userId : null,
       updated_at: new Date().toISOString(),
     };
-    const op = isEdit
-      ? supabase.from('customer_complaints').update(payload).eq('id', complaint.id)
-      : supabase.from('customer_complaints').insert(payload);
-    const { error } = await op;
-    if (error) { setError(error.message); setSaving(false); return; }
-    onSaved();
+    try {
+      const op = isEdit
+        ? supabase.from('customer_complaints').update(payload).eq('id', complaint.id)
+        : supabase.from('customer_complaints').insert(payload);
+      const { error } = await safeMutate(op);
+      if (error) { setError(error.message); return; }
+      onSaved();
+    } catch (e) {
+      setError(String(e?.message || e));
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
