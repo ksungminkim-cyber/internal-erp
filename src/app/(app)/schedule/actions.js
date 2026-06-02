@@ -24,7 +24,7 @@ export async function getScheduleData(workplaceId, periodStartISO, periodEndISO)
 
   const svc = getServiceClient();
 
-  // ── 요청자가 시급을 볼 권한이 있는지 (매니저/대표/본사/super_admin) ──
+  // ── 요청자가 시급을 볼 권한이 있는지 (대표/임원/본사/super_admin만 — 매니저 제외) ──
   const [{ data: myProfile }, { data: myMems }] = await Promise.all([
     svc.from('profiles').select('is_super_admin, is_executive').eq('user_id', user.id).maybeSingle(),
     svc.from('memberships').select('role, workplaces(name)').eq('user_id', user.id).eq('active', true),
@@ -32,7 +32,7 @@ export async function getScheduleData(workplaceId, periodStartISO, periodEndISO)
   const canSeeWage =
     myProfile?.is_super_admin === true ||
     myProfile?.is_executive === true ||
-    (myMems ?? []).some((m) => m.role === 'manager' || m.role === 'owner') ||
+    (myMems ?? []).some((m) => m.role === 'owner') ||
     (myMems ?? []).some((m) => m.workplaces?.name === '본사');
 
   const [{ data: shifts }, { data: members }, { data: logs }] = await Promise.all([
