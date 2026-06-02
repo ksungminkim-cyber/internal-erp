@@ -8,6 +8,7 @@ import PageHeader from '@/components/PageHeader';
 import BottomSheet from '@/components/BottomSheet';
 import { formatRelative } from '@/lib/format';
 import { ChevronLeft, Plus, X, Wrench, AlertTriangle, CheckCircle2, Coffee, Snowflake, ScanLine, Trash2, ChevronRight } from 'lucide-react';
+import { safeMutate } from '@/lib/safeMutate';
 
 const STATUS_META = {
   ok:      { label: '정상',   tag: 'tag-success', icon: CheckCircle2 },
@@ -206,20 +207,32 @@ function EquipmentEditor({ equipment, supabase, workplaceId, onClose, onSaved })
       status,
       notes: notes.trim() || null,
     };
-    const op = isEdit
-      ? supabase.from('equipment').update({ ...payload, updated_at: new Date().toISOString() }).eq('id', equipment.id)
-      : supabase.from('equipment').insert(payload);
-    const { error } = await op;
-    if (error) { setError(error.message); setSaving(false); return; }
-    onSaved();
+    try {
+      const op = isEdit
+        ? supabase.from('equipment').update({ ...payload, updated_at: new Date().toISOString() }).eq('id', equipment.id)
+        : supabase.from('equipment').insert(payload);
+      const { error } = await safeMutate(op);
+      if (error) { setError(error.message); return; }
+      onSaved();
+    } catch (e) {
+      setError(String(e?.message || e));
+    } finally {
+      setSaving(false);
+    }
   }
 
   async function archive() {
     if (!confirm('이 장비를 보관 처리할까요?')) return;
     setSaving(true);
-    const { error } = await supabase.from('equipment').update({ archived: true }).eq('id', equipment.id);
-    if (error) { setError(error.message); setSaving(false); return; }
-    onSaved();
+    try {
+      const { error } = await safeMutate(supabase.from('equipment').update({ archived: true }).eq('id', equipment.id));
+      if (error) { setError(error.message); return; }
+      onSaved();
+    } catch (e) {
+      setError(String(e?.message || e));
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (

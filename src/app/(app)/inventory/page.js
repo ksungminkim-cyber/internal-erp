@@ -6,6 +6,7 @@ import { useApp } from '@/context/AppContext';
 import PageHeader from '@/components/PageHeader';
 import BottomSheet from '@/components/BottomSheet';
 import { formatRelative } from '@/lib/format';
+import { safeMutate } from '@/lib/safeMutate';
 import { ChevronLeft, Plus, X, Package, AlertTriangle, TrendingUp, TrendingDown, Edit3, Trash2, Search, Lock, ClipboardList } from 'lucide-react';
 
 const CATEGORY_OPTIONS = ['식자재', '음료/시럽', '주류', '컵·뚜껑', '비품', '청소·세제', '포장', '기타'];
@@ -229,25 +230,30 @@ function InventoryClosingDialog({ items, supabase, userId, workplaceId, onClose 
     if (!confirm(`${year}년 ${month}월 재고를 마감하시겠습니까?\n현재 ${items.length}개 품목의 수량을 스냅샷으로 저장합니다.`)) return;
     setSaving(true);
     setError(null);
-    const snapshot = items.map((i) => ({
-      id: i.id, name: i.name, category: i.category, unit: i.unit,
-      qty: Number(i.current_qty), min_qty: Number(i.min_qty), vendor: i.vendor,
-    }));
-    const { error } = await supabase.from('inventory_closings').upsert({
-      workplace_id: workplaceId,
-      year, month,
-      item_count: items.length,
-      total_qty_estimate: totalQty,
-      low_stock_count: lowStockCount,
-      snapshot,
-      notes: notes.trim() || null,
-      closed_by: userId,
-      closed_at: new Date().toISOString(),
-    }, { onConflict: 'workplace_id,year,month' });
-    if (error) { setError(error.message); setSaving(false); return; }
-    setNotes('');
-    await load();
-    setSaving(false);
+    try {
+      const snapshot = items.map((i) => ({
+        id: i.id, name: i.name, category: i.category, unit: i.unit,
+        qty: Number(i.current_qty), min_qty: Number(i.min_qty), vendor: i.vendor,
+      }));
+      const { error } = await safeMutate(supabase.from('inventory_closings').upsert({
+        workplace_id: workplaceId,
+        year, month,
+        item_count: items.length,
+        total_qty_estimate: totalQty,
+        low_stock_count: lowStockCount,
+        snapshot,
+        notes: notes.trim() || null,
+        closed_by: userId,
+        closed_at: new Date().toISOString(),
+      }, { onConflict: 'workplace_id,year,month' }));
+      if (error) { setError(error.message); return; }
+      setNotes('');
+      await load();
+    } catch (e) {
+      setError(String(e?.message || e));
+    } finally {
+      setSaving(false);
+    }
   }
 
   async function deleteClosing(id) {
