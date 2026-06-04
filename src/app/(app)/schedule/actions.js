@@ -98,7 +98,7 @@ export async function saveShift({ id, workplaceId, userId, startAt, endAt, roleL
   const authClient = await createServerClient();
   const { data: { user } } = await authClient.auth.getUser();
   if (!user) throw new Error('로그인이 필요합니다.');
-  if (!workplaceId || !userId || !startAt || !endAt) throw new Error('필수 항목 누락');
+  if (!workplaceId || !userId || !startAt || !endAt) return { ok: false, error: '필수 항목을 모두 입력해주세요.' };
 
   const svc = getServiceClient();
   const payload = {
@@ -115,12 +115,17 @@ export async function saveShift({ id, workplaceId, userId, startAt, endAt, roleL
     ? await svc.from('shifts').update({ ...payload, updated_at: new Date().toISOString() }).eq('id', id)
     : await svc.from('shifts').insert(payload);
 
+  // 에러는 throw 대신 return — Next.js 운영 빌드가 throw된 메시지를 가려
+  // "An error occurred in the Server Components render"로 표시되는 문제 방지.
   if (error) {
     const msg = String(error.message || '');
     if (msg.includes('시프트 충돌')) {
-      throw new Error('이 직원은 같은 시간대에 다른 시프트가 이미 있습니다.');
+      return { ok: false, error: '이 직원은 같은 시간대에 이미 다른 시프트가 있어요. 시간이 겹치지 않게 조정해주세요.' };
     }
-    throw new Error(msg);
+    if (msg.includes('range lower bound must be less than')) {
+      return { ok: false, error: '종료 시간이 시작 시간보다 빠릅니다. 시간을 확인해주세요.' };
+    }
+    return { ok: false, error: msg || '저장 중 오류가 발생했습니다.' };
   }
   return { ok: true };
 }

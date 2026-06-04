@@ -486,7 +486,7 @@ function ShiftEditor({ shift, initial, coworkers, workplaceId, userId, supabase,
     if (!startAt || !endAt) return setError('시간을 입력해주세요.');
     setSaving(true);
     try {
-      await saveShift({
+      const res = await saveShift({
         id: shift?.id ?? null,
         workplaceId,
         userId: userPick,
@@ -495,6 +495,7 @@ function ShiftEditor({ shift, initial, coworkers, workplaceId, userId, supabase,
         roleLabel,
         notes,
       });
+      if (res?.error) { setError(res.error); return; }
       onSaved();
     } catch (e) {
       setError(String(e?.message || e));
