@@ -40,6 +40,11 @@ function toLocalInput(iso) {
 function localInputToIso(val) {
   return new Date(val).toISOString();
 }
+// 로컬(KST) 기준 날짜 키 — slice(0,10)은 UTC라 새벽/밤 기록이 전날·다음날로 밀림
+function localDateKey(iso) {
+  const d = new Date(iso);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
 
 function todayStr() {
   const d = new Date();
@@ -102,7 +107,7 @@ export default function AttendanceHistoryPage() {
 
   // 날짜별 그룹핑
   const groupedByDate = logs.reduce((acc, log) => {
-    const date = log.event_at.slice(0, 10);
+    const date = localDateKey(log.event_at);
     if (!acc[date]) acc[date] = [];
     acc[date].push(log);
     return acc;
@@ -192,7 +197,7 @@ export default function AttendanceHistoryPage() {
           <div className="stack stack-3">
             {dates.map((date) => {
               const dateLogs = groupedByDate[date];
-              const d = new Date(date);
+              const d = new Date(date + 'T00:00:00');
               const dateLabel = d.toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'short' });
               return (
                 <section key={date}>
