@@ -445,8 +445,8 @@ function ShiftBlock({ shift, attendance, onEdit }) {
           계획 {start} - {end}
           {shift.role_label && <span className="tag" style={{ marginLeft: 8 }}>{shift.role_label}</span>}
         </div>
-        {/* 실제 출퇴근 기록 */}
-        {attendance && (
+        {/* 실제 출퇴근 기록 — clockInAt이 있을 때만 (결근 등 출근기록 없으면 표시 안 함) */}
+        {attendance?.clockInAt && (
           <div className="num" style={{ fontSize: 12, marginTop: 2, color: 'var(--accent-strong)' }}>
             실제 {fmtTime(attendance.clockInAt)}
             {attendance.clockOutAt ? ` - ${fmtTime(attendance.clockOutAt)}` : ' - 근무중'}
