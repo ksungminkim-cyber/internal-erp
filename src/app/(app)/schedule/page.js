@@ -29,7 +29,10 @@ function endOfMonth(d) {
 }
 function addDays(d, n) { const x = new Date(d); x.setDate(x.getDate() + n); return x; }
 function addMonths(d, n) { return new Date(d.getFullYear(), d.getMonth() + n, 1); }
-function ymd(d) { return d.toISOString().slice(0, 10); }
+// 로컬 날짜 기준 YYYY-MM-DD (toISOString은 UTC라 KST에서 하루 밀림 — '오늘' 판정 버그 원인)
+function ymd(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
 function fmtTime(iso) {
   return new Date(iso).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false });
 }
@@ -175,7 +178,7 @@ export default function SchedulePage() {
 
   function shiftsForDate(d) {
     const dayKey = ymd(d);
-    return shifts.filter((s) => new Date(s.start_at).toISOString().slice(0, 10) === dayKey);
+    return shifts.filter((s) => ymd(new Date(s.start_at)) === dayKey);
   }
 
   const todayStr = ymd(new Date());
