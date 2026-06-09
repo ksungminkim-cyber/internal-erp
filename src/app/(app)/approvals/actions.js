@@ -2,6 +2,7 @@
 
 import { createClient as createServerClient } from '@/lib/supabase/server';
 import { createClient } from '@supabase/supabase-js';
+import { kstDateKey } from '@/lib/date';
 
 function getServiceClient() {
   return createClient(
@@ -18,6 +19,66 @@ function getServiceClient() {
  */
 // 진행중인데 N일 이상 결재 안 된 건 = '지연(장기 미결)'
 const OVERDUE_DAYS = 3;
+
+/**
+ * 장기 미결 리마인드 — 접속 시 호출.
+ * 내가 현재 결재 차례인데 OVERDUE_DAYS 이상 진행중인 건에 대해
+ * '결재 대기(지연)' 알림을 생성. 하루 1회만 (스팸 방지).
+ */
+export async function remindMyOverdueApprovals() {
+  const authClient = await createServerClient();
+  const { data: { user } } = await authClient.auth.getUser();
+  if (!user) return { reminded: 0 };
+
+  const svc = getServiceClient();
+  const thresholdIso = new Date(Date.now() - OVERDUE_DAYS * 86400000).toISOString();
+
+  // 내가 현재 승인 차례(current_step)인 대기 단계 + 진행중 + 지연
+  const { data: steps } = await svc
+    .from('approval_steps')
+    .select('request_id, step_order, approval_requests!inner(id, title, status, current_step, submitted_at)')
+    .eq('approver_id', user.id)
+    .eq('status', 'waiting');
+
+  const due = (steps ?? []).filter((s) => {
+    const r = s.approval_requests;
+    return r && r.status === 'pending' && r.current_step === s.step_order
+      && r.submitted_at && r.submitted_at <= thresholdIso;
+  });
+  if (due.length === 0) return { reminded: 0 };
+
+  // 오늘 이미 보낸 리마인드 제외 (하루 1회)
+  const reqIds = [...new Set(due.map((s) => s.request_id))];
+  const todayStartIso = new Date(kstDateKey() + 'T00:00:00+09:00').toISOString();
+  const { data: sent } = await svc
+    .from('notifications')
+    .select('ref_id')
+    .eq('user_id', user.id)
+    .eq('type', 'approval_reminder')
+    .gte('created_at', todayStartIso)
+    .in('ref_id', reqIds);
+  const sentToday = new Set((sent ?? []).map((n) => n.ref_id));
+
+  const seen = new Set();
+  const rows = [];
+  for (const s of due) {
+    if (sentToday.has(s.request_id) || seen.has(s.request_id)) continue;
+    seen.add(s.request_id);
+    const r = s.approval_requests;
+    const days = Math.floor((Date.now() - new Date(r.submitted_at).getTime()) / 86400000);
+    rows.push({
+      user_id: user.id,
+      type: 'approval_reminder',
+      title: '결재 대기 (지연)',
+      body: `${r.title} — ${days}일째 미결`,
+      link: `/approvals/${r.id}`,
+      ref_id: r.id,
+    });
+  }
+  if (rows.length === 0) return { reminded: 0 };
+  await svc.from('notifications').insert(rows);
+  return { reminded: rows.length };
+}
 
 export async function getApprovals({ workplaceId, scope = 'all', status = 'all', docType = 'all', from, to, search, allWorkplaces = false } = {}) {
   const authClient = await createServerClient();

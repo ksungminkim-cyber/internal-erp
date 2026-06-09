@@ -10,6 +10,7 @@ import { Bell, Check, CheckCheck } from 'lucide-react';
 const TYPE_LABEL = {
   approval_decided: '결재 결과',
   approval_assigned: '결재 요청',
+  approval_reminder: '결재 지연',
   suggestion_response: '건의 응답',
   announcement_new: '새 공지',
 };

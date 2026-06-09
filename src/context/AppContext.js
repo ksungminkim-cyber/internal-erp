@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { createClient } from '@/lib/supabase/client';
+import { remindMyOverdueApprovals } from '@/app/(app)/approvals/actions';
 
 const AppContext = createContext(null);
 
@@ -62,6 +63,12 @@ export function AppProvider({ children, initialUser, initialProfile = null, init
       setCurrentWorkplaceId(validStored?.workplace_id ?? allMems[0].workplace_id);
     }
   }, [supabase]);
+
+  // 접속 시 1회: 장기 미결(지연) 결재 리마인드 — 하루 1회 dedup은 서버에서 처리
+  useEffect(() => {
+    if (!user?.id) return;
+    remindMyOverdueApprovals().catch(() => {});
+  }, [user?.id]);
 
   // localStorage 사업장 선택은 useState lazy init 대신 useEffect로 처리 (hydration 이후 1회)
   useEffect(() => {
