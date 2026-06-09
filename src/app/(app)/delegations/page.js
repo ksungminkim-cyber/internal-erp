@@ -6,6 +6,7 @@ import { useApp } from '@/context/AppContext';
 import PageHeader from '@/components/PageHeader';
 import { getProfileNames } from '@/app/_actions/names';
 import { safeMutate } from '@/lib/safeMutate';
+import { todayKey } from '@/lib/date';
 import { ChevronLeft, Plus, X, Trash2, UserCheck } from 'lucide-react';
 
 export default function DelegationsPage() {
@@ -71,7 +72,7 @@ export default function DelegationsPage() {
     }
   }
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayKey();
 
   return (
     <>
@@ -151,7 +152,7 @@ export default function DelegationsPage() {
 
 function DelegationDialog({ coworkers, userId, workplaceId, supabase, onClose, onSaved }) {
   const [delegateId, setDelegateId] = useState('');
-  const [startAt, setStartAt] = useState(new Date().toISOString().slice(0, 10));
+  const [startAt, setStartAt] = useState(todayKey());
   const [endAt, setEndAt] = useState('');
   const [reason, setReason] = useState('');
   const [saving, setSaving] = useState(false);

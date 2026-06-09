@@ -10,6 +10,7 @@ import { formatCurrency } from '@/lib/format';
 import { downloadCsv, fmtDate } from '@/lib/csvExport';
 import { calcLabor, formatMinutes } from '@/lib/laborCalc';
 import { safeMutate } from '@/lib/safeMutate';
+import { ymd } from '@/lib/date';
 import {
   ChevronLeft, ChevronRight, Lock, Unlock, Download, Check, AlertCircle,
   Send, Printer, X, Plus, Clock, FileCheck,
@@ -17,7 +18,6 @@ import {
 
 function monthStart(y, m) { return new Date(y, m, 1, 0, 0, 0, 0); }
 function monthEnd(y, m) { return new Date(y, m + 1, 1, 0, 0, 0, 0); }
-function ymd(d) { return d.toISOString().slice(0, 10); }
 
 // 카테고리 → 회계분류 매핑 (스냅샷에서 재구성용 — approvals/new와 동일)
 function getCategoryKind(cat) {

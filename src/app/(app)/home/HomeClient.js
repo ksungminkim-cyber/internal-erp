@@ -6,12 +6,11 @@ import { useApp } from '@/context/AppContext';
 import PageHeader from '@/components/PageHeader';
 import { formatRelative, formatCurrency, todayBoundary } from '@/lib/format';
 import { getProfileNames } from '@/app/_actions/names';
+import { todayKey } from '@/lib/date';
 import {
   Clock, FileText, Megaphone, Users, ChevronRight, Plus, Sparkles,
   Calendar, ClipboardCheck, Package, TrendingUp, AlertTriangle,
 } from 'lucide-react';
-
-function todayKey() { return new Date().toISOString().slice(0, 10); }
 
 // ─── 날씨 ──────────────────────────────────────────────────────────────────
 const SHOPS = [

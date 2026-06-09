@@ -7,6 +7,7 @@ import PageHeader from '@/components/PageHeader';
 import Avatar from '@/components/Avatar';
 import { calcLabor } from '@/lib/laborCalc';
 import { formatCurrency, formatDateTime } from '@/lib/format';
+import { ymd } from '@/lib/date';
 import { ChevronLeft, Clock, Wallet, Calendar, TrendingUp, History, AlertTriangle } from 'lucide-react';
 
 function dateLabel(dateStr) {
@@ -108,7 +109,7 @@ export default function MemberStatsClient({
               {target.phone || '연락처 없음'}
               {target.retired_at && (
                 <span className="tag tag-danger" style={{ marginLeft: 8, fontSize: 10 }}>
-                  퇴사 {new Date(target.retired_at).toISOString().slice(0, 10)}
+                  퇴사 {ymd(new Date(target.retired_at))}
                 </span>
               )}
             </div>

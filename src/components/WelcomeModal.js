@@ -5,14 +5,13 @@ import Link from 'next/link';
 import { useApp } from '@/context/AppContext';
 import { isChecklistDueToday, frequencyLabel } from '@/lib/checklist';
 import { safeMutate } from '@/lib/safeMutate';
+import { todayKey } from '@/lib/date';
 import {
   X, Megaphone, ListTodo, Sparkles, ChevronRight, Clock,
   FileText, Calendar, Package, TrendingUp, BookOpen, Lock,
 } from 'lucide-react';
 
 const SESSION_KEY = 'counter:welcome:dismissed';
-
-function todayKey() { return new Date().toISOString().slice(0, 10); }
 
 /**
  * 홈 진입 시 보여줄 통합 모달:

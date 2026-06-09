@@ -9,6 +9,7 @@ import BottomSheet from '@/components/BottomSheet';
 import { formatCurrency } from '@/lib/format';
 import { getProfileNames } from '@/app/_actions/names';
 import { safeMutate } from '@/lib/safeMutate';
+import { todayKey } from '@/lib/date';
 import {
   ChevronLeft, Target, Plus, X, Send, FileText, Trash2, Edit3, TrendingUp,
 } from 'lucide-react';
@@ -432,9 +433,8 @@ function KpiEditor({ kpi, memberships, currentWorkplaceId, isSuperAdmin, userId,
 }
 
 function KpiRecorder({ kpi, userId, supabase, onClose, onSaved }) {
-  const today = new Date();
-  const [periodStart, setPeriodStart] = useState(today.toISOString().slice(0, 10));
-  const [periodEnd, setPeriodEnd] = useState(today.toISOString().slice(0, 10));
+  const [periodStart, setPeriodStart] = useState(todayKey());
+  const [periodEnd, setPeriodEnd] = useState(todayKey());
   const [actualValue, setActualValue] = useState('');
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);

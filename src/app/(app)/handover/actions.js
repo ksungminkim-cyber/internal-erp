@@ -2,6 +2,7 @@
 
 import { createClient as createServerClient } from '@/lib/supabase/server';
 import { createClient } from '@supabase/supabase-js';
+import { kstDateKey } from '@/lib/date';
 
 function getServiceClient() {
   return createClient(
@@ -77,7 +78,7 @@ export async function createHandoverNote({ workplaceId, shiftType, content, flag
     workplace_id: workplaceId,
     author_id: user.id,
     shift_type: shiftType,
-    note_date: new Date().toISOString().slice(0, 10),
+    note_date: kstDateKey(),
     content: content.trim(),
     flags: flags ?? [],
   });

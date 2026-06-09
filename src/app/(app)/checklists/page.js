@@ -8,6 +8,7 @@ import BottomSheet from '@/components/BottomSheet';
 import { ChevronLeft, ListTodo, Check, Plus, X, Trash2, Edit3, Sun, Moon, Repeat, Calendar } from 'lucide-react';
 import { isChecklistDueToday, frequencyLabel } from '@/lib/checklist';
 import { safeMutate } from '@/lib/safeMutate';
+import { todayKey } from '@/lib/date';
 
 const TYPE_META = {
   open:    { label: '오픈',  icon: Sun,    tag: 'tag-warning' },
@@ -15,8 +16,6 @@ const TYPE_META = {
   weekly:  { label: '주간',  icon: Repeat, tag: 'tag-accent'  },
   custom:  { label: '기타',  icon: ListTodo, tag: 'tag'       },
 };
-
-function todayKey() { return new Date().toISOString().slice(0, 10); }
 
 export default function ChecklistsPage() {
   const router = useRouter();

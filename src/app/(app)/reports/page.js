@@ -7,6 +7,7 @@ import PageHeader from '@/components/PageHeader';
 import Avatar from '@/components/Avatar';
 import { formatCurrency } from '@/lib/format';
 import { getProfileNames } from '@/app/_actions/names';
+import { ymd } from '@/lib/date';
 import {
   ChevronLeft, ChevronRight, TrendingUp, TrendingDown, Calendar,
   Users, DollarSign, MessageCircle, Clock, FileText, Package,
@@ -18,7 +19,6 @@ function monthStart(year, month) {
 function monthEnd(year, month) {
   return new Date(year, month + 1, 1, 0, 0, 0, 0);
 }
-function ymd(d) { return d.toISOString().slice(0, 10); }
 
 export default function ReportsPage() {
   const router = useRouter();

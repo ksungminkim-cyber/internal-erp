@@ -7,6 +7,7 @@ import Avatar from '@/components/Avatar';
 import BottomSheet from '@/components/BottomSheet';
 import { formatRelative, formatCurrency } from '@/lib/format';
 import { downloadCsv } from '@/lib/csvExport';
+import { ymd } from '@/lib/date';
 import Link from 'next/link';
 import { saveMemberAssignment, retireMember, unretireMember } from './actions';
 import {
@@ -156,7 +157,7 @@ export default function MembersClient({ workplaces, profiles, memberships, curre
                             {p.name || '이름 없음'}
                           </div>
                           {isMe && <span className="tag tag-accent">나</span>}
-                          {p.retired_at && <span className="tag tag-danger" style={{ fontSize: 10 }}>퇴사 {new Date(p.retired_at).toISOString().slice(0, 10)}</span>}
+                          {p.retired_at && <span className="tag tag-danger" style={{ fontSize: 10 }}>퇴사 {ymd(new Date(p.retired_at))}</span>}
                           {(p.is_super_admin || p.is_executive) && !p.retired_at && <span className="tag tag-accent"><Crown size={10} /> 전체관리</span>}
                           {p.can_close_books && !p.is_super_admin && !p.is_executive && !p.retired_at && <span className="tag tag-mint">마감권한</span>}
                         </div>

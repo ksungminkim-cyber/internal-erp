@@ -3,8 +3,10 @@ import { createClient } from '@/lib/supabase/server';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import HomeClient from './HomeClient';
+import { kstDateKey } from '@/lib/date';
 
-function todayKey() { return new Date().toISOString().slice(0, 10); }
+// 서버(UTC 런타임)에서 한국시간 기준 '오늘'
+function todayKey() { return kstDateKey(); }
 
 export default async function HomePage() {
   const supabase = await createClient();

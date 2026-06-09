@@ -8,10 +8,10 @@ import BottomSheet from '@/components/BottomSheet';
 import { formatCurrency } from '@/lib/format';
 import { downloadCsv } from '@/lib/csvExport';
 import { safeMutate } from '@/lib/safeMutate';
+import { ymd } from '@/lib/date';
 import { ChevronLeft, ChevronRight, TrendingUp, Plus, X, Info, Calendar, CreditCard, Banknote, Download } from 'lucide-react';
 
 function addDays(d, n) { const x = new Date(d); x.setDate(x.getDate() + n); return x; }
-function ymd(d) { return d.toISOString().slice(0, 10); }
 
 export default function SalesPage() {
   const router = useRouter();
@@ -260,7 +260,7 @@ export default function SalesPage() {
 
 function SalesEditor({ row, supabase, userId, workplaceId, onClose, onSaved }) {
   const isEdit = !!row?.id;
-  const [date, setDate] = useState(row?.sales_date ?? new Date().toISOString().slice(0, 10));
+  const [date, setDate] = useState(row?.sales_date ?? ymd());
   const [total, setTotal] = useState(row?.total_amount ?? '');
   const [card, setCard] = useState(row?.card_amount ?? '');
   const [cash, setCash] = useState(row?.cash_amount ?? '');
