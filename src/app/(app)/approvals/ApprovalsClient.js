@@ -8,7 +8,7 @@ import Avatar from '@/components/Avatar';
 import { formatRelative, formatCurrency } from '@/lib/format';
 import { downloadCsv, fmtDate } from '@/lib/csvExport';
 import { getApprovals } from './actions';
-import { Plus, Inbox, Download, Search, X } from 'lucide-react';
+import { Plus, Inbox, Download, Search, X, Building2 } from 'lucide-react';
 
 const STATUS_META = {
   pending:   { label: '진행중', tag: 'tag-warning' },
@@ -26,10 +26,16 @@ const TABS = [
 const STATUS_FILTERS = [
   { key: 'all', label: '전체' },
   { key: 'pending', label: '진행중' },
+  { key: 'overdue', label: '지연' },
   { key: 'approved', label: '승인' },
   { key: 'rejected', label: '반려' },
   { key: 'cancelled', label: '취소' },
 ];
+
+function daysSince(iso) {
+  if (!iso) return 0;
+  return Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
+}
 
 const DOC_TYPES = [
   { key: 'all', label: '전체 종류' },
@@ -42,12 +48,13 @@ const DOC_TYPES = [
 const DOC_TYPE_LABEL = { expense: '지출', schedule: '시프트', kpi: 'KPI', closing: '월마감' };
 
 export default function ApprovalsClient({ initialItems, ssrWorkplaceId, userId }) {
-  const { user, currentWorkplaceId, supabase } = useApp();
+  const { user, profile, memberships, currentWorkplaceId, supabase } = useApp();
   const [tab, setTab] = useState('inbox');
   const [statusFilter, setStatusFilter] = useState('all');
   const [docType, setDocType] = useState('all');
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState(''); // 디바운스된 검색어
+  const [allWp, setAllWp] = useState(false); // 전 매장 통합 뷰
   const [items, setItems] = useState(initialItems ?? []);
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -55,6 +62,9 @@ export default function ApprovalsClient({ initialItems, ssrWorkplaceId, userId }
   const [dateTo, setDateTo] = useState('');
 
   const uid = user?.id ?? userId;
+  // 본사/대표/super_admin만 전 매장 통합 조회 가능
+  const canAllWp = profile?.is_super_admin === true || profile?.is_executive === true
+    || (memberships ?? []).some((m) => m.workplaces?.name === '본사');
 
   const load = useCallback(async () => {
     if (!currentWorkplaceId || !uid) return;
@@ -68,6 +78,7 @@ export default function ApprovalsClient({ initialItems, ssrWorkplaceId, userId }
         from: dateFrom || undefined,
         to: dateTo || undefined,
         search: search || undefined,
+        allWorkplaces: allWp && canAllWp,
       });
       setItems(list ?? []);
       setSummary(sum ?? null);
@@ -77,17 +88,17 @@ export default function ApprovalsClient({ initialItems, ssrWorkplaceId, userId }
     } finally {
       setLoading(false);
     }
-  }, [currentWorkplaceId, uid, tab, statusFilter, docType, dateFrom, dateTo, search]);
+  }, [currentWorkplaceId, uid, tab, statusFilter, docType, dateFrom, dateTo, search, allWp, canAllWp]);
 
   // 초기 SSR 데이터는 inbox·무필터 → 조건 동일하면 첫 호출 생략
   const initialSkipped = useRef(false);
   useEffect(() => {
     if (!initialSkipped.current) {
       initialSkipped.current = true;
-      if (tab === 'inbox' && statusFilter === 'all' && docType === 'all' && !dateFrom && !dateTo && !search && currentWorkplaceId === ssrWorkplaceId) return;
+      if (tab === 'inbox' && statusFilter === 'all' && docType === 'all' && !dateFrom && !dateTo && !search && !allWp && currentWorkplaceId === ssrWorkplaceId) return;
     }
     load();
-  }, [load, tab, statusFilter, docType, dateFrom, dateTo, search, currentWorkplaceId, ssrWorkplaceId]);
+  }, [load, tab, statusFilter, docType, dateFrom, dateTo, search, allWp, currentWorkplaceId, ssrWorkplaceId]);
 
   // 검색어 디바운스 (350ms) — 키 입력마다 서버 호출 방지
   useEffect(() => {
@@ -114,6 +125,7 @@ export default function ApprovalsClient({ initialItems, ssrWorkplaceId, userId }
       `approvals_${tab}_${statusFilter}.csv`,
       [
         { key: 'submitted_at', label: '기안일', format: (v) => fmtDate(v) },
+        { key: 'workplace_name', label: '매장' },
         { key: 'drafter_name', label: '기안자' },
         { key: 'doc_type', label: '종류', format: (v) => DOC_TYPE_LABEL[v] || v },
         { key: 'title', label: '제목' },
@@ -124,6 +136,7 @@ export default function ApprovalsClient({ initialItems, ssrWorkplaceId, userId }
       ],
       items.map((r) => ({
         ...r,
+        workplace_name: r.workplace?.name ?? '',
         drafter_name: r.drafter?.name ?? '',
         step_total: r.approval_steps?.length ?? 0,
       }))
@@ -149,27 +162,43 @@ export default function ApprovalsClient({ initialItems, ssrWorkplaceId, userId }
               </button>
             ))}
           </div>
-          <button onClick={exportCsv} className="btn btn-soft btn-sm" disabled={!items.length}>
-            <Download size={14} /> CSV
-          </button>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            {canAllWp && (
+              <button
+                type="button"
+                onClick={() => setAllWp((v) => !v)}
+                className={`btn btn-sm ${allWp ? 'btn-primary' : 'btn-soft'}`}
+                title="모든 매장의 결재를 한 화면에서 봅니다"
+              >
+                <Building2 size={14} /> 전 매장
+              </button>
+            )}
+            <button onClick={exportCsv} className="btn btn-soft btn-sm" disabled={!items.length}>
+              <Download size={14} /> CSV
+            </button>
+          </div>
         </div>
 
         {/* 상태 필터 칩 */}
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-          {STATUS_FILTERS.map((s) => (
-            <button
-              key={s.key}
-              type="button"
-              onClick={() => setStatusFilter(s.key)}
-              className={`tag ${statusFilter === s.key ? 'tag-accent' : ''}`}
-              style={{ cursor: 'pointer', fontWeight: statusFilter === s.key ? 700 : 500 }}
-            >
-              {s.label}
-              {summary && s.key !== 'all' && summary.byStatus[s.key] > 0 && (
-                <span style={{ marginLeft: 4, opacity: 0.7 }}>{summary.byStatus[s.key]}</span>
-              )}
-            </button>
-          ))}
+          {STATUS_FILTERS.map((s) => {
+            const cnt = s.key === 'overdue' ? summary?.overdue : summary?.byStatus?.[s.key];
+            const isOverdue = s.key === 'overdue';
+            return (
+              <button
+                key={s.key}
+                type="button"
+                onClick={() => setStatusFilter(s.key)}
+                className={`tag ${statusFilter === s.key ? (isOverdue ? 'tag-danger' : 'tag-accent') : ''}`}
+                style={{ cursor: 'pointer', fontWeight: statusFilter === s.key ? 700 : 500, color: isOverdue && statusFilter !== s.key && cnt > 0 ? 'var(--danger)' : undefined }}
+              >
+                {s.label}
+                {summary && s.key !== 'all' && cnt > 0 && (
+                  <span style={{ marginLeft: 4, opacity: 0.75 }}>{cnt}</span>
+                )}
+              </button>
+            );
+          })}
         </div>
 
         {/* 검색 + 종류 + 기간 */}
@@ -208,6 +237,9 @@ export default function ApprovalsClient({ initialItems, ssrWorkplaceId, userId }
               반려 <strong style={{ color: 'var(--danger)' }}>{summary.byStatus.rejected}</strong> ·
               취소 {summary.byStatus.cancelled}
             </span>
+            {summary.overdue > 0 && (
+              <span className="tag tag-danger" style={{ fontSize: 11 }}>지연 {summary.overdue}건</span>
+            )}
             {summary.approvedAmount > 0 && (
               <span style={{ marginLeft: 'auto', fontSize: 12 }} className="text-muted">
                 승인 합계 <strong className="num" style={{ color: 'var(--accent)', fontSize: 14 }}>{formatCurrency(summary.approvedAmount)}</strong>원
@@ -246,14 +278,20 @@ export default function ApprovalsClient({ initialItems, ssrWorkplaceId, userId }
                         <div className="h4" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text)' }}>
                           {r.title}
                         </div>
-                        <div className="text-muted" style={{ fontSize: 12, marginTop: 2, display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <div className="text-muted" style={{ fontSize: 12, marginTop: 2, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                          {allWp && r.workplace?.name && <span className="tag tag-accent" style={{ fontSize: 10 }}>{r.workplace.name}</span>}
                           {r.doc_type && r.doc_type !== 'expense' && <span className="tag" style={{ fontSize: 10 }}>{DOC_TYPE_LABEL[r.doc_type] || r.doc_type}</span>}
                           {r.drafter?.name || '—'} · {formatRelative(r.submitted_at)}
                         </div>
                       </div>
                       <div style={{ textAlign: 'right' }}>
                         <span className={`tag ${meta.tag}`}>{meta.label}</span>
-                        {stepText && (
+                        {r.overdue && (
+                          <div style={{ marginTop: 4 }}>
+                            <span className="tag tag-danger" style={{ fontSize: 10 }}>지연 {daysSince(r.submitted_at)}일</span>
+                          </div>
+                        )}
+                        {stepText && !r.overdue && (
                           <div className="text-muted" style={{ fontSize: 10, marginTop: 4, fontWeight: 600 }}>
                             {stepText}
                           </div>

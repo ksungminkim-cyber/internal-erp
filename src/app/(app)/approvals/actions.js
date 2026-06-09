@@ -16,11 +16,14 @@ function getServiceClient() {
  * 상태/종류/검색/기간/스코프 필터를 서버에서 적용하고 요약까지 반환.
  * 클라이언트 RLS로 과거 결재가 누락되던 문제 해결.
  */
-export async function getApprovals({ workplaceId, scope = 'all', status = 'all', docType = 'all', from, to, search } = {}) {
+// 진행중인데 N일 이상 결재 안 된 건 = '지연(장기 미결)'
+const OVERDUE_DAYS = 3;
+
+export async function getApprovals({ workplaceId, scope = 'all', status = 'all', docType = 'all', from, to, search, allWorkplaces = false } = {}) {
   const authClient = await createServerClient();
   const { data: { user } } = await authClient.auth.getUser();
   if (!user) return { items: [], summary: emptySummary(), error: '로그인이 필요합니다.' };
-  if (!workplaceId) return { items: [], summary: emptySummary() };
+  if (!workplaceId && !allWorkplaces) return { items: [], summary: emptySummary() };
 
   const svc = getServiceClient();
 
@@ -30,19 +33,28 @@ export async function getApprovals({ workplaceId, scope = 'all', status = 'all',
     svc.from('memberships').select('workplace_id, workplaces(name)').eq('user_id', user.id).eq('active', true),
   ]);
   const isHQ = (mems ?? []).some((m) => m.workplaces?.name === '본사');
+  const isAdmin = isHQ || prof?.is_super_admin === true || prof?.is_executive === true;
   const isMemberHere = (mems ?? []).some((m) => m.workplace_id === workplaceId);
-  if (!(isMemberHere || isHQ || prof?.is_super_admin === true || prof?.is_executive === true)) {
+  // 전 매장 통합 뷰는 본사/super_admin/임원만
+  const crossWp = allWorkplaces && isAdmin;
+  if (!crossWp && !(isMemberHere || isAdmin)) {
     return { items: [], summary: emptySummary(), error: '조회 권한이 없습니다.' };
   }
+
+  const overdueThreshold = new Date(Date.now() - OVERDUE_DAYS * 86400000).toISOString();
 
   let q = svc
     .from('approval_requests')
     .select('id, title, status, total_amount, current_step, submitted_at, drafter_id, doc_type, workplace_id')
-    .eq('workplace_id', workplaceId)
     .order('submitted_at', { ascending: false })
-    .limit(500);
+    .limit(crossWp ? 1000 : 500);
+  if (!crossWp) q = q.eq('workplace_id', workplaceId);
   if (scope === 'mine') q = q.eq('drafter_id', user.id);
-  if (status && status !== 'all') q = q.eq('status', status);
+  if (status === 'overdue') {
+    q = q.eq('status', 'pending').lte('submitted_at', overdueThreshold);
+  } else if (status && status !== 'all') {
+    q = q.eq('status', status);
+  }
   if (docType && docType !== 'all') q = q.eq('doc_type', docType);
   if (from) q = q.gte('submitted_at', from);
   if (to) {
@@ -74,9 +86,19 @@ export async function getApprovals({ workplaceId, scope = 'all', status = 'all',
     drafterMap = new Map((profs ?? []).map((p) => [p.user_id, p.name]));
   }
 
+  // 매장명 (전 매장 통합 뷰에서 어느 매장 결재인지 표시)
+  const wpIds = [...new Set(rows.map((r) => r.workplace_id).filter(Boolean))];
+  let wpMap = new Map();
+  if (wpIds.length > 0) {
+    const { data: wps } = await svc.from('workplaces').select('id, name').in('id', wpIds);
+    wpMap = new Map((wps ?? []).map((w) => [w.id, w.name]));
+  }
+
   let items = rows.map((r) => ({
     ...r,
     drafter: { name: drafterMap.get(r.drafter_id) ?? null },
+    workplace: { name: wpMap.get(r.workplace_id) ?? null },
+    overdue: r.status === 'pending' && r.submitted_at != null && r.submitted_at <= overdueThreshold,
     approval_steps: stepsByReq.get(r.id) ?? [],
   }));
 
@@ -93,18 +115,20 @@ export async function getApprovals({ workplaceId, scope = 'all', status = 'all',
   for (const r of items) {
     summary.count += 1;
     if (summary.byStatus[r.status] != null) summary.byStatus[r.status] += 1;
+    if (r.overdue) summary.overdue += 1;
     const amt = Number(r.total_amount) || 0;
     summary.totalAmount += amt;
     if (r.status === 'approved') summary.approvedAmount += amt;
   }
 
-  return { items, summary };
+  return { items, summary, crossWorkplace: crossWp };
 }
 
 function emptySummary() {
   return {
     count: 0,
     byStatus: { pending: 0, approved: 0, rejected: 0, cancelled: 0 },
+    overdue: 0,
     totalAmount: 0,
     approvedAmount: 0,
   };
