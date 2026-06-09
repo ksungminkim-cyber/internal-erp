@@ -8,6 +8,7 @@ import PageHeader from '@/components/PageHeader';
 import Avatar from '@/components/Avatar';
 import { formatDateTime, formatCurrency } from '@/lib/format';
 import { safeMutate } from '@/lib/safeMutate';
+import { getApprovalDetail } from '../actions';
 import { CheckCircle2, XCircle, Clock, ChevronLeft, Paperclip, Download, Sparkles, Printer } from 'lucide-react';
 
 const STATUS_META = {
@@ -34,38 +35,36 @@ export default function ApprovalDetailPage({ params }) {
   const [steps, setSteps] = useState([]);
   const [attachments, setAttachments] = useState([]);
   const [shifts, setShifts] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [forbidden, setForbidden] = useState(false);
   const [comment, setComment] = useState('');
   const [acting, setActing] = useState(false);
   const [error, setError] = useState(null);
 
+  // 서버 액션(서비스 롤)으로 조회 — 클라이언트 RLS가 기안자 본인 문서까지
+  // 가려 "존재하지 않는 문서"로 뜨던 문제 해결
   const load = useCallback(async () => {
-    const [{ data: r }, { data: it }, { data: st }, { data: att }, { data: sh }] = await Promise.all([
-      supabase
-        .from('approval_requests')
-        .select('*, drafter:profiles!approval_requests_drafter_id_fkey(name, phone)')
-        .eq('id', id)
-        .maybeSingle(),
-      supabase.from('expense_items').select('*').eq('request_id', id).order('created_at'),
-      supabase
-        .from('approval_steps')
-        .select('*, approver:profiles!approval_steps_approver_id_fkey(name)')
-        .eq('request_id', id)
-        .order('step_order'),
-      supabase.from('approval_attachments').select('*').eq('request_id', id).order('uploaded_at'),
-      supabase
-        .from('shifts')
-        .select('*, user:profiles!shifts_user_id_fkey(name)')
-        .eq('approval_request_id', id)
-        .order('start_at'),
-    ]);
-    setReq(r);
-    setItems(it ?? []);
-    setSteps(st ?? []);
-    setAttachments(att ?? []);
-    setShifts(sh ?? []);
-    setLoading(false);
-  }, [supabase, id]);
+    try {
+      const res = await getApprovalDetail(id);
+      if (res?.forbidden) {
+        setForbidden(true);
+        setReq(null);
+      } else if (res?.notFound || res?.error || !res?.request) {
+        setReq(null);
+      } else {
+        setReq(res.request);
+        setItems(res.items ?? []);
+        setSteps(res.steps ?? []);
+        setAttachments(res.attachments ?? []);
+        setShifts(res.shifts ?? []);
+        setForbidden(false);
+      }
+    } catch {
+      setReq(null);
+    } finally {
+      setLoading(false);
+    }
+  }, [id]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -148,7 +147,13 @@ export default function ApprovalDetailPage({ params }) {
       <main className="section">
         <div className="card empty">
           <div className="empty-icon"><Sparkles size={28} /></div>
-          <div className="empty-title">존재하지 않는 문서</div>
+          <div className="empty-title">{forbidden ? '열람 권한이 없는 문서' : '존재하지 않는 문서'}</div>
+          <div className="empty-desc">
+            {forbidden ? '이 결재를 볼 수 있는 권한이 없습니다.' : '삭제되었거나 잘못된 링크일 수 있어요.'}
+          </div>
+          <button onClick={() => router.push('/approvals')} className="btn btn-soft btn-sm" style={{ marginTop: 12 }}>
+            <ChevronLeft size={14} /> 결재함으로
+          </button>
         </div>
       </main>
     );

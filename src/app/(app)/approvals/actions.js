@@ -12,6 +12,67 @@ function getServiceClient() {
 }
 
 /**
+ * 결재 상세 조회 — 서비스 롤로 RLS 우회 (기안자가 자기 문서를 못 읽어
+ * "존재하지 않는 문서"로 뜨던 문제 해결). 권한 검증 후 반환.
+ */
+export async function getApprovalDetail(id) {
+  const authClient = await createServerClient();
+  const { data: { user } } = await authClient.auth.getUser();
+  if (!user) return { error: '로그인이 필요합니다.' };
+  if (!id) return { notFound: true };
+
+  const svc = getServiceClient();
+
+  const [
+    { data: request },
+    { data: items },
+    { data: steps },
+    { data: attachments },
+    { data: shifts },
+  ] = await Promise.all([
+    svc.from('approval_requests')
+      .select('*, drafter:profiles!approval_requests_drafter_id_fkey(name, phone)')
+      .eq('id', id)
+      .maybeSingle(),
+    svc.from('expense_items').select('*').eq('request_id', id).order('created_at'),
+    svc.from('approval_steps')
+      .select('*, approver:profiles!approval_steps_approver_id_fkey(name)')
+      .eq('request_id', id)
+      .order('step_order'),
+    svc.from('approval_attachments').select('*').eq('request_id', id).order('uploaded_at'),
+    svc.from('shifts')
+      .select('*, user:profiles!shifts_user_id_fkey(name)')
+      .eq('approval_request_id', id)
+      .order('start_at'),
+  ]);
+
+  if (!request) return { notFound: true };
+
+  // 권한: 기안자 / 결재자 / 해당 매장 매니저·대표 / 본사 / super_admin·임원
+  const approverIds = (steps ?? []).map((s) => s.approver_id);
+  let allowed = request.drafter_id === user.id || approverIds.includes(user.id);
+  if (!allowed) {
+    const [{ data: prof }, { data: mems }] = await Promise.all([
+      svc.from('profiles').select('is_super_admin, is_executive').eq('user_id', user.id).maybeSingle(),
+      svc.from('memberships').select('role, workplace_id, workplaces(name)').eq('user_id', user.id).eq('active', true),
+    ]);
+    const isHQ = (mems ?? []).some((m) => m.workplaces?.name === '본사');
+    const isMgrHere = !!request.workplace_id
+      && (mems ?? []).some((m) => m.workplace_id === request.workplace_id && (m.role === 'manager' || m.role === 'owner'));
+    allowed = prof?.is_super_admin === true || prof?.is_executive === true || isHQ || isMgrHere;
+  }
+  if (!allowed) return { forbidden: true };
+
+  return {
+    request,
+    items: items ?? [],
+    steps: steps ?? [],
+    attachments: attachments ?? [],
+    shifts: shifts ?? [],
+  };
+}
+
+/**
  * 결재자 후보 조회 — 현재 매장 매니저/대표 + 본사 active 멤버 전원
  * 서비스 롤로 조회해 RLS(본사 직원 프로필 가림) 우회.
  */
