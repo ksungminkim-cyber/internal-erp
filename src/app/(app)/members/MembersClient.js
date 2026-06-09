@@ -41,8 +41,11 @@ export default function MembersClient({ workplaces, profiles, memberships, curre
     activeByUser.get(m.user_id).push(m);
   });
 
-  const unassigned = profiles.filter((p) => !(activeByUser.get(p.user_id)?.length));
-  const assigned   = profiles.filter((p) =>   activeByUser.get(p.user_id)?.length);
+  // 퇴사자는 별도 분리 — 배정 대기/현재 멤버에 섞이지 않게
+  const retired    = profiles.filter((p) => p.retired_at);
+  const activeProfiles = profiles.filter((p) => !p.retired_at);
+  const unassigned = activeProfiles.filter((p) => !(activeByUser.get(p.user_id)?.length));
+  const assigned   = activeProfiles.filter((p) =>   activeByUser.get(p.user_id)?.length);
 
   function exportCsv() {
     const rows = assigned.map((p) => {
@@ -205,8 +208,11 @@ export default function MembersClient({ workplaces, profiles, memberships, curre
                                   onClick={async () => {
                                     setMenuOpenId(null);
                                     if (!confirm('퇴사 처리를 해제할까요?')) return;
-                                    await unretireMember(p.user_id);
-                                    router.refresh();
+                                    try {
+                                      const res = await unretireMember(p.user_id);
+                                      if (res?.error) { alert(res.error); return; }
+                                      router.refresh();
+                                    } catch (e) { alert(String(e?.message || e)); }
                                   }}
                                   style={menuItemStyle}
                                 >
@@ -219,8 +225,11 @@ export default function MembersClient({ workplaces, profiles, memberships, curre
                                     setMenuOpenId(null);
                                     const reason = prompt(`${p.name || '직원'}님을 퇴사 처리합니다.\n사유 (선택):`);
                                     if (reason === null) return; // cancel
-                                    await retireMember(p.user_id, reason || null);
-                                    router.refresh();
+                                    try {
+                                      const res = await retireMember(p.user_id, reason || null);
+                                      if (res?.error) { alert(res.error); return; }
+                                      router.refresh();
+                                    } catch (e) { alert(String(e?.message || e)); }
                                   }}
                                   style={menuItemStyle}
                                 >
@@ -254,6 +263,43 @@ export default function MembersClient({ workplaces, profiles, memberships, curre
             </div>
           )}
         </section>
+
+        {/* 퇴사한 직원 */}
+        {retired.length > 0 && (
+          <section className="stack stack-3">
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+              <h2 className="h3">퇴사한 직원</h2>
+              <span className="text-muted" style={{ fontSize: 12 }}>{retired.length}명</span>
+            </div>
+            <div className="stack stack-2">
+              {retired.map((p) => (
+                <div key={p.user_id} className="card compact" style={{ display: 'flex', alignItems: 'center', gap: 12, opacity: 0.7 }}>
+                  <Avatar name={p.name} userId={p.user_id} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div className="h4" style={{ textDecoration: 'line-through' }}>{p.name || '이름 없음'}</div>
+                    <div className="text-muted" style={{ fontSize: 12, marginTop: 2 }}>
+                      퇴사 {ymd(new Date(p.retired_at))}{p.retired_reason ? ` · ${p.retired_reason}` : ''}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className="btn btn-soft btn-sm"
+                    onClick={async () => {
+                      if (!confirm(`${p.name || '직원'}님의 퇴사 처리를 해제(복직)할까요?`)) return;
+                      try {
+                        const res = await unretireMember(p.user_id);
+                        if (res?.error) { alert(res.error); return; }
+                        router.refresh();
+                      } catch (e) { alert(String(e?.message || e)); }
+                    }}
+                  >
+                    <UserCheck size={14} color="var(--success)" /> 복직
+                  </button>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
 
         <section className="card" style={{ background: 'var(--surface-soft)', boxShadow: 'none' }}>
           <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>

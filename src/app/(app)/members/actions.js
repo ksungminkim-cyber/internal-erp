@@ -157,7 +157,7 @@ export async function saveMemberAssignment({ userId, userName, userPhone, hourly
 export async function retireMember(userId, reason) {
   const authClient = await createServerClient();
   const { data: { user } } = await authClient.auth.getUser();
-  if (!user) throw new Error('로그인이 필요합니다.');
+  if (!user) return { ok: false, error: '로그인이 필요합니다.' };
 
   const { data: myProfile } = await authClient
     .from('profiles')
@@ -177,7 +177,7 @@ export async function retireMember(userId, reason) {
     (myMem ?? []).some((m) => m.role === 'owner') ||
     (myMem ?? []).some((m) => m.workplaces?.name === '본사');
 
-  if (!canManage) throw new Error('접근 권한이 없습니다.');
+  if (!canManage) return { ok: false, error: '접근 권한이 없습니다.' };
 
   const svc = getServiceClient();
   const { error } = await svc
@@ -188,7 +188,8 @@ export async function retireMember(userId, reason) {
       updated_at: new Date().toISOString(),
     })
     .eq('user_id', userId);
-  if (error) throw new Error('퇴사 처리 실패: ' + error.message);
+  if (error) return { ok: false, error: '퇴사 처리 실패: ' + error.message };
+  return { ok: true };
 }
 
 /**
@@ -197,7 +198,7 @@ export async function retireMember(userId, reason) {
 export async function unretireMember(userId) {
   const authClient = await createServerClient();
   const { data: { user } } = await authClient.auth.getUser();
-  if (!user) throw new Error('로그인이 필요합니다.');
+  if (!user) return { ok: false, error: '로그인이 필요합니다.' };
 
   const { data: myProfile } = await authClient
     .from('profiles')
@@ -217,7 +218,7 @@ export async function unretireMember(userId) {
     (myMem ?? []).some((m) => m.role === 'owner') ||
     (myMem ?? []).some((m) => m.workplaces?.name === '본사');
 
-  if (!canManage) throw new Error('접근 권한이 없습니다.');
+  if (!canManage) return { ok: false, error: '접근 권한이 없습니다.' };
 
   const svc = getServiceClient();
   const { error } = await svc
@@ -228,5 +229,6 @@ export async function unretireMember(userId) {
       updated_at: new Date().toISOString(),
     })
     .eq('user_id', userId);
-  if (error) throw new Error('복직 처리 실패: ' + error.message);
+  if (error) return { ok: false, error: '복직 처리 실패: ' + error.message };
+  return { ok: true };
 }
