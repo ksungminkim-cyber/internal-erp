@@ -18,8 +18,10 @@ function getServiceClient() {
 export async function recordAttendance(workplaceId, eventType) {
   const authClient = await createServerClient();
   const { data: { user } } = await authClient.auth.getUser();
-  if (!user) throw new Error('로그인이 필요합니다.');
-  if (!workplaceId) throw new Error('사업장이 선택되지 않았습니다.');
+  // 에러는 throw 대신 return — Next.js 운영 빌드가 throw 메시지를 가려
+  // "An error occurred…"로 표시되던 문제 방지
+  if (!user) return { ok: false, error: '로그인이 필요합니다.' };
+  if (!workplaceId) return { ok: false, error: '사업장이 선택되지 않았습니다.' };
 
   const svc = getServiceClient();
 
@@ -31,7 +33,7 @@ export async function recordAttendance(workplaceId, eventType) {
     .eq('workplace_id', workplaceId)
     .eq('active', true)
     .maybeSingle();
-  if (!mem) throw new Error('이 매장의 정식 직원이 아니어서 출퇴근 기록을 남길 수 없습니다.');
+  if (!mem) return { ok: false, error: '이 매장의 정식 직원이 아니어서 출퇴근 기록을 남길 수 없습니다.' };
 
   const { error } = await svc.from('attendance_logs').insert({
     user_id: user.id,
@@ -42,12 +44,12 @@ export async function recordAttendance(workplaceId, eventType) {
   if (error) {
     const msg = String(error.message || '');
     if (msg.includes('sales_date')) {
-      throw new Error('서버 설정 오류(마감잠금 트리거). 관리자에게 _HOTFIX SQL 실행을 요청하세요.');
+      return { ok: false, error: '서버 설정 오류(마감잠금 트리거). 관리자에게 문의하세요.' };
     }
-    if (msg.includes('마감 잠금')) {
-      throw new Error('마감된 월에는 출퇴근 기록을 추가할 수 없습니다.');
+    if (msg.includes('마감 잠금') || msg.includes('locked')) {
+      return { ok: false, error: '마감된 월에는 출퇴근 기록을 추가할 수 없습니다.' };
     }
-    throw new Error(msg);
+    return { ok: false, error: msg || '기록 중 오류가 발생했습니다.' };
   }
   return { ok: true };
 }

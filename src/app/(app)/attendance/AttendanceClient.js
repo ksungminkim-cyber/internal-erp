@@ -131,7 +131,8 @@ export default function AttendanceClient({
     setActionLoading(eventType);
     setError(null);
     try {
-      await recordAttendance(currentWorkplaceId, eventType);
+      const res = await recordAttendance(currentWorkplaceId, eventType);
+      if (res?.error) { setError(res.error); return; }
       await loadData();
     } catch (err) {
       setError(String(err?.message || err));

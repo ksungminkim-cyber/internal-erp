@@ -200,10 +200,12 @@ function HandoverComposer({ supabase, userId, workplaceId, onClose, onSaved }) {
     if (!content.trim()) return setError('내용을 입력해주세요.');
     setSaving(true);
     try {
-      await createHandoverNote({ workplaceId, shiftType, content, flags });
+      const res = await createHandoverNote({ workplaceId, shiftType, content, flags });
+      if (res?.error) { setError(res.error); return; }
       onSaved();
     } catch (err) {
       setError(String(err?.message || err));
+    } finally {
       setSaving(false);
     }
   }

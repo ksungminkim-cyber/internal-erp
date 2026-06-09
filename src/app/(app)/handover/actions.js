@@ -49,7 +49,7 @@ export async function getHandoverNotes(workplaceId) {
 export async function toggleHandoverResolved(noteId, resolved) {
   const authClient = await createServerClient();
   const { data: { user } } = await authClient.auth.getUser();
-  if (!user) throw new Error('로그인이 필요합니다.');
+  if (!user) return { ok: false, error: '로그인이 필요합니다.' };
 
   const svc = getServiceClient();
   const { error } = await svc
@@ -60,7 +60,7 @@ export async function toggleHandoverResolved(noteId, resolved) {
       resolved_at: resolved ? new Date().toISOString() : null,
     })
     .eq('id', noteId);
-  if (error) throw new Error(error.message);
+  if (error) return { ok: false, error: error.message };
   return { ok: true };
 }
 
@@ -70,8 +70,8 @@ export async function toggleHandoverResolved(noteId, resolved) {
 export async function createHandoverNote({ workplaceId, shiftType, content, flags }) {
   const authClient = await createServerClient();
   const { data: { user } } = await authClient.auth.getUser();
-  if (!user) throw new Error('로그인이 필요합니다.');
-  if (!content?.trim()) throw new Error('내용을 입력해주세요.');
+  if (!user) return { ok: false, error: '로그인이 필요합니다.' };
+  if (!content?.trim()) return { ok: false, error: '내용을 입력해주세요.' };
 
   const svc = getServiceClient();
   const { error } = await svc.from('handover_notes').insert({
@@ -82,6 +82,6 @@ export async function createHandoverNote({ workplaceId, shiftType, content, flag
     content: content.trim(),
     flags: flags ?? [],
   });
-  if (error) throw new Error(error.message);
+  if (error) return { ok: false, error: error.message };
   return { ok: true };
 }
