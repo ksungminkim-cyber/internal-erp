@@ -7,7 +7,8 @@ import PageHeader from '@/components/PageHeader';
 import Avatar from '@/components/Avatar';
 import { formatRelative, formatCurrency } from '@/lib/format';
 import { downloadCsv, fmtDate } from '@/lib/csvExport';
-import { Plus, Inbox, Download } from 'lucide-react';
+import { getApprovals } from './actions';
+import { Plus, Inbox, Download, Search, X } from 'lucide-react';
 
 const STATUS_META = {
   pending:   { label: '진행중', tag: 'tag-warning' },
@@ -22,10 +23,33 @@ const TABS = [
   { key: 'all', label: '전체' },
 ];
 
+const STATUS_FILTERS = [
+  { key: 'all', label: '전체' },
+  { key: 'pending', label: '진행중' },
+  { key: 'approved', label: '승인' },
+  { key: 'rejected', label: '반려' },
+  { key: 'cancelled', label: '취소' },
+];
+
+const DOC_TYPES = [
+  { key: 'all', label: '전체 종류' },
+  { key: 'expense', label: '지출결의' },
+  { key: 'schedule', label: '시프트' },
+  { key: 'kpi', label: 'KPI' },
+  { key: 'closing', label: '월마감' },
+];
+
+const DOC_TYPE_LABEL = { expense: '지출', schedule: '시프트', kpi: 'KPI', closing: '월마감' };
+
 export default function ApprovalsClient({ initialItems, ssrWorkplaceId, userId }) {
   const { user, currentWorkplaceId, supabase } = useApp();
   const [tab, setTab] = useState('inbox');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [docType, setDocType] = useState('all');
+  const [searchInput, setSearchInput] = useState('');
+  const [search, setSearch] = useState(''); // 디바운스된 검색어
   const [items, setItems] = useState(initialItems ?? []);
+  const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(false);
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
@@ -34,74 +58,44 @@ export default function ApprovalsClient({ initialItems, ssrWorkplaceId, userId }
 
   const load = useCallback(async () => {
     if (!currentWorkplaceId || !uid) return;
-
-    // 1) 결재 본문 (profiles JOIN 없이 — RLS 충돌 회피)
-    let q1 = supabase
-      .from('approval_requests')
-      .select('id, title, status, total_amount, current_step, submitted_at, drafter_id, doc_type, workplace_id')
-      .eq('workplace_id', currentWorkplaceId)
-      .order('submitted_at', { ascending: false })
-      .limit(200);
-    if (tab === 'mine') q1 = q1.eq('drafter_id', uid);
-    if (dateFrom) q1 = q1.gte('submitted_at', dateFrom);
-    if (dateTo) {
-      const endDate = new Date(dateTo);
-      endDate.setHours(23, 59, 59, 999);
-      q1 = q1.lte('submitted_at', endDate.toISOString());
+    setLoading(true);
+    try {
+      const { items: list, summary: sum } = await getApprovals({
+        workplaceId: currentWorkplaceId,
+        scope: tab,
+        status: statusFilter,
+        docType,
+        from: dateFrom || undefined,
+        to: dateTo || undefined,
+        search: search || undefined,
+      });
+      setItems(list ?? []);
+      setSummary(sum ?? null);
+    } catch {
+      setItems([]);
+      setSummary(null);
+    } finally {
+      setLoading(false);
     }
-    const { data: reqs, error } = await q1;
-    if (error) { console.error(error); setItems([]); setLoading(false); return; }
+  }, [currentWorkplaceId, uid, tab, statusFilter, docType, dateFrom, dateTo, search]);
 
-    // 2) 결재 단계
-    const requestIds = (reqs ?? []).map((r) => r.id);
-    const { data: steps } = requestIds.length > 0
-      ? await supabase.from('approval_steps').select('id, request_id, step_order, approver_id, status').in('request_id', requestIds)
-      : { data: [] };
-    const stepsByReq = new Map();
-    (steps ?? []).forEach((s) => {
-      if (!stepsByReq.has(s.request_id)) stepsByReq.set(s.request_id, []);
-      stepsByReq.get(s.request_id).push(s);
-    });
-
-    // 3) drafter 이름 별도 조회
-    const drafterIds = [...new Set((reqs ?? []).map((r) => r.drafter_id).filter(Boolean))];
-    let drafterMap = new Map();
-    if (drafterIds.length > 0) {
-      const { data: profs } = await supabase.from('profiles').select('user_id, name').in('user_id', drafterIds);
-      drafterMap = new Map((profs ?? []).map((p) => [p.user_id, p.name]));
-    }
-
-    const enriched = (reqs ?? []).map((r) => ({
-      ...r,
-      drafter: { name: drafterMap.get(r.drafter_id) ?? null },
-      approval_steps: stepsByReq.get(r.id) ?? [],
-    }));
-
-    let list = enriched;
-    if (tab === 'inbox') {
-      list = list.filter(
-        (r) =>
-          r.status === 'pending' &&
-          r.approval_steps?.some(
-            (s) => s.step_order === r.current_step && s.approver_id === uid && s.status === 'waiting'
-          )
-      );
-    }
-    setItems(list);
-    setLoading(false);
-  }, [supabase, currentWorkplaceId, uid, tab, dateFrom, dateTo]);
-
-  // 초기 SSR 데이터는 inbox 탭이고 필터 없음 — 변경되면 재로드
+  // 초기 SSR 데이터는 inbox·무필터 → 조건 동일하면 첫 호출 생략
   const initialSkipped = useRef(false);
   useEffect(() => {
     if (!initialSkipped.current) {
       initialSkipped.current = true;
-      // SSR 조건과 동일하면 첫 호출 생략 (inbox, no date, same workplace)
-      if (tab === 'inbox' && !dateFrom && !dateTo && currentWorkplaceId === ssrWorkplaceId) return;
+      if (tab === 'inbox' && statusFilter === 'all' && docType === 'all' && !dateFrom && !dateTo && !search && currentWorkplaceId === ssrWorkplaceId) return;
     }
     load();
-  }, [load, tab, dateFrom, dateTo, currentWorkplaceId, ssrWorkplaceId]);
+  }, [load, tab, statusFilter, docType, dateFrom, dateTo, search, currentWorkplaceId, ssrWorkplaceId]);
 
+  // 검색어 디바운스 (350ms) — 키 입력마다 서버 호출 방지
+  useEffect(() => {
+    const t = setTimeout(() => setSearch(searchInput.trim()), 350);
+    return () => clearTimeout(t);
+  }, [searchInput]);
+
+  // Realtime — 결재/단계 변경 시 목록 자동 갱신
   useEffect(() => {
     if (!currentWorkplaceId) return;
     const channel = supabase
@@ -117,10 +111,11 @@ export default function ApprovalsClient({ initialItems, ssrWorkplaceId, userId }
 
   function exportCsv() {
     downloadCsv(
-      `approvals_${tab}.csv`,
+      `approvals_${tab}_${statusFilter}.csv`,
       [
         { key: 'submitted_at', label: '기안일', format: (v) => fmtDate(v) },
         { key: 'drafter_name', label: '기안자' },
+        { key: 'doc_type', label: '종류', format: (v) => DOC_TYPE_LABEL[v] || v },
         { key: 'title', label: '제목' },
         { key: 'total_amount', label: '금액' },
         { key: 'status', label: '상태', format: (v) => STATUS_META[v]?.label || v },
@@ -135,11 +130,13 @@ export default function ApprovalsClient({ initialItems, ssrWorkplaceId, userId }
     );
   }
 
+  const hasFilter = statusFilter !== 'all' || docType !== 'all' || dateFrom || dateTo || searchInput;
+
   return (
     <>
       <PageHeader title="전자결재" subtitle="지출결의서 · 시프트 · KPI 등 사내 결재" />
 
-      <main className="fade-in page-main" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <main className="fade-in page-main" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
           <div className="segment">
             {TABS.map((t) => (
@@ -157,43 +154,79 @@ export default function ApprovalsClient({ initialItems, ssrWorkplaceId, userId }
           </button>
         </div>
 
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', fontSize: 12 }}>
-          <span className="text-muted" style={{ fontWeight: 600 }}>기간</span>
-          <input
-            type="date"
-            value={dateFrom}
-            onChange={(e) => setDateFrom(e.target.value)}
-            className="input"
-            style={{ width: 'auto', padding: '8px 10px', fontSize: 13 }}
-          />
-          <span className="text-muted">~</span>
-          <input
-            type="date"
-            value={dateTo}
-            onChange={(e) => setDateTo(e.target.value)}
-            className="input"
-            style={{ width: 'auto', padding: '8px 10px', fontSize: 13 }}
-          />
-          {(dateFrom || dateTo) && (
+        {/* 상태 필터 칩 */}
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          {STATUS_FILTERS.map((s) => (
             <button
+              key={s.key}
               type="button"
-              className="btn btn-ghost btn-xs"
-              onClick={() => { setDateFrom(''); setDateTo(''); }}
+              onClick={() => setStatusFilter(s.key)}
+              className={`tag ${statusFilter === s.key ? 'tag-accent' : ''}`}
+              style={{ cursor: 'pointer', fontWeight: statusFilter === s.key ? 700 : 500 }}
             >
-              초기화
+              {s.label}
+              {summary && s.key !== 'all' && summary.byStatus[s.key] > 0 && (
+                <span style={{ marginLeft: 4, opacity: 0.7 }}>{summary.byStatus[s.key]}</span>
+              )}
+            </button>
+          ))}
+        </div>
+
+        {/* 검색 + 종류 + 기간 */}
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', fontSize: 12 }}>
+          <div style={{ position: 'relative', flex: '1 1 180px', minWidth: 160 }}>
+            <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+            <input
+              type="text"
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              placeholder="제목 검색"
+              className="input"
+              style={{ width: '100%', padding: '8px 10px 8px 30px', fontSize: 13 }}
+            />
+          </div>
+          <select className="input" value={docType} onChange={(e) => setDocType(e.target.value)} style={{ width: 'auto', padding: '8px 10px', fontSize: 13 }}>
+            {DOC_TYPES.map((d) => <option key={d.key} value={d.key}>{d.label}</option>)}
+          </select>
+          <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="input" style={{ width: 'auto', padding: '8px 10px', fontSize: 13 }} />
+          <span className="text-muted">~</span>
+          <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="input" style={{ width: 'auto', padding: '8px 10px', fontSize: 13 }} />
+          {hasFilter && (
+            <button type="button" className="btn btn-ghost btn-xs" onClick={() => { setStatusFilter('all'); setDocType('all'); setDateFrom(''); setDateTo(''); setSearchInput(''); setSearch(''); }}>
+              <X size={12} /> 초기화
             </button>
           )}
         </div>
 
-        {items.length === 0 ? (
+        {/* 요약 바 */}
+        {summary && summary.count > 0 && (
+          <div className="card compact" style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'baseline', padding: '12px 14px' }}>
+            <span style={{ fontSize: 13, fontWeight: 700 }}>총 {summary.count}건</span>
+            <span className="text-muted" style={{ fontSize: 12 }}>
+              승인 <strong style={{ color: 'var(--success)' }}>{summary.byStatus.approved}</strong> ·
+              진행 <strong style={{ color: 'var(--warning)' }}>{summary.byStatus.pending}</strong> ·
+              반려 <strong style={{ color: 'var(--danger)' }}>{summary.byStatus.rejected}</strong> ·
+              취소 {summary.byStatus.cancelled}
+            </span>
+            {summary.approvedAmount > 0 && (
+              <span style={{ marginLeft: 'auto', fontSize: 12 }} className="text-muted">
+                승인 합계 <strong className="num" style={{ color: 'var(--accent)', fontSize: 14 }}>{formatCurrency(summary.approvedAmount)}</strong>원
+              </span>
+            )}
+          </div>
+        )}
+
+        {loading ? (
+          <div className="skeleton" style={{ height: 180 }} />
+        ) : items.length === 0 ? (
           <div className="card">
             <div className="empty">
               <div className="empty-icon"><Inbox size={26} /></div>
               <div className="empty-title">
-                {tab === 'inbox' ? '결재 대기 없음' : tab === 'mine' ? '기안한 문서 없음' : '문서 없음'}
+                {tab === 'inbox' ? '결재 대기 없음' : hasFilter ? '조건에 맞는 문서 없음' : tab === 'mine' ? '기안한 문서 없음' : '문서 없음'}
               </div>
               <div className="empty-desc">
-                {tab === 'mine' ? '+ 버튼으로 새 기안을 작성해보세요' : '여기에 표시될 문서가 없어요'}
+                {tab === 'mine' ? '+ 버튼으로 새 기안을 작성해보세요' : hasFilter ? '필터를 바꾸거나 초기화해보세요' : '여기에 표시될 문서가 없어요'}
               </div>
             </div>
           </div>
@@ -213,7 +246,8 @@ export default function ApprovalsClient({ initialItems, ssrWorkplaceId, userId }
                         <div className="h4" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text)' }}>
                           {r.title}
                         </div>
-                        <div className="text-muted" style={{ fontSize: 12, marginTop: 2 }}>
+                        <div className="text-muted" style={{ fontSize: 12, marginTop: 2, display: 'flex', alignItems: 'center', gap: 6 }}>
+                          {r.doc_type && r.doc_type !== 'expense' && <span className="tag" style={{ fontSize: 10 }}>{DOC_TYPE_LABEL[r.doc_type] || r.doc_type}</span>}
                           {r.drafter?.name || '—'} · {formatRelative(r.submitted_at)}
                         </div>
                       </div>
@@ -226,7 +260,7 @@ export default function ApprovalsClient({ initialItems, ssrWorkplaceId, userId }
                         )}
                       </div>
                     </div>
-                    {r.total_amount != null && (
+                    {r.total_amount != null && r.total_amount > 0 && (
                       <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px dashed var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
                         <span className="text-muted" style={{ fontSize: 12, fontWeight: 600 }}>합계</span>
                         <span className="num" style={{ fontSize: 18, fontWeight: 800, color: 'var(--accent)' }}>

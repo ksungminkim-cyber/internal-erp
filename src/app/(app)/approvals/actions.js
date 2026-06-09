@@ -12,6 +12,105 @@ function getServiceClient() {
 }
 
 /**
+ * 결재 목록 조회 (감사용) — 서비스롤 + 매장 멤버십 검증.
+ * 상태/종류/검색/기간/스코프 필터를 서버에서 적용하고 요약까지 반환.
+ * 클라이언트 RLS로 과거 결재가 누락되던 문제 해결.
+ */
+export async function getApprovals({ workplaceId, scope = 'all', status = 'all', docType = 'all', from, to, search } = {}) {
+  const authClient = await createServerClient();
+  const { data: { user } } = await authClient.auth.getUser();
+  if (!user) return { items: [], summary: emptySummary(), error: '로그인이 필요합니다.' };
+  if (!workplaceId) return { items: [], summary: emptySummary() };
+
+  const svc = getServiceClient();
+
+  // 권한: 해당 매장 active 멤버 또는 본사/super_admin·임원만 목록 조회
+  const [{ data: prof }, { data: mems }] = await Promise.all([
+    svc.from('profiles').select('is_super_admin, is_executive').eq('user_id', user.id).maybeSingle(),
+    svc.from('memberships').select('workplace_id, workplaces(name)').eq('user_id', user.id).eq('active', true),
+  ]);
+  const isHQ = (mems ?? []).some((m) => m.workplaces?.name === '본사');
+  const isMemberHere = (mems ?? []).some((m) => m.workplace_id === workplaceId);
+  if (!(isMemberHere || isHQ || prof?.is_super_admin === true || prof?.is_executive === true)) {
+    return { items: [], summary: emptySummary(), error: '조회 권한이 없습니다.' };
+  }
+
+  let q = svc
+    .from('approval_requests')
+    .select('id, title, status, total_amount, current_step, submitted_at, drafter_id, doc_type, workplace_id')
+    .eq('workplace_id', workplaceId)
+    .order('submitted_at', { ascending: false })
+    .limit(500);
+  if (scope === 'mine') q = q.eq('drafter_id', user.id);
+  if (status && status !== 'all') q = q.eq('status', status);
+  if (docType && docType !== 'all') q = q.eq('doc_type', docType);
+  if (from) q = q.gte('submitted_at', from);
+  if (to) {
+    const end = new Date(to);
+    end.setHours(23, 59, 59, 999);
+    q = q.lte('submitted_at', end.toISOString());
+  }
+  if (search && search.trim()) q = q.ilike('title', `%${search.trim()}%`);
+
+  const { data: reqs } = await q;
+  const rows = reqs ?? [];
+
+  // 단계 (진행단계 표시 + inbox 필터용)
+  const requestIds = rows.map((r) => r.id);
+  const { data: steps } = requestIds.length > 0
+    ? await svc.from('approval_steps').select('id, request_id, step_order, approver_id, status').in('request_id', requestIds)
+    : { data: [] };
+  const stepsByReq = new Map();
+  (steps ?? []).forEach((s) => {
+    if (!stepsByReq.has(s.request_id)) stepsByReq.set(s.request_id, []);
+    stepsByReq.get(s.request_id).push(s);
+  });
+
+  // 기안자 이름
+  const drafterIds = [...new Set(rows.map((r) => r.drafter_id).filter(Boolean))];
+  let drafterMap = new Map();
+  if (drafterIds.length > 0) {
+    const { data: profs } = await svc.from('profiles').select('user_id, name').in('user_id', drafterIds);
+    drafterMap = new Map((profs ?? []).map((p) => [p.user_id, p.name]));
+  }
+
+  let items = rows.map((r) => ({
+    ...r,
+    drafter: { name: drafterMap.get(r.drafter_id) ?? null },
+    approval_steps: stepsByReq.get(r.id) ?? [],
+  }));
+
+  // inbox: 내가 현재 단계 승인 대기
+  if (scope === 'inbox') {
+    items = items.filter(
+      (r) => r.status === 'pending' &&
+        r.approval_steps.some((s) => s.step_order === r.current_step && s.approver_id === user.id && s.status === 'waiting')
+    );
+  }
+
+  // 요약 (필터 적용된 집합 기준)
+  const summary = emptySummary();
+  for (const r of items) {
+    summary.count += 1;
+    if (summary.byStatus[r.status] != null) summary.byStatus[r.status] += 1;
+    const amt = Number(r.total_amount) || 0;
+    summary.totalAmount += amt;
+    if (r.status === 'approved') summary.approvedAmount += amt;
+  }
+
+  return { items, summary };
+}
+
+function emptySummary() {
+  return {
+    count: 0,
+    byStatus: { pending: 0, approved: 0, rejected: 0, cancelled: 0 },
+    totalAmount: 0,
+    approvedAmount: 0,
+  };
+}
+
+/**
  * 결재 상세 조회 — 서비스 롤로 RLS 우회 (기안자가 자기 문서를 못 읽어
  * "존재하지 않는 문서"로 뜨던 문제 해결). 권한 검증 후 반환.
  */
