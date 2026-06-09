@@ -33,6 +33,7 @@ const HQ_ROLES = [
 export default function MembersClient({ workplaces, profiles, memberships, currentUserId, isExecutive = false }) {
   const router = useRouter();
   const [editing, setEditing] = useState(null);
+  const [retiring, setRetiring] = useState(null); // 퇴사 처리 대상 프로필
   const [menuOpenId, setMenuOpenId] = useState(null);
 
   const activeByUser = new Map();
@@ -221,16 +222,7 @@ export default function MembersClient({ workplaces, profiles, memberships, curre
                               ) : (
                                 <button
                                   type="button"
-                                  onClick={async () => {
-                                    setMenuOpenId(null);
-                                    const reason = prompt(`${p.name || '직원'}님을 퇴사 처리합니다.\n사유 (선택):`);
-                                    if (reason === null) return; // cancel
-                                    try {
-                                      const res = await retireMember(p.user_id, reason || null);
-                                      if (res?.error) { alert(res.error); return; }
-                                      router.refresh();
-                                    } catch (e) { alert(String(e?.message || e)); }
-                                  }}
+                                  onClick={() => { setMenuOpenId(null); setRetiring(p); }}
                                   style={menuItemStyle}
                                 >
                                   <UserMinus size={14} color="var(--danger)" /> 퇴사 처리
@@ -326,6 +318,14 @@ export default function MembersClient({ workplaces, profiles, memberships, curre
           onSaved={() => { setEditing(null); router.refresh(); }}
         />
       )}
+
+      {retiring && (
+        <RetireDialog
+          profile={retiring}
+          onClose={() => setRetiring(null)}
+          onSaved={() => { setRetiring(null); router.refresh(); }}
+        />
+      )}
     </>
   );
 }
@@ -337,6 +337,59 @@ const menuItemStyle = {
   fontSize: 13, fontWeight: 600, textAlign: 'left',
   borderRadius: 8,
 };
+
+function RetireDialog({ profile, onClose, onSaved }) {
+  const [retiredAt, setRetiredAt] = useState(ymd()); // 기본: 오늘
+  const [reason, setReason] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState(null);
+
+  async function submit() {
+    if (!retiredAt) return setError('퇴사일을 선택해주세요.');
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await retireMember(profile.user_id, { reason: reason.trim() || null, retiredAt });
+      if (res?.error) { setError(res.error); return; }
+      onSaved();
+    } catch (e) {
+      setError(String(e?.message || e));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <BottomSheet onClose={onClose}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+        <h2 className="h3">퇴사 처리</h2>
+        <button onClick={onClose} className="btn btn-ghost btn-icon"><X size={18} /></button>
+      </div>
+      <p className="text-muted" style={{ fontSize: 12, marginBottom: 16 }}>
+        <strong style={{ color: 'var(--text)' }}>{profile.name || '직원'}</strong> 님을 퇴사 처리합니다. 배정된 사업장에서 자동으로 빠지고, 시프트·결재 대상에서 제외됩니다.
+      </p>
+
+      <label className="label">퇴사일</label>
+      <input className="input" type="date" value={retiredAt} onChange={(e) => setRetiredAt(e.target.value)} />
+
+      <label className="label" style={{ marginTop: 12 }}>사유 (선택)</label>
+      <input className="input" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="예: 자발적 퇴사, 계약 만료" />
+
+      {error && (
+        <div style={{ marginTop: 12, padding: 10, background: 'var(--danger-soft)', color: 'var(--danger)', borderRadius: 10, fontSize: 13 }}>
+          {error}
+        </div>
+      )}
+
+      <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
+        <button type="button" className="btn btn-outline" onClick={onClose} style={{ flex: 1 }}>취소</button>
+        <button type="button" className="btn btn-danger" onClick={submit} disabled={saving} style={{ flex: 2 }}>
+          {saving ? '처리 중...' : '퇴사 처리'}
+        </button>
+      </div>
+    </BottomSheet>
+  );
+}
 
 function AssignDialog({ profile, mode, workplaces, currentMemberships, onClose, onSaved }) {
   const [state, setState] = useState(() => {

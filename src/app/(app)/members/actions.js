@@ -154,7 +154,9 @@ export async function saveMemberAssignment({ userId, userName, userPhone, hourly
  * - profiles.retired_at, retired_reason 설정
  * - DB 트리거가 자동으로 memberships.active = false 처리
  */
-export async function retireMember(userId, reason) {
+export async function retireMember(userId, opts = {}) {
+  // 하위호환: 두 번째 인자가 문자열이면 reason 으로 간주
+  const { reason = null, retiredAt = null } = typeof opts === 'string' ? { reason: opts } : opts;
   const authClient = await createServerClient();
   const { data: { user } } = await authClient.auth.getUser();
   if (!user) return { ok: false, error: '로그인이 필요합니다.' };
@@ -179,11 +181,19 @@ export async function retireMember(userId, reason) {
 
   if (!canManage) return { ok: false, error: '접근 권한이 없습니다.' };
 
+  // 퇴사일 — 'YYYY-MM-DD'(KST 자정) 또는 ISO 허용, 없으면 현재시각
+  let retiredIso = new Date().toISOString();
+  if (retiredAt) {
+    const raw = /^\d{4}-\d{2}-\d{2}$/.test(retiredAt) ? `${retiredAt}T00:00:00+09:00` : retiredAt;
+    const d = new Date(raw);
+    if (!isNaN(d.getTime())) retiredIso = d.toISOString();
+  }
+
   const svc = getServiceClient();
   const { error } = await svc
     .from('profiles')
     .update({
-      retired_at: new Date().toISOString(),
+      retired_at: retiredIso,
       retired_reason: reason ?? null,
       updated_at: new Date().toISOString(),
     })
