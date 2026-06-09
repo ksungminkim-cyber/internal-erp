@@ -31,7 +31,7 @@ export async function getApprovalDetail(id) {
     { data: shifts },
   ] = await Promise.all([
     svc.from('approval_requests')
-      .select('*, drafter:profiles!approval_requests_drafter_id_fkey(name, phone)')
+      .select('*, drafter:profiles!approval_requests_drafter_id_fkey(name, phone), workplaces(name)')
       .eq('id', id)
       .maybeSingle(),
     svc.from('expense_items').select('*').eq('request_id', id).order('created_at'),

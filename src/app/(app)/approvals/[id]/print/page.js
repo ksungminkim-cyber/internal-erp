@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, use } from 'react';
 import { useRouter } from 'next/navigation';
 import { useApp } from '@/context/AppContext';
 import { formatCurrency } from '@/lib/format';
+import { getApprovalDetail } from '../../actions';
 import { Printer, ChevronLeft } from 'lucide-react';
 
 function ymd(iso) {
@@ -31,35 +32,33 @@ const STEP_STATUS_LABEL = {
 export default function PrintApprovalPage({ params }) {
   const { id } = use(params);
   const router = useRouter();
-  const { supabase, currentWorkplace } = useApp();
+  const { currentWorkplace } = useApp();
 
   const [req, setReq] = useState(null);
   const [items, setItems] = useState([]);
   const [steps, setSteps] = useState([]);
   const [attachments, setAttachments] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
 
+  // 서버액션(서비스롤)으로 조회 — 클라이언트 RLS가 기안자 본인 문서까지 가려
+  // 출력 페이지가 "존재하지 않는 문서"로 뜨던 문제 해결
   const load = useCallback(async () => {
-    const [{ data: r }, { data: it }, { data: st }, { data: att }] = await Promise.all([
-      supabase
-        .from('approval_requests')
-        .select('*, drafter:profiles!approval_requests_drafter_id_fkey(name, phone), workplaces(name)')
-        .eq('id', id)
-        .maybeSingle(),
-      supabase.from('expense_items').select('*').eq('request_id', id).order('created_at'),
-      supabase
-        .from('approval_steps')
-        .select('*, approver:profiles!approval_steps_approver_id_fkey(name)')
-        .eq('request_id', id)
-        .order('step_order'),
-      supabase.from('approval_attachments').select('*').eq('request_id', id).order('uploaded_at'),
-    ]);
-    setReq(r);
-    setItems(it ?? []);
-    setSteps(st ?? []);
-    setAttachments(att ?? []);
-    setLoading(false);
-  }, [supabase, id]);
+    try {
+      const res = await getApprovalDetail(id);
+      if (res?.request) {
+        setReq(res.request);
+        setItems(res.items ?? []);
+        setSteps(res.steps ?? []);
+        setAttachments(res.attachments ?? []);
+      } else {
+        setReq(null);
+      }
+    } catch {
+      setReq(null);
+    } finally {
+      setLoading(false);
+    }
+  }, [id]);
 
   useEffect(() => { load(); }, [load]);
 
