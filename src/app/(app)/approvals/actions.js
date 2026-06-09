@@ -73,6 +73,71 @@ export async function getApprovalDetail(id) {
 }
 
 /**
+ * 결재 단계 승인/반려 — 서비스 롤 + 권한검증 (본인 차례의 대기 단계만)
+ * 클라이언트 RLS write 실패 방지.
+ */
+export async function decideApprovalStep({ stepId, decision, comment }) {
+  const authClient = await createServerClient();
+  const { data: { user } } = await authClient.auth.getUser();
+  if (!user) return { error: '로그인이 필요합니다.' };
+  if (!stepId || !['approved', 'rejected'].includes(decision)) return { error: '잘못된 요청입니다.' };
+
+  const svc = getServiceClient();
+  const { data: step } = await svc
+    .from('approval_steps')
+    .select('id, request_id, approver_id, status, step_order')
+    .eq('id', stepId)
+    .maybeSingle();
+  if (!step) return { error: '결재 단계를 찾을 수 없습니다.' };
+  if (step.approver_id !== user.id) return { error: '본인 결재 차례가 아닙니다.' };
+  if (step.status !== 'waiting') return { error: '이미 처리된 단계입니다.' };
+
+  const { data: reqRow } = await svc
+    .from('approval_requests')
+    .select('id, status, current_step')
+    .eq('id', step.request_id)
+    .maybeSingle();
+  if (!reqRow || reqRow.status !== 'pending') return { error: '이미 종료된 결재입니다.' };
+  if (reqRow.current_step != null && step.step_order !== reqRow.current_step) {
+    return { error: '아직 이 단계의 차례가 아닙니다.' };
+  }
+
+  const { error } = await svc
+    .from('approval_steps')
+    .update({ status: decision, comment: (comment || '').trim() || null })
+    .eq('id', stepId);
+  if (error) return { error: error.message };
+  return { ok: true };
+}
+
+/**
+ * 기안 취소 — 서비스 롤 + 권한검증 (기안자 본인 · 진행중 only)
+ */
+export async function cancelApprovalRequest({ requestId }) {
+  const authClient = await createServerClient();
+  const { data: { user } } = await authClient.auth.getUser();
+  if (!user) return { error: '로그인이 필요합니다.' };
+  if (!requestId) return { error: '결재 ID가 누락되었습니다.' };
+
+  const svc = getServiceClient();
+  const { data: reqRow } = await svc
+    .from('approval_requests')
+    .select('id, drafter_id, status')
+    .eq('id', requestId)
+    .maybeSingle();
+  if (!reqRow) return { error: '결재를 찾을 수 없습니다.' };
+  if (reqRow.drafter_id !== user.id) return { error: '기안자만 취소할 수 있습니다.' };
+  if (reqRow.status !== 'pending') return { error: '진행 중인 결재만 취소할 수 있습니다.' };
+
+  const { error } = await svc
+    .from('approval_requests')
+    .update({ status: 'cancelled', decided_at: new Date().toISOString() })
+    .eq('id', requestId);
+  if (error) return { error: error.message };
+  return { ok: true };
+}
+
+/**
  * 결재자 후보 조회 — 현재 매장 매니저/대표 + 본사 active 멤버 전원
  * 서비스 롤로 조회해 RLS(본사 직원 프로필 가림) 우회.
  */

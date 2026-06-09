@@ -7,8 +7,7 @@ import { useApp } from '@/context/AppContext';
 import PageHeader from '@/components/PageHeader';
 import Avatar from '@/components/Avatar';
 import { formatDateTime, formatCurrency } from '@/lib/format';
-import { safeMutate } from '@/lib/safeMutate';
-import { getApprovalDetail } from '../actions';
+import { getApprovalDetail, decideApprovalStep, cancelApprovalRequest } from '../actions';
 import { CheckCircle2, XCircle, Clock, ChevronLeft, Paperclip, Download, Sparkles, Printer } from 'lucide-react';
 
 const STATUS_META = {
@@ -87,12 +86,10 @@ export default function ApprovalDetailPage({ params }) {
     setActing(true);
     setError(null);
     try {
-      const { error } = await safeMutate(supabase
-        .from('approval_steps')
-        .update({ status: decision, comment: comment.trim() || null })
-        .eq('id', stepId));
-      if (error) setError(error.message);
-      else setComment('');
+      const res = await decideApprovalStep({ stepId, decision, comment });
+      if (res?.error) { setError(res.error); return; }
+      setComment('');
+      await load();
     } catch (e) {
       setError(String(e?.message || e));
     } finally {
@@ -104,11 +101,9 @@ export default function ApprovalDetailPage({ params }) {
     if (!confirm('이 기안을 취소하시겠습니까?')) return;
     setActing(true);
     try {
-      const { error } = await safeMutate(supabase
-        .from('approval_requests')
-        .update({ status: 'cancelled', decided_at: new Date().toISOString() })
-        .eq('id', id));
-      if (error) setError(error.message);
+      const res = await cancelApprovalRequest({ requestId: id });
+      if (res?.error) { setError(res.error); return; }
+      await load();
     } catch (e) {
       setError(String(e?.message || e));
     } finally {
