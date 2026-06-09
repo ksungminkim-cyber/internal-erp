@@ -7,6 +7,7 @@ import Avatar from '@/components/Avatar';
 import BottomSheet from '@/components/BottomSheet';
 import { formatRelative } from '@/lib/format';
 import { safeMutate } from '@/lib/safeMutate';
+import { getProfileNames } from '@/app/_actions/names';
 import { Plus, Pin, Megaphone, X, MoreVertical, Edit3, Trash2 } from 'lucide-react';
 
 export default function AnnouncementsPage() {
@@ -30,12 +31,9 @@ export default function AnnouncementsPage() {
       supabase.from('announcement_reads').select('announcement_id').eq('user_id', user.id),
     ]);
     const authorIds = [...new Set((anns ?? []).map((a) => a.author_id).filter(Boolean))];
-    let authorMap = new Map();
-    if (authorIds.length > 0) {
-      const { data: profs } = await supabase.from('profiles').select('user_id, name').in('user_id', authorIds);
-      authorMap = new Map((profs ?? []).map((p) => [p.user_id, p.name]));
-    }
-    setItems((anns ?? []).map((a) => ({ ...a, author: { name: authorMap.get(a.author_id) ?? null } })));
+    // 서비스롤 서버액션으로 이름 매핑 — 타 매장/본사 작성자도 RLS 무관하게 표시
+    const authorNames = await getProfileNames(authorIds);
+    setItems((anns ?? []).map((a) => ({ ...a, author: { name: authorNames[a.author_id] ?? null } })));
     setReadIds(new Set((reads ?? []).map((r) => r.announcement_id)));
     setLoading(false);
   }, [supabase, currentWorkplaceId, user]);

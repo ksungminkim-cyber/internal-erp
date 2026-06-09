@@ -8,6 +8,7 @@ import Avatar from '@/components/Avatar';
 import BottomSheet from '@/components/BottomSheet';
 import { formatDateTime, formatRelative } from '@/lib/format';
 import { safeMutate } from '@/lib/safeMutate';
+import { getProfileNames } from '@/app/_actions/names';
 import {
   ChevronLeft, Plus, X, MessageCircle, Phone, MessageSquare, Star,
   Users as UsersIcon, AlertCircle, CheckCircle2, Clock,
@@ -61,12 +62,9 @@ export default function ComplaintsPage() {
       .order('occurred_at', { ascending: false })
       .limit(100);
     const reporterIds = [...new Set((complaints ?? []).map((c) => c.reporter_id).filter(Boolean))];
-    let nameMap = new Map();
-    if (reporterIds.length > 0) {
-      const { data: profs } = await supabase.from('profiles').select('user_id, name').in('user_id', reporterIds);
-      nameMap = new Map((profs ?? []).map((p) => [p.user_id, p.name]));
-    }
-    setItems((complaints ?? []).map((c) => ({ ...c, reporter: { name: nameMap.get(c.reporter_id) ?? null } })));
+    // 서비스롤 서버액션으로 이름 매핑 — RLS 무관
+    const nameMap = await getProfileNames(reporterIds);
+    setItems((complaints ?? []).map((c) => ({ ...c, reporter: { name: nameMap[c.reporter_id] ?? null } })));
     setLoading(false);
   }, [supabase, currentWorkplaceId]);
 
