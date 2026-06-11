@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useApp } from '@/context/AppContext';
-import { getApproverCandidates } from '../actions';
+import { getApproverCandidates, submitApproval } from '../actions';
 import PageHeader from '@/components/PageHeader';
 import { formatCurrency } from '@/lib/format';
 import { safeMutate } from '@/lib/safeMutate';
@@ -132,58 +132,36 @@ export default function NewApprovalPage() {
 
     setSubmitting(true);
     try {
-      const { data: req, error: e1 } = await safeMutate(supabase
-        .from('approval_requests')
-        .insert({
-          workplace_id: currentWorkplaceId,
-          drafter_id: user.id,
-          doc_type: 'expense',
-          title: title.trim(),
-          body: body.trim() || null,
-          total_amount: total,
-          revision_of: revisionInfo?.id ?? null,
-          revision_count: revisionInfo?.count ?? 0,
-        })
-        .select('id')
-        .single());
-      if (e1) throw e1;
-      const requestId = req.id;
-
-      const { error: e2 } = await safeMutate(supabase.from('expense_items').insert(
-        items.map((it) => ({
-          request_id: requestId,
-          description: it.description.trim(),
-          category: it.category,
-          amount: parseFloat(it.amount) || 0,
-          vendor: it.vendor.trim() || null,
-          product_url: it.product_url?.trim() || null,
-          kind: getKindByCategory(it.category),
-        }))
-      ));
-      if (e2) throw e2;
-
-      const { error: e3 } = await safeMutate(supabase.from('approval_steps').insert(
-        approvers.map((a, i) => ({
-          request_id: requestId,
-          step_order: i + 1,
-          approver_id: a.user_id,
-          status: 'waiting',
-        }))
-      ));
-      if (e3) throw e3;
-
+      // 영수증 파일은 클라이언트에서 storage 업로드 후 경로만 서버액션에 전달
+      const uploaded = [];
       for (const f of files) {
-        const path = `${currentWorkplaceId}/${requestId}/${Date.now()}_${f.name}`;
-        // 영수증 업로드는 30초 timeout (파일 크기 고려)
+        const path = `${currentWorkplaceId}/${Date.now()}_${f.name}`;
         const { error: upErr } = await safeMutate(supabase.storage.from('receipts').upload(path, f, { contentType: f.type }), 30000);
         if (upErr) { console.warn('upload failed', upErr); continue; }
-        await safeMutate(supabase.from('approval_attachments').insert({
-          request_id: requestId, file_path: path, file_name: f.name,
-          mime_type: f.type, size_bytes: f.size, uploaded_by: user.id,
-        }));
+        uploaded.push({ path, name: f.name, type: f.type, size: f.size });
       }
 
-      router.replace(`/approvals/${requestId}`);
+      // 결재 본문·항목·결재선·첨부는 서버액션(서비스롤)으로 일괄 생성
+      const res = await submitApproval({
+        workplaceId: currentWorkplaceId,
+        title,
+        body,
+        items: items.map((it) => ({
+          description: it.description,
+          category: it.category,
+          amount: parseFloat(it.amount) || 0,
+          vendor: it.vendor,
+          product_url: it.product_url,
+          kind: getKindByCategory(it.category),
+        })),
+        approverIds: approvers.map((a) => a.user_id),
+        attachments: uploaded,
+        revisionOf: revisionInfo?.id ?? null,
+        revisionCount: revisionInfo?.count ?? 0,
+      });
+      if (res?.error && !res.requestId) { setError(res.error); return; }
+
+      router.replace(`/approvals/${res.requestId}`);
     } catch (err) {
       setError(err.message ?? '제출 실패');
     } finally {

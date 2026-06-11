@@ -3,6 +3,7 @@
 import { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { remindMyOverdueApprovals } from '@/app/(app)/approvals/actions';
+import { getMyContext } from '@/app/_actions/context';
 
 const AppContext = createContext(null);
 
@@ -21,37 +22,8 @@ export function AppProvider({ children, initialUser, initialProfile = null, init
 
   const loadProfileAndMemberships = useCallback(async (uid) => {
     if (!uid) return;
-    const [{ data: prof }, { data: mems }] = await Promise.all([
-      supabase.from('profiles').select('*').eq('user_id', uid).maybeSingle(),
-      supabase
-        .from('memberships')
-        .select('id, workplace_id, role, active, workplaces(id, name, address)')
-        .eq('user_id', uid)
-        .eq('active', true),
-    ]);
-
-    // super_admin 또는 본사 소속이면 모든 사업장을 switcher에서 접근 가능하게
-    let allMems = mems ?? [];
-    const isHQ = prof?.is_super_admin || allMems.some((m) => m.workplaces?.name === '본사');
-    if (isHQ) {
-      const { data: allWps } = await supabase
-        .from('workplaces')
-        .select('id, name, address')
-        .order('name');
-      if (allWps?.length) {
-        const realWpIds = new Set(allMems.map((m) => m.workplace_id));
-        const virtualMems = allWps
-          .filter((w) => !realWpIds.has(w.id))
-          .map((w) => ({
-            id: `virtual_${w.id}`,
-            workplace_id: w.id,
-            role: 'manager',
-            active: true,
-            workplaces: w,
-          }));
-        allMems = [...allMems, ...virtualMems];
-      }
-    }
+    // 서비스롤 서버액션으로 본인 profile+멤버십 로드 (RLS 누락 방지)
+    const { profile: prof, memberships: allMems } = await getMyContext();
 
     setProfile(prof);
     setMemberships(allMems);
@@ -62,7 +34,7 @@ export function AppProvider({ children, initialUser, initialProfile = null, init
       const validStored = allMems.find((m) => m.workplace_id === stored);
       setCurrentWorkplaceId(validStored?.workplace_id ?? allMems[0].workplace_id);
     }
-  }, [supabase]);
+  }, []);
 
   // 접속 시 1회: 장기 미결(지연) 결재 리마인드 — 하루 1회 dedup은 서버에서 처리
   useEffect(() => {

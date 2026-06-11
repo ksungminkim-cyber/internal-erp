@@ -7,8 +7,8 @@ import PageHeader from '@/components/PageHeader';
 import BottomSheet from '@/components/BottomSheet';
 import { formatCurrency } from '@/lib/format';
 import { downloadCsv } from '@/lib/csvExport';
-import { safeMutate } from '@/lib/safeMutate';
 import { ymd } from '@/lib/date';
+import { saveSales } from './actions';
 import { ChevronLeft, ChevronRight, TrendingUp, Plus, X, Info, Calendar, CreditCard, Banknote, Download } from 'lucide-react';
 
 function addDays(d, n) { const x = new Date(d); x.setDate(x.getDate() + n); return x; }
@@ -278,21 +278,17 @@ function SalesEditor({ row, supabase, userId, workplaceId, onClose, onSaved }) {
     if (!date) return setError('날짜를 입력해주세요.');
     setSaving(true);
     try {
-      const { error } = await safeMutate(supabase.from('sales_daily').upsert({
-        workplace_id: workplaceId,
-        sales_date: date,
-        total_amount: totalFinal,
-        transaction_count: Number(count) || 0,
-        cash_amount: Number(cash) || 0,
-        card_amount: Number(card) || 0,
-        other_amount: Number(other) || 0,
-        source: 'manual',
-        notes: notes.trim() || null,
-        recorded_by: userId,
-        recorded_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      }, { onConflict: 'workplace_id,sales_date' }));
-      if (error) { setError(error.message); return; }
+      const res = await saveSales({
+        workplaceId,
+        salesDate: date,
+        totalAmount: totalFinal,
+        transactionCount: count,
+        cashAmount: cash,
+        cardAmount: card,
+        otherAmount: other,
+        notes,
+      });
+      if (res?.error) { setError(res.error); return; }
       onSaved();
     } catch (e) {
       setError(String(e?.message || e));

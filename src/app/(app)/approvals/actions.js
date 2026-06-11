@@ -17,6 +17,92 @@ function getServiceClient() {
  * 상태/종류/검색/기간/스코프 필터를 서버에서 적용하고 요약까지 반환.
  * 클라이언트 RLS로 과거 결재가 누락되던 문제 해결.
  */
+/**
+ * 결재 제출 (지출결의서) — 서비스롤로 일괄 생성.
+ * 클라이언트 insert가 멈춰(로딩→유효시간 초과) 결재가 안 올라가던 문제 해결.
+ * 첨부 파일은 클라이언트가 storage 업로드 후 경로만 넘기면 여기서 행 생성.
+ */
+export async function submitApproval({ workplaceId, title, body, items = [], approverIds = [], attachments = [], revisionOf = null, revisionCount = 0 }) {
+  const authClient = await createServerClient();
+  const { data: { user } } = await authClient.auth.getUser();
+  if (!user) return { error: '로그인이 필요합니다.' };
+  if (!workplaceId) return { error: '사업장이 선택되지 않았습니다.' };
+  if (!title?.trim()) return { error: '제목을 입력해주세요.' };
+  if (!approverIds.length) return { error: '결재자를 최소 1명 지정해주세요.' };
+
+  const svc = getServiceClient();
+
+  // 권한: 해당 매장 active 멤버 또는 본사/super_admin·임원
+  const [{ data: prof }, { data: mems }] = await Promise.all([
+    svc.from('profiles').select('is_super_admin, is_executive').eq('user_id', user.id).maybeSingle(),
+    svc.from('memberships').select('workplace_id, workplaces(name)').eq('user_id', user.id).eq('active', true),
+  ]);
+  const isHQ = (mems ?? []).some((m) => m.workplaces?.name === '본사');
+  const isMemberHere = (mems ?? []).some((m) => m.workplace_id === workplaceId);
+  if (!(isMemberHere || isHQ || prof?.is_super_admin === true || prof?.is_executive === true)) {
+    return { error: '이 매장에 결재를 올릴 권한이 없습니다.' };
+  }
+
+  const total = items.reduce((sum, it) => sum + (Number(it.amount) || 0), 0);
+
+  const { data: req, error: e1 } = await svc
+    .from('approval_requests')
+    .insert({
+      workplace_id: workplaceId,
+      drafter_id: user.id,
+      doc_type: 'expense',
+      title: title.trim(),
+      body: body?.trim() || null,
+      total_amount: total,
+      revision_of: revisionOf ?? null,
+      revision_count: revisionCount ?? 0,
+    })
+    .select('id')
+    .single();
+  if (e1) return { error: e1.message };
+  const requestId = req.id;
+
+  if (items.length) {
+    const { error: e2 } = await svc.from('expense_items').insert(
+      items.map((it) => ({
+        request_id: requestId,
+        description: (it.description || '').trim(),
+        category: it.category,
+        amount: Number(it.amount) || 0,
+        vendor: it.vendor?.trim() || null,
+        product_url: it.product_url?.trim() || null,
+        kind: it.kind || 'opex',
+      }))
+    );
+    if (e2) return { error: e2.message, requestId };
+  }
+
+  const { error: e3 } = await svc.from('approval_steps').insert(
+    approverIds.map((uid, i) => ({
+      request_id: requestId,
+      step_order: i + 1,
+      approver_id: uid,
+      status: 'waiting',
+    }))
+  );
+  if (e3) return { error: e3.message, requestId };
+
+  if (attachments.length) {
+    await svc.from('approval_attachments').insert(
+      attachments.map((a) => ({
+        request_id: requestId,
+        file_path: a.path,
+        file_name: a.name,
+        mime_type: a.type || null,
+        size_bytes: a.size || null,
+        uploaded_by: user.id,
+      }))
+    );
+  }
+
+  return { ok: true, requestId };
+}
+
 // 진행중인데 N일 이상 결재 안 된 건 = '지연(장기 미결)'
 const OVERDUE_DAYS = 3;
 
