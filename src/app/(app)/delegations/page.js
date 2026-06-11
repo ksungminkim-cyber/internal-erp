@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useApp } from '@/context/AppContext';
 import PageHeader from '@/components/PageHeader';
 import { getProfileNames } from '@/app/_actions/names';
-import { safeMutate } from '@/lib/safeMutate';
+import { createDelegation, deactivateDelegation, deleteDelegation } from './actions';
 import { todayKey } from '@/lib/date';
 import { ChevronLeft, Plus, X, Trash2, UserCheck } from 'lucide-react';
 
@@ -53,8 +53,8 @@ export default function DelegationsPage() {
   async function deactivate(id) {
     if (!confirm('이 위임을 비활성화할까요?')) return;
     try {
-      const { error } = await safeMutate(supabase.from('approval_delegations').update({ active: false }).eq('id', id));
-      if (error) { alert(error.message); return; }
+      const res = await deactivateDelegation({ id });
+      if (res?.error) { alert(res.error); return; }
       load();
     } catch (e) {
       alert(String(e?.message || e));
@@ -64,8 +64,8 @@ export default function DelegationsPage() {
   async function removeOne(id) {
     if (!confirm('이 위임을 삭제할까요?')) return;
     try {
-      const { error } = await safeMutate(supabase.from('approval_delegations').delete().eq('id', id));
-      if (error) { alert(error.message); return; }
+      const res = await deleteDelegation({ id });
+      if (res?.error) { alert(res.error); return; }
       load();
     } catch (e) {
       alert(String(e?.message || e));
@@ -139,9 +139,7 @@ export default function DelegationsPage() {
       {composing && (
         <DelegationDialog
           coworkers={coworkers}
-          userId={user.id}
           workplaceId={currentWorkplaceId}
-          supabase={supabase}
           onClose={() => setComposing(false)}
           onSaved={() => { setComposing(false); load(); }}
         />
@@ -150,7 +148,7 @@ export default function DelegationsPage() {
   );
 }
 
-function DelegationDialog({ coworkers, userId, workplaceId, supabase, onClose, onSaved }) {
+function DelegationDialog({ coworkers, workplaceId, onClose, onSaved }) {
   const [delegateId, setDelegateId] = useState('');
   const [startAt, setStartAt] = useState(todayKey());
   const [endAt, setEndAt] = useState('');
@@ -163,15 +161,14 @@ function DelegationDialog({ coworkers, userId, workplaceId, supabase, onClose, o
     if (!delegateId) return setError('피위임자를 선택해주세요.');
     setSaving(true);
     try {
-      const { error } = await safeMutate(supabase.from('approval_delegations').insert({
-        delegator_id: userId,
-        delegate_id: delegateId,
-        workplace_id: workplaceId,
-        start_at: startAt,
-        end_at: endAt || null,
-        reason: reason || null,
-      }));
-      if (error) { setError(error.message); return; }
+      const res = await createDelegation({
+        delegateId,
+        workplaceId,
+        startAt,
+        endAt,
+        reason,
+      });
+      if (res?.error) { setError(res.error); return; }
       onSaved();
     } catch (e) {
       setError(String(e?.message || e));

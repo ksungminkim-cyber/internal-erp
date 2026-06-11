@@ -7,8 +7,8 @@ import PageHeader from '@/components/PageHeader';
 import Avatar from '@/components/Avatar';
 import BottomSheet from '@/components/BottomSheet';
 import { formatDateTime, formatRelative } from '@/lib/format';
-import { safeMutate } from '@/lib/safeMutate';
 import { getProfileNames } from '@/app/_actions/names';
+import { createComplaint, updateComplaint } from './actions';
 import {
   ChevronLeft, Plus, X, MessageCircle, Phone, MessageSquare, Star,
   Users as UsersIcon, AlertCircle, CheckCircle2, Clock,
@@ -46,7 +46,7 @@ const STATUS_META = {
 
 export default function ComplaintsPage() {
   const router = useRouter();
-  const { user, currentWorkplaceId, supabase } = useApp();
+  const { currentWorkplaceId, supabase } = useApp();
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(false);
   const [filter, setFilter] = useState('open');
@@ -192,8 +192,6 @@ export default function ComplaintsPage() {
       {editing && (
         <ComplaintEditor
           complaint={editing}
-          supabase={supabase}
-          userId={user.id}
           workplaceId={currentWorkplaceId}
           onClose={() => setEditing(null)}
           onSaved={() => { setEditing(null); load(); }}
@@ -203,7 +201,7 @@ export default function ComplaintsPage() {
   );
 }
 
-function ComplaintEditor({ complaint, supabase, userId, workplaceId, onClose, onSaved }) {
+function ComplaintEditor({ complaint, workplaceId, onClose, onSaved }) {
   const isEdit = !!complaint?.id;
   const [channel, setChannel] = useState(complaint?.channel ?? 'in_person');
   const [category, setCategory] = useState(complaint?.category ?? 'service');
@@ -220,25 +218,19 @@ function ComplaintEditor({ complaint, supabase, userId, workplaceId, onClose, on
     setError(null);
     if (!summary.trim()) return setError('내용을 입력해주세요.');
     setSaving(true);
-    const payload = {
-      workplace_id: workplaceId,
-      reporter_id: isEdit ? complaint.reporter_id : userId,
+    const fields = {
       channel, category, severity,
       customer_label: customerLabel.trim() || null,
       customer_contact: customerContact.trim() || null,
       summary: summary.trim(),
       status,
       resolution: resolution.trim() || null,
-      resolved_at: status === 'resolved' ? (complaint?.resolved_at || new Date().toISOString()) : null,
-      resolved_by: status === 'resolved' ? userId : null,
-      updated_at: new Date().toISOString(),
     };
     try {
-      const op = isEdit
-        ? supabase.from('customer_complaints').update(payload).eq('id', complaint.id)
-        : supabase.from('customer_complaints').insert(payload);
-      const { error } = await safeMutate(op);
-      if (error) { setError(error.message); return; }
+      const res = isEdit
+        ? await updateComplaint({ id: complaint.id, ...fields })
+        : await createComplaint({ workplaceId, ...fields });
+      if (res?.error) { setError(res.error); return; }
       onSaved();
     } catch (e) {
       setError(String(e?.message || e));

@@ -6,8 +6,8 @@ import PageHeader from '@/components/PageHeader';
 import Avatar from '@/components/Avatar';
 import BottomSheet from '@/components/BottomSheet';
 import { formatRelative } from '@/lib/format';
-import { safeMutate } from '@/lib/safeMutate';
 import { getProfileNames } from '@/app/_actions/names';
+import { createAnnouncement, updateAnnouncement, deleteAnnouncement as deleteAnnouncementAction, markAnnouncementRead } from './actions';
 import { Plus, Pin, Megaphone, X, MoreVertical, Edit3, Trash2 } from 'lucide-react';
 
 export default function AnnouncementsPage() {
@@ -62,15 +62,15 @@ export default function AnnouncementsPage() {
     if (readIds.has(id)) return;
     setReadIds((prev) => new Set([...prev, id]));
     try {
-      await safeMutate(supabase.from('announcement_reads').insert({ announcement_id: id, user_id: user.id }));
+      await markAnnouncementRead(id);
     } catch { /* 읽음 표시 실패는 조용히 무시 (낙관적 업데이트 유지) */ }
   }
 
   async function deleteAnnouncement(id) {
     if (!confirm('이 공지를 삭제하시겠습니까?')) return;
     try {
-      const { error } = await safeMutate(supabase.from('announcements').delete().eq('id', id));
-      if (error) alert(error.message);
+      const res = await deleteAnnouncementAction(id);
+      if (res?.error) alert(res.error);
       else load();
     } catch (e) {
       alert(String(e?.message || e));
@@ -210,8 +210,6 @@ export default function AnnouncementsPage() {
       {editing && (
         <AnnouncementEditor
           item={editing}
-          supabase={supabase}
-          userId={user.id}
           workplaceId={currentWorkplaceId}
           onClose={() => setEditing(null)}
           onSaved={() => { setEditing(null); load(); }}
@@ -221,7 +219,7 @@ export default function AnnouncementsPage() {
   );
 }
 
-function AnnouncementEditor({ item, supabase, userId, workplaceId, onClose, onSaved }) {
+function AnnouncementEditor({ item, workplaceId, onClose, onSaved }) {
   const isEdit = !!item?.id;
   const [title, setTitle] = useState(item?.title ?? '');
   const [body, setBody] = useState(item?.body ?? '');
@@ -234,21 +232,11 @@ function AnnouncementEditor({ item, supabase, userId, workplaceId, onClose, onSa
     if (!title.trim() || !body.trim()) return setError('제목과 내용을 모두 입력해주세요.');
     setSaving(true);
     try {
-      const payload = {
-        title: title.trim(),
-        body: body.trim(),
-        pinned,
-        updated_at: new Date().toISOString(),
-      };
-      const op = isEdit
-        ? supabase.from('announcements').update(payload).eq('id', item.id)
-        : supabase.from('announcements').insert({
-            ...payload,
-            workplace_id: workplaceId,
-            author_id: userId,
-          });
-      const { error } = await safeMutate(op);
-      if (error) { setError(error.message); return; }
+      const fields = { title: title.trim(), body: body.trim(), pinned };
+      const res = isEdit
+        ? await updateAnnouncement({ id: item.id, ...fields })
+        : await createAnnouncement({ workplaceId, ...fields });
+      if (res?.error) { setError(res.error); return; }
       onSaved();
     } catch (e) {
       setError(String(e?.message || e));

@@ -7,6 +7,7 @@ import PageHeader from '@/components/PageHeader';
 import Avatar from '@/components/Avatar';
 import { formatCurrency } from '@/lib/format';
 import { safeMutate } from '@/lib/safeMutate';
+import { updateMyProfile } from './actions';
 import { LogOut, Save, Building2, Crown, User as UserIcon, Shield, Wallet, KeyRound, Eye, EyeOff } from 'lucide-react';
 
 const ROLE_META = {
@@ -37,11 +38,8 @@ export default function MePage() {
     e.preventDefault();
     setSaving(true); setError(null); setInfo(null);
     try {
-    const { error } = await safeMutate(supabase
-      .from('profiles')
-      .update({ name: name.trim(), phone: phone.trim() || null, updated_at: new Date().toISOString() })
-      .eq('user_id', user.id));
-    if (error) setError(error.message);
+    const res = await updateMyProfile({ name, phone });
+    if (res?.error) setError(res.error);
     else {
       setInfo('저장되었습니다');
       refresh?.();

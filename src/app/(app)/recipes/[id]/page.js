@@ -6,7 +6,7 @@ import { useApp } from '@/context/AppContext';
 import PageHeader from '@/components/PageHeader';
 import { formatCurrency, formatRelative } from '@/lib/format';
 import { getProfileNames } from '@/app/_actions/names';
-import { safeMutate } from '@/lib/safeMutate';
+import { saveRecipe, archiveRecipe } from '../actions';
 import { ChevronLeft, Edit3, BookOpen, Plus, Trash2 } from 'lucide-react';
 
 const CATEGORY_OPTIONS = ['에스프레소', '브루잉', '라떼/베리에이션', '논커피', '디저트', '베이커리', '기타'];
@@ -73,27 +73,24 @@ export default function RecipeDetail({ params }) {
     if (validIngredients.length === 0) return setError('재료를 최소 1개 입력해주세요.');
 
     setSaving(true);
-    const payload = {
-      workplace_id: workplaceId || null,
-      name: name.trim(),
-      category,
-      serving_size: servingSize.trim() || null,
-      cost: Number(cost) || null,
-      sell_price: Number(sellPrice) || null,
-      notes: notes.trim() || null,
-      ingredients: validIngredients,
-      steps: validSteps,
-      updated_by: user.id,
-      updated_at: new Date().toISOString(),
-    };
     try {
-      const op = isNew
-        ? supabase.from('recipes').insert({ ...payload, created_by: user.id }).select('id').single()
-        : supabase.from('recipes').update(payload).eq('id', id);
-      const res = await safeMutate(op);
-      if (res.error) { setError(res.error.message); return; }
-      if (isNew && res.data?.id) {
-        router.replace(`/recipes/${res.data.id}`);
+      const res = await saveRecipe({
+        id: isNew ? null : id,
+        workplaceId: workplaceId || null,
+        payload: {
+          name: name.trim(),
+          category,
+          serving_size: servingSize.trim() || null,
+          cost: Number(cost) || null,
+          sell_price: Number(sellPrice) || null,
+          notes: notes.trim() || null,
+          ingredients: validIngredients,
+          steps: validSteps,
+        },
+      });
+      if (res?.error) { setError(res.error); return; }
+      if (isNew && res.id) {
+        router.replace(`/recipes/${res.id}`);
       } else {
         setEditing(false);
         load();
@@ -109,8 +106,8 @@ export default function RecipeDetail({ params }) {
     if (!confirm('이 레시피를 보관 처리할까요?')) return;
     setSaving(true);
     try {
-      const { error } = await safeMutate(supabase.from('recipes').update({ active: false }).eq('id', id));
-      if (error) { setError(error.message); return; }
+      const res = await archiveRecipe({ id });
+      if (res?.error) { setError(res.error); return; }
       router.replace('/recipes');
     } catch (e) {
       setError(String(e?.message || e));

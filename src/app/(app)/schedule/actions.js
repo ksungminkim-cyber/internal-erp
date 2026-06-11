@@ -2,6 +2,7 @@
 
 import { createClient as createServerClient } from '@/lib/supabase/server';
 import { createClient } from '@supabase/supabase-js';
+import { getActor, loadActorPerms, friendlyDbError } from '@/lib/server/guard';
 
 function getServiceClient() {
   return createClient(
@@ -142,5 +143,88 @@ export async function deleteShift(id) {
   const svc = getServiceClient();
   const { error } = await svc.from('shifts').delete().eq('id', id);
   if (error) throw new Error(error.message);
+  return { ok: true };
+}
+
+/**
+ * 시프트 결재 제출 — approval_requests + approval_steps insert, 시프트에 결재 ID 묶기
+ */
+export async function submitScheduleApproval({
+  workplaceId, year, month, shiftCount, shiftIds, approverIds,
+}) {
+  const user = await getActor();
+  if (!user) return { ok: false, error: '로그인이 필요합니다.' };
+  if (!Array.isArray(approverIds) || approverIds.length === 0) {
+    return { ok: false, error: '결재자를 최소 1명 지정해주세요.' };
+  }
+  const svc = getServiceClient();
+  const perms = await loadActorPerms(svc, user.id);
+  if (!perms.isManagerOf(workplaceId)) return { ok: false, error: '권한이 없습니다.' };
+
+  const { data: req, error: e1 } = await svc
+    .from('approval_requests')
+    .insert({
+      workplace_id: workplaceId,
+      drafter_id: user.id,
+      doc_type: 'schedule',
+      title: `${year}년 ${month}월 근무 스케줄`,
+      body: `${shiftCount}개 시프트`,
+      total_amount: 0,
+      period_year: year,
+      period_month: month,
+    })
+    .select('id')
+    .single();
+  if (e1) return { ok: false, error: friendlyDbError(e1) };
+  const requestId = req.id;
+
+  const { error: e2 } = await svc.from('approval_steps').insert(
+    approverIds.map((uid, i) => ({
+      request_id: requestId,
+      step_order: i + 1,
+      approver_id: uid,
+      status: 'waiting',
+    }))
+  );
+  if (e2) return { ok: false, error: friendlyDbError(e2) };
+
+  const ids = Array.isArray(shiftIds) ? shiftIds : [];
+  if (ids.length > 0) {
+    const { error: e3 } = await svc
+      .from('shifts')
+      .update({ approval_request_id: requestId })
+      .in('id', ids);
+    if (e3) return { ok: false, error: friendlyDbError(e3) };
+  }
+
+  return { ok: true, requestId };
+}
+
+/**
+ * 지난달 시프트 복사 — 새 시프트 배열 insert (created_by는 서버에서 설정)
+ */
+export async function copyPreviousShifts({ workplaceId, rows }) {
+  const user = await getActor();
+  if (!user) return { ok: false, error: '로그인이 필요합니다.' };
+  if (!Array.isArray(rows) || rows.length === 0) {
+    return { ok: false, error: '복사할 시프트를 선택해주세요.' };
+  }
+  const svc = getServiceClient();
+  const perms = await loadActorPerms(svc, user.id);
+  if (!perms.isManagerOf(workplaceId)) return { ok: false, error: '권한이 없습니다.' };
+
+  const payload = rows.map((r) => ({
+    workplace_id: workplaceId,
+    user_id: r.user_id,
+    start_at: r.start_at,
+    end_at: r.end_at,
+    role_label: r.role_label ?? null,
+    notes: r.notes ?? null,
+    status: r.status || 'scheduled',
+    created_by: user.id,
+  }));
+
+  const { error } = await svc.from('shifts').insert(payload);
+  if (error) return { ok: false, error: friendlyDbError(error) };
   return { ok: true };
 }

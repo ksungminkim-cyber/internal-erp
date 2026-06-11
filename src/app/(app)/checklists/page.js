@@ -7,8 +7,8 @@ import PageHeader from '@/components/PageHeader';
 import BottomSheet from '@/components/BottomSheet';
 import { ChevronLeft, ListTodo, Check, Plus, X, Trash2, Edit3, Sun, Moon, Repeat, Calendar } from 'lucide-react';
 import { isChecklistDueToday, frequencyLabel } from '@/lib/checklist';
-import { safeMutate } from '@/lib/safeMutate';
 import { todayKey } from '@/lib/date';
+import { saveChecklistCompletion, saveChecklistTemplate, deleteChecklistTemplate } from './actions';
 
 const TYPE_META = {
   open:    { label: '오픈',  icon: Sun,    tag: 'tag-warning' },
@@ -206,19 +206,17 @@ function ChecklistRunner({ template, completion, supabase, userId, workplaceId, 
     setSaving(true);
     const completedCount = Object.values(newItems).filter((v) => v?.checked).length;
     try {
-      const { error } = await safeMutate(supabase.from('checklist_completions').upsert({
-        template_id: template.id,
-        workplace_id: workplaceId,
-        completion_date: todayKey(),
+      const res = await saveChecklistCompletion({
+        workplaceId,
+        templateId: template.id,
+        completionDate: todayKey(),
         items: newItems,
-        completed_count: completedCount,
-        total_count: total,
-        last_updated_by: userId,
-        last_updated_at: new Date().toISOString(),
-      }, { onConflict: 'template_id,completion_date' }));
-      if (error) {
+        completedCount,
+        totalCount: total,
+      });
+      if (res?.error) {
         setItems(items); // 실패 시 롤백
-        alert(error.message);
+        alert(res.error);
         return;
       }
       onChanged?.();
@@ -345,33 +343,17 @@ function ChecklistEditor({ template, supabase, workplaceId, onClose, onSaved }) 
         day_of_week: frequency === 'weekly' ? Number(dayOfWeek) : null,
         day_of_month: frequency === 'monthly' ? Number(dayOfMonth) : null,
       };
-      let templateId = template?.id;
-      if (isEdit) {
-        const { error } = await safeMutate(supabase
-          .from('checklist_templates')
-          .update(meta)
-          .eq('id', templateId));
-        if (error) throw error;
-        const { error: eDel } = await safeMutate(supabase.from('checklist_items').delete().eq('template_id', templateId));
-        if (eDel) throw eDel;
-      } else {
-        const { data, error } = await safeMutate(supabase
-          .from('checklist_templates')
-          .insert({ workplace_id: workplaceId, ...meta })
-          .select('id')
-          .single());
-        if (error) throw error;
-        templateId = data.id;
-      }
-      const { error: e2 } = await safeMutate(supabase.from('checklist_items').insert(
-        validItems.map((it, idx) => ({
-          template_id: templateId,
+      const res = await saveChecklistTemplate({
+        workplaceId,
+        templateId: template?.id ?? null,
+        meta,
+        items: validItems.map((it, idx) => ({
           text: it.text.trim(),
           order_idx: idx,
           required: it.required ?? true,
-        }))
-      ));
-      if (e2) throw e2;
+        })),
+      });
+      if (res?.error) { setError(res.error); return; }
       onSaved();
     } catch (err) {
       setError(String(err?.message || err));
@@ -384,11 +366,8 @@ function ChecklistEditor({ template, supabase, workplaceId, onClose, onSaved }) 
     if (!confirm('이 체크리스트를 삭제하시겠습니까?')) return;
     setSaving(true);
     try {
-      const { error } = await safeMutate(supabase
-        .from('checklist_templates')
-        .update({ active: false })
-        .eq('id', template.id));
-      if (error) { setError(error.message); return; }
+      const res = await deleteChecklistTemplate({ templateId: template.id });
+      if (res?.error) { setError(res.error); return; }
       onSaved();
     } catch (e) {
       setError(String(e?.message || e));

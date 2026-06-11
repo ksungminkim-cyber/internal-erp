@@ -6,7 +6,7 @@ import { useApp } from '@/context/AppContext';
 import PageHeader from '@/components/PageHeader';
 import BottomSheet from '@/components/BottomSheet';
 import { formatRelative } from '@/lib/format';
-import { safeMutate } from '@/lib/safeMutate';
+import { closeInventoryMonth, deleteInventoryClosing, saveInventoryItem, archiveInventoryItem, recordInventoryTransaction } from './actions';
 import { ChevronLeft, Plus, X, Package, AlertTriangle, TrendingUp, TrendingDown, Edit3, Trash2, Search, Lock, ClipboardList } from 'lucide-react';
 
 const CATEGORY_OPTIONS = ['식자재', '음료/시럽', '주류', '컵·뚜껑', '비품', '청소·세제', '포장', '기타'];
@@ -235,18 +235,16 @@ function InventoryClosingDialog({ items, supabase, userId, workplaceId, onClose 
         id: i.id, name: i.name, category: i.category, unit: i.unit,
         qty: Number(i.current_qty), min_qty: Number(i.min_qty), vendor: i.vendor,
       }));
-      const { error } = await safeMutate(supabase.from('inventory_closings').upsert({
-        workplace_id: workplaceId,
+      const res = await closeInventoryMonth({
+        workplaceId,
         year, month,
-        item_count: items.length,
-        total_qty_estimate: totalQty,
-        low_stock_count: lowStockCount,
+        itemCount: items.length,
+        totalQtyEstimate: totalQty,
+        lowStockCount,
         snapshot,
-        notes: notes.trim() || null,
-        closed_by: userId,
-        closed_at: new Date().toISOString(),
-      }, { onConflict: 'workplace_id,year,month' }));
-      if (error) { setError(error.message); return; }
+        notes,
+      });
+      if (res?.error) { setError(res.error); return; }
       setNotes('');
       await load();
     } catch (e) {
@@ -259,8 +257,8 @@ function InventoryClosingDialog({ items, supabase, userId, workplaceId, onClose 
   async function deleteClosing(id) {
     if (!confirm('이 마감 기록을 삭제하시겠습니까?')) return;
     try {
-      const { error } = await safeMutate(supabase.from('inventory_closings').delete().eq('id', id));
-      if (error) { alert(error.message); return; }
+      const res = await deleteInventoryClosing({ id });
+      if (res?.error) { alert(res.error); return; }
       load();
     } catch (e) {
       alert(String(e?.message || e));
@@ -384,7 +382,6 @@ function InventoryEditor({ item, supabase, workplaceId, onClose, onSaved }) {
     if (!name.trim()) return setError('품목명을 입력해주세요.');
     setSaving(true);
     const payload = {
-      workplace_id: workplaceId,
       name: name.trim(),
       category,
       unit: unit.trim() || '개',
@@ -394,11 +391,8 @@ function InventoryEditor({ item, supabase, workplaceId, onClose, onSaved }) {
       notes: notes.trim() || null,
     };
     try {
-      const op = isEdit
-        ? supabase.from('inventory_items').update({ ...payload, updated_at: new Date().toISOString() }).eq('id', item.id)
-        : supabase.from('inventory_items').insert(payload);
-      const { error } = await safeMutate(op);
-      if (error) { setError(error.message); return; }
+      const res = await saveInventoryItem({ id: isEdit ? item.id : null, workplaceId, payload });
+      if (res?.error) { setError(res.error); return; }
       onSaved();
     } catch (e) {
       setError(String(e?.message || e));
@@ -411,11 +405,8 @@ function InventoryEditor({ item, supabase, workplaceId, onClose, onSaved }) {
     if (!confirm('이 품목을 보관 처리할까요? (목록에서 사라집니다)')) return;
     setSaving(true);
     try {
-      const { error } = await safeMutate(supabase
-        .from('inventory_items')
-        .update({ archived: true })
-        .eq('id', item.id));
-      if (error) { setError(error.message); return; }
+      const res = await archiveInventoryItem({ id: item.id });
+      if (res?.error) { setError(res.error); return; }
       onSaved();
     } catch (e) {
       setError(String(e?.message || e));
@@ -499,15 +490,14 @@ function InventoryAdjust({ item, supabase, userId, workplaceId, onClose, onSaved
     setSaving(true);
     const delta = type === 'restock' ? Math.abs(n) : -Math.abs(n);
     try {
-      const { error } = await safeMutate(supabase.from('inventory_transactions').insert({
-        item_id: item.id,
-        workplace_id: workplaceId,
-        user_id: userId,
+      const res = await recordInventoryTransaction({
+        workplaceId,
+        itemId: item.id,
         type,
-        qty_delta: delta,
-        note: note.trim() || null,
-      }));
-      if (error) { setError(error.message); return; }
+        qtyDelta: delta,
+        note,
+      });
+      if (res?.error) { setError(res.error); return; }
       onSaved();
     } catch (e) {
       setError(String(e?.message || e));

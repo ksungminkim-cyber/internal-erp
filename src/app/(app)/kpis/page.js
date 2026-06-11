@@ -8,8 +8,8 @@ import PageHeader from '@/components/PageHeader';
 import BottomSheet from '@/components/BottomSheet';
 import { formatCurrency } from '@/lib/format';
 import { getProfileNames } from '@/app/_actions/names';
-import { safeMutate } from '@/lib/safeMutate';
 import { todayKey } from '@/lib/date';
+import { saveKpi, archiveKpi, recordKpi } from './actions';
 import {
   ChevronLeft, Target, Plus, X, Send, FileText, Trash2, Edit3, TrendingUp,
 } from 'lucide-react';
@@ -240,56 +240,26 @@ function KpiEditor({ kpi, memberships, currentWorkplaceId, isSuperAdmin, userId,
   async function save() {
     setError(null);
     if (!name.trim()) return setError('지표명을 입력해주세요.');
+    if (!isEdit && approvers.length === 0) return setError('결재자를 1명 이상 지정해주세요.');
     setSaving(true);
     try {
-      let approvalId = null;
-      // 신규 등록일 경우만 결재 생성 (편집은 결재 별도)
-      if (!isEdit) {
-        if (approvers.length === 0) return setError('결재자를 1명 이상 지정해주세요.');
-        const { data: req, error: e1 } = await safeMutate(supabase
-          .from('approval_requests')
-          .insert({
-            workplace_id: workplaceId || null,
-            drafter_id: userId,
-            doc_type: 'kpi',
-            title: `[${category.toUpperCase()}] ${name.trim()}`,
-            body: description.trim() || null,
-            total_amount: Number(target) || 0,
-          })
-          .select('id')
-          .single());
-        if (e1) throw e1;
-        approvalId = req.id;
-
-        const { error: e2 } = await safeMutate(supabase.from('approval_steps').insert(
-          approvers.map((a, i) => ({
-            request_id: approvalId,
-            step_order: i + 1,
-            approver_id: a.user_id,
-            status: 'waiting',
-          }))
-        ));
-        if (e2) throw e2;
-      }
-
-      const payload = {
-        workplace_id: workplaceId || null,
-        category,
-        name: name.trim(),
-        target_value: Number(target) || null,
-        unit: unit.trim() || null,
-        period,
-        description: description.trim() || null,
-        approval_request_id: approvalId ?? kpi?.approval_request_id ?? null,
-      };
-      if (isEdit) {
-        const { error } = await safeMutate(supabase.from('kpis').update({ ...payload, updated_at: new Date().toISOString() }).eq('id', kpi.id));
-        if (error) throw error;
-      } else {
-        const { error } = await safeMutate(supabase.from('kpis').insert({ ...payload, created_by: userId }));
-        if (error) throw error;
-      }
-      onSaved(approvalId);
+      const res = await saveKpi({
+        id: isEdit ? kpi.id : null,
+        workplaceId: workplaceId || null,
+        payload: {
+          category,
+          name: name.trim(),
+          target_value: Number(target) || null,
+          unit: unit.trim() || null,
+          period,
+          description: description.trim() || null,
+          approval_request_id: kpi?.approval_request_id ?? null,
+        },
+        approverIds: approvers.map((a) => a.user_id),
+        isNew: !isEdit,
+      });
+      if (res?.error) { setError(res.error); return; }
+      onSaved(res.approvalId);
     } catch (err) {
       setError(String(err?.message || err));
     } finally {
@@ -301,8 +271,8 @@ function KpiEditor({ kpi, memberships, currentWorkplaceId, isSuperAdmin, userId,
     if (!confirm('이 지표를 보관 처리할까요?')) return;
     setSaving(true);
     try {
-      const { error } = await safeMutate(supabase.from('kpis').update({ active: false }).eq('id', kpi.id));
-      if (error) { setError(error.message); return; }
+      const res = await archiveKpi({ id: kpi.id });
+      if (res?.error) { setError(res.error); return; }
       onSaved();
     } catch (e) {
       setError(String(e?.message || e));
@@ -445,15 +415,14 @@ function KpiRecorder({ kpi, userId, supabase, onClose, onSaved }) {
     if (!actualValue) return setError('실적값을 입력해주세요.');
     setSaving(true);
     try {
-      const { error } = await safeMutate(supabase.from('kpi_records').insert({
-        kpi_id: kpi.id,
-        period_start: periodStart,
-        period_end: periodEnd,
-        actual_value: Number(actualValue),
+      const res = await recordKpi({
+        kpiId: kpi.id,
+        periodStart,
+        periodEnd,
+        actualValue: Number(actualValue),
         notes: notes.trim() || null,
-        recorded_by: userId,
-      }));
-      if (error) { setError(error.message); return; }
+      });
+      if (res?.error) { setError(res.error); return; }
       onSaved();
     } catch (e) {
       setError(String(e?.message || e));

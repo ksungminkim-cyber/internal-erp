@@ -8,7 +8,7 @@ import Avatar from '@/components/Avatar';
 import BottomSheet from '@/components/BottomSheet';
 import { formatRelative } from '@/lib/format';
 import { getProfileNames } from '@/app/_actions/names';
-import { safeMutate } from '@/lib/safeMutate';
+import { createSuggestion, respondSuggestion } from './actions';
 import {
   ChevronLeft, Plus, X, MessageSquare, Lock, EyeOff, Send, CheckCircle2, Clock, XCircle,
 } from 'lucide-react';
@@ -160,8 +160,6 @@ export default function SuggestionsPage() {
 
       {composing && (
         <SuggestionComposer
-          supabase={supabase}
-          userId={user.id}
           onClose={() => setComposing(false)}
           onSaved={() => { setComposing(false); load(); }}
         />
@@ -170,8 +168,6 @@ export default function SuggestionsPage() {
       {responding && (
         <ResponseDialog
           suggestion={responding}
-          supabase={supabase}
-          userId={user.id}
           onClose={() => setResponding(null)}
           onSaved={() => { setResponding(null); load(); }}
         />
@@ -180,7 +176,7 @@ export default function SuggestionsPage() {
   );
 }
 
-function SuggestionComposer({ supabase, userId, onClose, onSaved }) {
+function SuggestionComposer({ onClose, onSaved }) {
   const { currentWorkplaceId } = useApp();
   const [category, setCategory] = useState('general');
   const [title, setTitle] = useState('');
@@ -194,15 +190,14 @@ function SuggestionComposer({ supabase, userId, onClose, onSaved }) {
     if (!title.trim() || !body.trim()) return setError('제목과 내용을 모두 입력해주세요.');
     setSaving(true);
     try {
-      const { error } = await safeMutate(supabase.from('suggestions').insert({
-        user_id: userId,
-        workplace_id: currentWorkplaceId || null,
+      const res = await createSuggestion({
+        workplaceId: currentWorkplaceId || null,
         category,
         title: title.trim(),
         body: body.trim(),
         anonymous,
-      }));
-      if (error) { setError(error.message); return; }
+      });
+      if (res?.error) { setError(res.error); return; }
       onSaved();
     } catch (e) {
       setError(String(e?.message || e));
@@ -269,7 +264,7 @@ function SuggestionComposer({ supabase, userId, onClose, onSaved }) {
   );
 }
 
-function ResponseDialog({ suggestion, supabase, userId, onClose, onSaved }) {
+function ResponseDialog({ suggestion, onClose, onSaved }) {
   const [status, setStatus] = useState(suggestion.status === 'open' ? 'reviewing' : suggestion.status);
   const [response, setResponse] = useState(suggestion.response ?? '');
   const [saving, setSaving] = useState(false);
@@ -279,17 +274,8 @@ function ResponseDialog({ suggestion, supabase, userId, onClose, onSaved }) {
     setError(null);
     setSaving(true);
     try {
-      const { error } = await safeMutate(supabase
-        .from('suggestions')
-        .update({
-          status,
-          response: response.trim() || null,
-          responded_by: userId,
-          responded_at: response.trim() ? new Date().toISOString() : null,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', suggestion.id));
-      if (error) { setError(error.message); return; }
+      const res = await respondSuggestion({ id: suggestion.id, status, response });
+      if (res?.error) { setError(res.error); return; }
       onSaved();
     } catch (e) {
       setError(String(e?.message || e));

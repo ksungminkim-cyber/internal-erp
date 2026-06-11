@@ -8,7 +8,7 @@ import PageHeader from '@/components/PageHeader';
 import BottomSheet from '@/components/BottomSheet';
 import { formatRelative } from '@/lib/format';
 import { ChevronLeft, Plus, X, Wrench, AlertTriangle, CheckCircle2, Coffee, Snowflake, ScanLine, Trash2, ChevronRight } from 'lucide-react';
-import { safeMutate } from '@/lib/safeMutate';
+import { saveEquipment, archiveEquipment } from './actions';
 
 const STATUS_META = {
   ok:      { label: '정상',   tag: 'tag-success', icon: CheckCircle2 },
@@ -165,7 +165,6 @@ export default function EquipmentPage() {
       {editing && (
         <EquipmentEditor
           equipment={editing}
-          supabase={supabase}
           workplaceId={currentWorkplaceId}
           onClose={() => setEditing(null)}
           onSaved={() => { setEditing(null); load(); }}
@@ -175,7 +174,7 @@ export default function EquipmentPage() {
   );
 }
 
-function EquipmentEditor({ equipment, supabase, workplaceId, onClose, onSaved }) {
+function EquipmentEditor({ equipment, workplaceId, onClose, onSaved }) {
   const isEdit = !!equipment?.id;
   const [name, setName] = useState(equipment?.name ?? '');
   const [category, setCategory] = useState(equipment?.category ?? '에스프레소 머신');
@@ -195,7 +194,6 @@ function EquipmentEditor({ equipment, supabase, workplaceId, onClose, onSaved })
     if (!name.trim()) return setError('장비명을 입력해주세요.');
     setSaving(true);
     const payload = {
-      workplace_id: workplaceId,
       name: name.trim(),
       category,
       model: model.trim() || null,
@@ -208,11 +206,8 @@ function EquipmentEditor({ equipment, supabase, workplaceId, onClose, onSaved })
       notes: notes.trim() || null,
     };
     try {
-      const op = isEdit
-        ? supabase.from('equipment').update({ ...payload, updated_at: new Date().toISOString() }).eq('id', equipment.id)
-        : supabase.from('equipment').insert(payload);
-      const { error } = await safeMutate(op);
-      if (error) { setError(error.message); return; }
+      const res = await saveEquipment({ id: isEdit ? equipment.id : null, workplaceId, payload });
+      if (res?.error) { setError(res.error); return; }
       onSaved();
     } catch (e) {
       setError(String(e?.message || e));
@@ -225,8 +220,8 @@ function EquipmentEditor({ equipment, supabase, workplaceId, onClose, onSaved })
     if (!confirm('이 장비를 보관 처리할까요?')) return;
     setSaving(true);
     try {
-      const { error } = await safeMutate(supabase.from('equipment').update({ archived: true }).eq('id', equipment.id));
-      if (error) { setError(error.message); return; }
+      const res = await archiveEquipment({ id: equipment.id });
+      if (res?.error) { setError(res.error); return; }
       onSaved();
     } catch (e) {
       setError(String(e?.message || e));

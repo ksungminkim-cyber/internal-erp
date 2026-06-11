@@ -4,8 +4,8 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useApp } from '@/context/AppContext';
 import { isChecklistDueToday, frequencyLabel } from '@/lib/checklist';
-import { safeMutate } from '@/lib/safeMutate';
 import { todayKey } from '@/lib/date';
+import { markOnboarded } from '@/app/_actions/context';
 import {
   X, Megaphone, ListTodo, Sparkles, ChevronRight, Clock,
   FileText, Calendar, Package, TrendingUp, BookOpen, Lock,
@@ -92,10 +92,7 @@ export default function WelcomeModal() {
     }
     if (onboarding && profile && !profile.onboarded_at) {
       try {
-        await safeMutate(supabase
-          .from('profiles')
-          .update({ onboarded_at: new Date().toISOString() })
-          .eq('user_id', profile.user_id));
+        await markOnboarded();
         refresh?.();
       } catch { /* 온보딩 완료 기록 실패는 조용히 무시 (모달은 이미 닫힘) */ }
     }

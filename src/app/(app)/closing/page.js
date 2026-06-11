@@ -9,8 +9,8 @@ import BottomSheet from '@/components/BottomSheet';
 import { formatCurrency } from '@/lib/format';
 import { downloadCsv, fmtDate } from '@/lib/csvExport';
 import { calcLabor, formatMinutes } from '@/lib/laborCalc';
-import { safeMutate } from '@/lib/safeMutate';
 import { ymd } from '@/lib/date';
+import { confirmMonthClosing, unlockMonthClosing, linkClosingApproval, submitClosingApproval } from './actions';
 import {
   ChevronLeft, ChevronRight, Lock, Unlock, Download, Check, AlertCircle,
   Send, Printer, X, Plus, Clock, FileCheck,
@@ -225,21 +225,18 @@ export default function ClosingPage() {
     setActing(true);
     setError(null);
     try {
-      const { error } = await safeMutate(supabase.from('month_closings').upsert({
-        workplace_id: currentWorkplaceId,
+      const res = await confirmMonthClosing({
+        workplaceId: currentWorkplaceId,
         year, month: month + 1,
-        total_revenue: data.totalRevenue,
-        total_labor: data.totalLabor,
-        total_expense: data.totalExpense,
-        net_profit: data.netProfit,
-        revenue_breakdown: data.revenueBreakdown,
-        labor_breakdown: data.laborBreakdown,
-        expense_breakdown: data.expenseBreakdown,
-        locked: true,
-        closed_by: user.id,
-        closed_at: new Date().toISOString(),
-      }, { onConflict: 'workplace_id,year,month' }));
-      if (error) { setError(error.message); return; }
+        totalRevenue: data.totalRevenue,
+        totalLabor: data.totalLabor,
+        totalExpense: data.totalExpense,
+        netProfit: data.netProfit,
+        revenueBreakdown: data.revenueBreakdown,
+        laborBreakdown: data.laborBreakdown,
+        expenseBreakdown: data.expenseBreakdown,
+      });
+      if (res?.error) { setError(res.error); return; }
       await load();
     } catch (e) {
       setError(String(e?.message || e));
@@ -252,13 +249,11 @@ export default function ClosingPage() {
     if (!confirm('마감을 해제하시겠습니까? 다시 실시간 집계가 표시됩니다.')) return;
     setActing(true);
     try {
-      const { error } = await safeMutate(supabase
-        .from('month_closings')
-        .delete()
-        .eq('workplace_id', currentWorkplaceId)
-        .eq('year', year)
-        .eq('month', month + 1));
-      if (error) { setError(error.message); return; }
+      const res = await unlockMonthClosing({
+        workplaceId: currentWorkplaceId,
+        year, month: month + 1,
+      });
+      if (res?.error) { setError(res.error); return; }
       await load();
     } catch (e) {
       setError(String(e?.message || e));
@@ -642,10 +637,7 @@ export default function ClosingPage() {
           onSaved={async (requestId) => {
             setShowApprovalDialog(false);
             // 마감 스냅샷에 결재 ID 연결
-            await safeMutate(supabase
-              .from('month_closings')
-              .update({ approval_request_id: requestId })
-              .eq('id', existingClosing.id));
+            await linkClosingApproval({ closingId: existingClosing.id, requestId });
             await load();
             router.push(`/approvals/${requestId}`);
           }}
@@ -699,34 +691,16 @@ function SubmitClosingApproval({
     if (approvers.length === 0) return setError('결재자를 최소 1명 지정해주세요.');
     setSaving(true);
     try {
-      const { data: req, error: e1 } = await safeMutate(supabase
-        .from('approval_requests')
-        .insert({
-          workplace_id: workplaceId,
-          drafter_id: userId,
-          doc_type: 'closing',
-          title: `${year}년 ${month}월 월 마감`,
-          body: `매출 ${formatCurrency(totalRevenue)}원 / 영업이익 ${formatCurrency(operatingProfit)}원`,
-          total_amount: operatingProfit,
-          period_year: year,
-          period_month: month,
-        })
-        .select('id')
-        .single());
-      if (e1) throw e1;
-      const requestId = req.id;
-
-      const { error: e2 } = await safeMutate(supabase.from('approval_steps').insert(
-        approvers.map((a, i) => ({
-          request_id: requestId,
-          step_order: i + 1,
-          approver_id: a.user_id,
-          status: 'waiting',
-        }))
-      ));
-      if (e2) throw e2;
-
-      onSaved(requestId);
+      const res = await submitClosingApproval({
+        workplaceId,
+        year,
+        month,
+        totalRevenue,
+        operatingProfit,
+        approverIds: approvers.map((a) => a.user_id),
+      });
+      if (res?.error) { setError(res.error); return; }
+      onSaved(res.requestId);
     } catch (err) {
       setError(String(err?.message || err));
     } finally {

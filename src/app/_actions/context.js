@@ -47,3 +47,17 @@ export async function getMyContext() {
 
   return { profile: profile ?? null, memberships };
 }
+
+/**
+ * 온보딩 완료 표시 — 본인 profiles.onboarded_at 설정 (서비스롤).
+ * profiles UPDATE RLS가 super_admin 전용이라 일반 직원은 클라이언트에서
+ * 업데이트가 막혀 온보딩 모달이 매번 뜨던 문제 해결.
+ */
+export async function markOnboarded() {
+  const authClient = await createServerClient();
+  const { data: { user } } = await authClient.auth.getUser();
+  if (!user) return { ok: false };
+  const svc = getServiceClient();
+  await svc.from('profiles').update({ onboarded_at: new Date().toISOString() }).eq('user_id', user.id).is('onboarded_at', null);
+  return { ok: true };
+}

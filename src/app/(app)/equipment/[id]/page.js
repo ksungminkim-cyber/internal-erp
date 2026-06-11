@@ -8,7 +8,7 @@ import Avatar from '@/components/Avatar';
 import BottomSheet from '@/components/BottomSheet';
 import { formatDateTime, formatCurrency, formatRelative } from '@/lib/format';
 import { getProfileNames } from '@/app/_actions/names';
-import { safeMutate } from '@/lib/safeMutate';
+import { addEquipmentLog } from '../actions';
 import { ChevronLeft, Plus, X, Wrench, AlertTriangle, CheckCircle2, ScanLine, Sparkles } from 'lucide-react';
 
 const LOG_TYPE_META = {
@@ -22,7 +22,7 @@ const LOG_TYPE_META = {
 export default function EquipmentDetail({ params }) {
   const { id } = use(params);
   const router = useRouter();
-  const { user, currentWorkplaceId, supabase } = useApp();
+  const { currentWorkplaceId, supabase } = useApp();
   const [equipment, setEquipment] = useState(null);
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -153,8 +153,6 @@ export default function EquipmentDetail({ params }) {
         <LogComposer
           equipmentId={id}
           workplaceId={currentWorkplaceId}
-          userId={user.id}
-          supabase={supabase}
           onClose={() => setComposing(false)}
           onSaved={() => { setComposing(false); load(); }}
         />
@@ -172,7 +170,7 @@ function Row({ label, value }) {
   );
 }
 
-function LogComposer({ equipmentId, workplaceId, userId, supabase, onClose, onSaved }) {
+function LogComposer({ equipmentId, workplaceId, onClose, onSaved }) {
   const [logType, setLogType] = useState('check');
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -186,17 +184,16 @@ function LogComposer({ equipmentId, workplaceId, userId, supabase, onClose, onSa
     if (!title.trim()) return setError('제목을 입력해주세요.');
     setSaving(true);
     try {
-      const { error } = await safeMutate(supabase.from('equipment_logs').insert({
-        equipment_id: equipmentId,
-        workplace_id: workplaceId,
-        user_id: userId,
-        log_type: logType,
+      const res = await addEquipmentLog({
+        workplaceId,
+        equipmentId,
+        logType,
         title: title.trim(),
         description: description.trim() || null,
         cost: Number(cost) || null,
-        next_check_at: nextCheckAt || null,
-      }));
-      if (error) { setError(error.message); return; }
+        nextCheckAt: nextCheckAt || null,
+      });
+      if (res?.error) { setError(res.error); return; }
       onSaved();
     } catch (e) {
       setError(String(e?.message || e));
