@@ -6,7 +6,7 @@ import { useApp } from '@/context/AppContext';
 import PageHeader from '@/components/PageHeader';
 import BottomSheet from '@/components/BottomSheet';
 import { formatRelative } from '@/lib/format';
-import { closeInventoryMonth, deleteInventoryClosing, saveInventoryItem, archiveInventoryItem, recordInventoryTransaction } from './actions';
+import { closeInventoryMonth, deleteInventoryClosing, saveInventoryItem, archiveInventoryItem, recordInventoryTransaction, getInventoryItemHistory } from './actions';
 import { ChevronLeft, Plus, X, Package, AlertTriangle, TrendingUp, TrendingDown, Edit3, Trash2, Search, Lock, ClipboardList } from 'lucide-react';
 
 const CATEGORY_OPTIONS = ['식자재', '음료/시럽', '주류', '컵·뚜껑', '비품', '청소·세제', '포장', '기타'];
@@ -482,6 +482,12 @@ function InventoryAdjust({ item, supabase, userId, workplaceId, onClose, onSaved
   const [note, setNote] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
+  const [history, setHistory] = useState([]);
+
+  useEffect(() => {
+    if (!item?.id) return;
+    getInventoryItemHistory({ itemId: item.id }).then((r) => setHistory(r.history ?? [])).catch(() => {});
+  }, [item?.id]);
 
   async function save() {
     setError(null);
@@ -562,6 +568,35 @@ function InventoryAdjust({ item, supabase, userId, workplaceId, onClose, onSaved
           {type === 'restock' ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
           {saving ? '처리 중...' : `${TYPE_LABEL[type]} 기록`}
         </button>
+      </div>
+
+      {/* 변경 이력 — 입고/사용/폐기/조정 내역 */}
+      <div style={{ marginTop: 20, borderTop: '1px solid var(--border)', paddingTop: 14 }}>
+        <h3 className="h4" style={{ fontSize: 13, marginBottom: 8 }}>변경 이력</h3>
+        {history.length === 0 ? (
+          <p className="text-muted" style={{ fontSize: 12 }}>아직 변경 기록이 없어요</p>
+        ) : (
+          <div className="stack stack-2" style={{ maxHeight: 240, overflowY: 'auto' }}>
+            {history.map((h) => {
+              const isPlus = Number(h.qty_delta) > 0;
+              const TAG = { restock: 'tag-mint', use: 'tag', adjust: 'tag-accent', discard: 'tag-danger' };
+              return (
+                <div key={h.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', background: 'var(--surface-soft)', borderRadius: 10 }}>
+                  <span className={`tag ${TAG[h.type] ?? 'tag'}`} style={{ fontSize: 10, flexShrink: 0 }}>{TYPE_LABEL[h.type] ?? h.type}</span>
+                  <span className="num" style={{ fontWeight: 800, fontSize: 13, color: isPlus ? 'var(--success)' : 'var(--danger)', minWidth: 44 }}>
+                    {isPlus ? '+' : ''}{Number(h.qty_delta)}{item.unit}
+                  </span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    {h.note && <div style={{ fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{h.note}</div>}
+                    <div className="text-muted" style={{ fontSize: 10.5 }}>
+                      {h.userName || '—'} · {formatRelative(h.created_at)}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
     </BottomSheet>
   );

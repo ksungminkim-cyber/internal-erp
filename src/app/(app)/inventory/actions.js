@@ -2,6 +2,34 @@
 
 import { getServiceClient, getActor, loadActorPerms, friendlyDbError } from '@/lib/server/guard';
 
+/**
+ * 품목 변경 이력 — 입고/사용/폐기/조정 트랜잭션 (작성자·메모 포함).
+ * 서비스롤, 해당 매장 멤버면 조회 가능.
+ */
+export async function getInventoryItemHistory({ itemId }) {
+  const user = await getActor();
+  if (!user || !itemId) return { history: [] };
+  const svc = getServiceClient();
+  const { data: item } = await svc.from('inventory_items').select('workplace_id').eq('id', itemId).maybeSingle();
+  if (!item) return { history: [] };
+  const perms = await loadActorPerms(svc, user.id);
+  if (!perms.isMemberOf(item.workplace_id)) return { history: [] };
+
+  const { data: txs } = await svc
+    .from('inventory_transactions')
+    .select('id, type, qty_delta, note, created_at, user_id')
+    .eq('item_id', itemId)
+    .order('created_at', { ascending: false })
+    .limit(50);
+  const ids = [...new Set((txs ?? []).map((t) => t.user_id).filter(Boolean))];
+  let names = {};
+  if (ids.length) {
+    const { data: profs } = await svc.from('profiles').select('user_id, name').in('user_id', ids);
+    names = Object.fromEntries((profs ?? []).map((p) => [p.user_id, p.name]));
+  }
+  return { history: (txs ?? []).map((t) => ({ ...t, userName: names[t.user_id] ?? null })) };
+}
+
 export async function closeInventoryMonth({ workplaceId, year, month, itemCount, totalQtyEstimate, lowStockCount, snapshot, notes }) {
   const user = await getActor();
   if (!user) return { ok: false, error: '로그인이 필요합니다.' };
