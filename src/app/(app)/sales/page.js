@@ -8,18 +8,31 @@ import BottomSheet from '@/components/BottomSheet';
 import { formatCurrency } from '@/lib/format';
 import { downloadCsv } from '@/lib/csvExport';
 import { ymd } from '@/lib/date';
-import { saveSales } from './actions';
-import { ChevronLeft, ChevronRight, TrendingUp, Plus, X, Info, Calendar, CreditCard, Banknote, Download } from 'lucide-react';
+import { saveSales, getSalesSummary } from './actions';
+import { ChevronLeft, ChevronRight, TrendingUp, Plus, X, Info, Calendar, CreditCard, Banknote, Download, Lightbulb, Sparkles } from 'lucide-react';
 
 function addDays(d, n) { const x = new Date(d); x.setDate(x.getDate() + n); return x; }
+
+// 직원에게 보여줄 매출 향상 팁 (현장 실행 가능한 것 위주)
+const SALES_TIPS = [
+  { icon: '➕', title: '한 끗 추가 제안', desc: '"샷 추가/사이즈업 어떠세요?", "오늘 디저트랑 같이 드시면 잘 어울려요" — 객단가를 올리는 가장 쉬운 한마디.' },
+  { icon: '🎁', title: '세트·페어링 추천', desc: '커피+디저트, 음료+베이커리 묶음을 먼저 권해보세요. 고민하는 손님께 선택을 좁혀주면 구매로 이어집니다.' },
+  { icon: '🔁', title: '단골 만들기', desc: '얼굴 기억하고 인사 한마디, 쿠폰/적립 안내. 재방문 한 번이 신규 손님 다섯보다 큽니다.' },
+  { icon: '🍰', title: '시즌·신메뉴 한 줄 안내', desc: '계산 전 "이번 시즌 메뉴 나왔어요" 한마디. 카운터 POP·샘플 노출도 효과 큼.' },
+  { icon: '⏰', title: '한가한 시간대 공략', desc: '브레이크 타임 한정 할인·세트로 비는 시간을 채우면 일 매출이 올라갑니다.' },
+  { icon: '⭐', title: '리뷰·SNS 유도', desc: '"사진 예쁘게 나와요, 태그해주시면 다음에 작은 서비스 드려요" — 자연스러운 노출 유도.' },
+  { icon: '⚡', title: '피크타임 회전', desc: '대기 줄엔 빠른 응대 + 미리 주문받기. 회전이 곧 매출입니다.' },
+];
 
 export default function SalesPage() {
   const router = useRouter();
   const { user, currentWorkplaceId, supabase, isManager } = useApp();
   const [rows, setRows] = useState([]);
+  const [summary, setSummary] = useState(null); // 누적/이번 달 합계
   const [loading, setLoading] = useState(false);
   const [editing, setEditing] = useState(null);
   const [showGuide, setShowGuide] = useState(false);
+  const [showTips, setShowTips] = useState(false);
 
   const today = useMemo(() => { const d = new Date(); d.setHours(0,0,0,0); return d; }, []);
   const start = useMemo(() => addDays(today, -29), [today]);
@@ -34,6 +47,8 @@ export default function SalesPage() {
       .order('sales_date', { ascending: false });
     setRows(data ?? []);
     setLoading(false);
+    // 누적/이번 달 합계는 서버액션으로 별도 집계 (30일 조회와 무관하게 전체)
+    getSalesSummary(currentWorkplaceId).then(setSummary).catch(() => {});
   }, [supabase, currentWorkplaceId, start]);
 
   useEffect(() => { load(); }, [load]);
@@ -150,6 +165,60 @@ export default function SalesPage() {
             </div>
             <div className="bento-sub text-muted">{last7.length}일 기준</div>
           </div>
+        </section>
+
+        {/* 누적 합계 — 이번 달 + 전체(지금까지 기입된 모든 매출) */}
+        {summary && (
+          <section className="card" style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div>
+              <div className="text-muted" style={{ fontSize: 11, fontWeight: 700 }}>이번 달 합계</div>
+              <div className="num" style={{ fontSize: 22, fontWeight: 800, color: 'var(--accent)' }}>
+                {formatCurrency(summary.monthTotal)}<span style={{ fontSize: 12, color: 'var(--text-muted)', marginLeft: 2 }}>원</span>
+              </div>
+              <div className="text-muted" style={{ fontSize: 11 }}>{summary.monthCount}일 입력</div>
+            </div>
+            <div style={{ textAlign: 'right' }}>
+              <div className="text-muted" style={{ fontSize: 11, fontWeight: 700 }}>누적 합계 (전체)</div>
+              <div className="num" style={{ fontSize: 22, fontWeight: 800 }}>
+                {formatCurrency(summary.allTotal)}<span style={{ fontSize: 12, color: 'var(--text-muted)', marginLeft: 2 }}>원</span>
+              </div>
+              <div className="text-muted" style={{ fontSize: 11 }}>총 {summary.allCount}일</div>
+            </div>
+          </section>
+        )}
+
+        {/* 매출 올리기 팁 — 직원 공통 노출 */}
+        <section className="card" style={{ background: 'var(--accent-soft)' }}>
+          <button
+            type="button"
+            onClick={() => setShowTips((v) => !v)}
+            style={{ width: '100%', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, padding: 0, textAlign: 'left' }}
+          >
+            <Lightbulb size={18} color="var(--accent-strong)" />
+            <span className="h4" style={{ flex: 1, color: 'var(--accent-strong)' }}>매출 올리는 작은 팁</span>
+            <ChevronRight size={18} style={{ transform: showTips ? 'rotate(90deg)' : 'none', transition: 'transform var(--t-sm) var(--ease)', color: 'var(--accent-strong)' }} />
+          </button>
+          {!showTips && (
+            <p className="text-secondary" style={{ fontSize: 12.5, marginTop: 8 }}>
+              {SALES_TIPS[0].icon} <strong>{SALES_TIPS[0].title}</strong> — {SALES_TIPS[0].desc}
+            </p>
+          )}
+          {showTips && (
+            <div className="stack stack-2" style={{ marginTop: 12 }}>
+              {SALES_TIPS.map((t, i) => (
+                <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', padding: '8px 10px', background: 'var(--surface)', borderRadius: 10 }}>
+                  <span style={{ fontSize: 16, lineHeight: 1.3 }}>{t.icon}</span>
+                  <div>
+                    <div className="h4" style={{ fontSize: 13 }}>{t.title}</div>
+                    <div className="text-secondary" style={{ fontSize: 12.5, marginTop: 2, lineHeight: 1.5 }}>{t.desc}</div>
+                  </div>
+                </div>
+              ))}
+              <p className="text-muted" style={{ fontSize: 11, marginTop: 2, display: 'flex', alignItems: 'center', gap: 4 }}>
+                <Sparkles size={11} /> 작은 한마디·추천 하나가 객단가를 바꿉니다.
+              </p>
+            </div>
+          )}
         </section>
 
         {/* 30일 차트 */}
