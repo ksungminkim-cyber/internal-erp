@@ -8,8 +8,8 @@ import BottomSheet from '@/components/BottomSheet';
 import { formatCurrency } from '@/lib/format';
 import { downloadCsv } from '@/lib/csvExport';
 import { ymd } from '@/lib/date';
-import { saveSales, getSalesSummary } from './actions';
-import { ChevronLeft, ChevronRight, TrendingUp, Plus, X, Info, Calendar, CreditCard, Banknote, Download, Lightbulb, Sparkles } from 'lucide-react';
+import { saveSales, getSalesSummary, getSalesTips, saveSalesTip, deleteSalesTip } from './actions';
+import { ChevronLeft, ChevronRight, TrendingUp, Plus, X, Info, Calendar, CreditCard, Banknote, Download, Lightbulb, Sparkles, Pencil, Trash2 } from 'lucide-react';
 
 function addDays(d, n) { const x = new Date(d); x.setDate(x.getDate() + n); return x; }
 
@@ -24,6 +24,9 @@ const SALES_TIPS = [
   { icon: '⚡', title: '피크타임 회전', desc: '대기 줄엔 빠른 응대 + 미리 주문받기. 회전이 곧 매출입니다.' },
 ];
 
+// 기본 팁을 한 줄 문자열로 (DB 팁이 없을 때 에디터 시드로 사용)
+const DEFAULT_TIP_STRINGS = SALES_TIPS.map((t) => `${t.icon} ${t.title} — ${t.desc}`);
+
 export default function SalesPage() {
   const router = useRouter();
   const { user, currentWorkplaceId, supabase, isManager } = useApp();
@@ -33,6 +36,8 @@ export default function SalesPage() {
   const [editing, setEditing] = useState(null);
   const [showGuide, setShowGuide] = useState(false);
   const [showTips, setShowTips] = useState(false);
+  const [tipsData, setTipsData] = useState({ tips: [], enabled: false });
+  const [editTips, setEditTips] = useState(false);
 
   const today = useMemo(() => { const d = new Date(); d.setHours(0,0,0,0); return d; }, []);
   const start = useMemo(() => addDays(today, -29), [today]);
@@ -49,6 +54,8 @@ export default function SalesPage() {
     setLoading(false);
     // 누적/이번 달 합계는 서버액션으로 별도 집계 (30일 조회와 무관하게 전체)
     getSalesSummary(currentWorkplaceId).then(setSummary).catch(() => {});
+    // 매장별 매출 팁 (서버액션)
+    getSalesTips(currentWorkplaceId).then(setTipsData).catch(() => setTipsData({ tips: [], enabled: false }));
   }, [supabase, currentWorkplaceId, start]);
 
   useEffect(() => { load(); }, [load]);
@@ -187,39 +194,73 @@ export default function SalesPage() {
           </section>
         )}
 
-        {/* 매출 올리기 팁 — 직원 공통 노출 */}
-        <section className="card" style={{ background: 'var(--accent-soft)' }}>
-          <button
-            type="button"
-            onClick={() => setShowTips((v) => !v)}
-            style={{ width: '100%', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, padding: 0, textAlign: 'left' }}
-          >
-            <Lightbulb size={18} color="var(--accent-strong)" />
-            <span className="h4" style={{ flex: 1, color: 'var(--accent-strong)' }}>매출 올리는 작은 팁</span>
-            <ChevronRight size={18} style={{ transform: showTips ? 'rotate(90deg)' : 'none', transition: 'transform var(--t-sm) var(--ease)', color: 'var(--accent-strong)' }} />
-          </button>
-          {!showTips && (
-            <p className="text-secondary" style={{ fontSize: 12.5, marginTop: 8 }}>
-              {SALES_TIPS[0].icon} <strong>{SALES_TIPS[0].title}</strong> — {SALES_TIPS[0].desc}
-            </p>
-          )}
-          {showTips && (
-            <div className="stack stack-2" style={{ marginTop: 12 }}>
-              {SALES_TIPS.map((t, i) => (
-                <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', padding: '8px 10px', background: 'var(--surface)', borderRadius: 10 }}>
-                  <span style={{ fontSize: 16, lineHeight: 1.3 }}>{t.icon}</span>
-                  <div>
-                    <div className="h4" style={{ fontSize: 13 }}>{t.title}</div>
-                    <div className="text-secondary" style={{ fontSize: 12.5, marginTop: 2, lineHeight: 1.5 }}>{t.desc}</div>
-                  </div>
+        {/* 매출 올리기 팁 — 직원 공통 노출. DB 팁 우선, 없으면 기본 팁 */}
+        {(() => {
+          const dbTips = tipsData.tips ?? [];
+          const hasDbTips = dbTips.length > 0;
+          // 접힘 상태 미리보기 (첫 팁)
+          const firstPreview = hasDbTips ? dbTips[0].content : `${SALES_TIPS[0].icon} ${SALES_TIPS[0].title} — ${SALES_TIPS[0].desc}`;
+          return (
+            <section className="card" style={{ background: 'var(--accent-soft)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <button
+                  type="button"
+                  onClick={() => setShowTips((v) => !v)}
+                  style={{ flex: 1, background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, padding: 0, textAlign: 'left' }}
+                >
+                  <Lightbulb size={18} color="var(--accent-strong)" />
+                  <span className="h4" style={{ flex: 1, color: 'var(--accent-strong)' }}>매출 올리는 작은 팁</span>
+                  <ChevronRight size={18} style={{ transform: showTips ? 'rotate(90deg)' : 'none', transition: 'transform var(--t-sm) var(--ease)', color: 'var(--accent-strong)' }} />
+                </button>
+                {isManager && (
+                  <button
+                    type="button"
+                    className="btn btn-soft btn-xs"
+                    onClick={() => setEditTips(true)}
+                    style={{ flexShrink: 0 }}
+                  >
+                    <Pencil size={12} /> 편집
+                  </button>
+                )}
+              </div>
+
+              {!showTips && (
+                <p className="text-secondary" style={{ fontSize: 12.5, marginTop: 8 }}>
+                  {firstPreview}
+                </p>
+              )}
+              {showTips && hasDbTips && (
+                <div className="stack stack-2" style={{ marginTop: 12 }}>
+                  {dbTips.map((t) => (
+                    <div key={t.id} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', padding: '8px 10px', background: 'var(--surface)', borderRadius: 10 }}>
+                      <span style={{ fontSize: 14, lineHeight: 1.5 }}>💡</span>
+                      <div className="text-secondary" style={{ fontSize: 12.5, lineHeight: 1.5 }}>{t.content}</div>
+                    </div>
+                  ))}
+                  <p className="text-muted" style={{ fontSize: 11, marginTop: 2, display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <Sparkles size={11} /> 작은 한마디·추천 하나가 객단가를 바꿉니다.
+                  </p>
                 </div>
-              ))}
-              <p className="text-muted" style={{ fontSize: 11, marginTop: 2, display: 'flex', alignItems: 'center', gap: 4 }}>
-                <Sparkles size={11} /> 작은 한마디·추천 하나가 객단가를 바꿉니다.
-              </p>
-            </div>
-          )}
-        </section>
+              )}
+              {showTips && !hasDbTips && (
+                <div className="stack stack-2" style={{ marginTop: 12 }}>
+                  {SALES_TIPS.map((t, i) => (
+                    <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', padding: '8px 10px', background: 'var(--surface)', borderRadius: 10 }}>
+                      <span style={{ fontSize: 16, lineHeight: 1.3 }}>{t.icon}</span>
+                      <div>
+                        <div className="h4" style={{ fontSize: 13 }}>{t.title}</div>
+                        <div className="text-secondary" style={{ fontSize: 12.5, marginTop: 2, lineHeight: 1.5 }}>{t.desc}</div>
+                      </div>
+                    </div>
+                  ))}
+                  <p className="text-muted" style={{ fontSize: 11, marginTop: 2, display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <Sparkles size={11} /> 작은 한마디·추천 하나가 객단가를 바꿉니다.
+                  </p>
+                </div>
+              )}
+            </section>
+          );
+        })()}
 
         {/* 30일 차트 */}
         <section className="card">
@@ -323,7 +364,128 @@ export default function SalesPage() {
       )}
 
       {showGuide && <PosGuide onClose={() => setShowGuide(false)} />}
+
+      {editTips && (
+        <TipsEditor
+          workplaceId={currentWorkplaceId}
+          tips={tipsData.tips ?? []}
+          onClose={() => setEditTips(false)}
+          onSaved={() => { setEditTips(false); load(); }}
+        />
+      )}
     </>
+  );
+}
+
+function TipsEditor({ workplaceId, tips, onClose, onSaved }) {
+  // 각 행: { id?, content }. DB 팁이 없으면 기본 팁 문자열로 시드.
+  const [rows, setRows] = useState(() =>
+    tips.length > 0
+      ? tips.map((t) => ({ id: t.id, content: t.content }))
+      : DEFAULT_TIP_STRINGS.map((c) => ({ content: c }))
+  );
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState(null);
+
+  // 삭제 대상: 원래 DB에 있었으나 지금 rows에 없는 id
+  const originalIds = useMemo(() => tips.map((t) => t.id), [tips]);
+
+  function updateRow(idx, value) {
+    setRows((prev) => prev.map((r, i) => (i === idx ? { ...r, content: value } : r)));
+  }
+  function addRow() {
+    setRows((prev) => [...prev, { content: '' }]);
+  }
+  function removeRow(idx) {
+    setRows((prev) => prev.filter((_, i) => i !== idx));
+  }
+
+  async function save() {
+    setError(null);
+    setSaving(true);
+    try {
+      const kept = rows.filter((r) => String(r.content ?? '').trim());
+      const keptIds = kept.filter((r) => r.id).map((r) => r.id);
+
+      // 삭제: 원래 있었으나 더이상 없는 행
+      const toDelete = originalIds.filter((id) => !keptIds.includes(id));
+      for (const id of toDelete) {
+        const res = await deleteSalesTip({ id });
+        if (res?.error) { setError(res.error); return; }
+      }
+
+      // 추가/수정: index 순으로 sortOrder 부여
+      for (let i = 0; i < kept.length; i++) {
+        const r = kept[i];
+        const res = await saveSalesTip({
+          id: r.id,
+          workplaceId,
+          content: r.content,
+          sortOrder: i,
+        });
+        if (res?.error) { setError(res.error); return; }
+      }
+
+      onSaved();
+    } catch (e) {
+      setError(String(e?.message || e));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <BottomSheet onClose={onClose}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+        <h2 className="h3">매출 팁 편집</h2>
+        <button onClick={onClose} className="btn btn-ghost btn-icon"><X size={18} /></button>
+      </div>
+
+      <p className="text-muted" style={{ fontSize: 12, marginBottom: 12, lineHeight: 1.5 }}>
+        직원에게 보여줄 매장별 매출 팁을 직접 작성하세요. 비어 있는 줄은 저장 시 무시됩니다.
+      </p>
+
+      <div className="stack stack-2">
+        {rows.map((r, i) => (
+          <div key={r.id ?? `new-${i}`} style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+            <textarea
+              className="input"
+              rows={2}
+              value={r.content}
+              onChange={(e) => updateRow(i, e.target.value)}
+              placeholder="예: ➕ 한 끗 추가 제안 — 샷 추가/사이즈업 어떠세요?"
+              style={{ flex: 1, resize: 'vertical' }}
+            />
+            <button
+              type="button"
+              className="btn btn-ghost btn-icon"
+              onClick={() => removeRow(i)}
+              aria-label="팁 삭제"
+              style={{ flexShrink: 0, color: 'var(--danger)' }}
+            >
+              <Trash2 size={16} />
+            </button>
+          </div>
+        ))}
+      </div>
+
+      <button type="button" className="btn btn-soft btn-sm" onClick={addRow} style={{ marginTop: 12 }}>
+        <Plus size={14} /> 팁 추가
+      </button>
+
+      {error && (
+        <div style={{ marginTop: 12, padding: 10, background: 'var(--danger-soft)', color: 'var(--danger)', borderRadius: 10, fontSize: 13 }}>
+          {error}
+        </div>
+      )}
+
+      <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
+        <button type="button" className="btn btn-outline" onClick={onClose} style={{ flex: 1 }}>취소</button>
+        <button type="button" className="btn btn-primary" onClick={save} disabled={saving} style={{ flex: 2 }}>
+          {saving ? '저장 중...' : '저장'}
+        </button>
+      </div>
+    </BottomSheet>
   );
 }
 

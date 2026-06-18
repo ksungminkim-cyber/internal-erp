@@ -2,6 +2,7 @@
 
 import { createClient as createServerClient } from '@/lib/supabase/server';
 import { createClient } from '@supabase/supabase-js';
+import { loadActorPerms } from '@/lib/server/guard';
 
 function getServiceClient() {
   return createClient(
@@ -97,6 +98,134 @@ export async function saveSales({ workplaceId, salesDate, totalAmount, transacti
       return { ok: false, error: '마감된 월의 매출은 수정할 수 없습니다.' };
     }
     return { ok: false, error: msg || '매출 저장 중 오류가 발생했습니다.' };
+  }
+  return { ok: true };
+}
+
+// sales_tips 테이블 미적용(마이그레이션 전) 여부 판정
+function isTableMissing(error) {
+  if (!error) return false;
+  if (error.code === '42P01') return true;
+  return String(error.message || '').includes('does not exist');
+}
+
+const TIPS_MIGRATION_MSG = '팁 기능을 쓰려면 DB 마이그레이션(sales_tips)을 먼저 적용해주세요.';
+
+/**
+ * 매장별 매출 팁 조회 — 멤버면 조회 가능. 테이블 미적용 시 graceful.
+ */
+export async function getSalesTips(workplaceId) {
+  const authClient = await createServerClient();
+  const { data: { user } } = await authClient.auth.getUser();
+  if (!user || !workplaceId) return { tips: [], enabled: false };
+
+  const svc = getServiceClient();
+  const perms = await loadActorPerms(svc, user.id);
+  if (!perms.isMemberOf(workplaceId)) return { tips: [], enabled: false };
+
+  const { data, error } = await svc
+    .from('sales_tips')
+    .select('*')
+    .eq('workplace_id', workplaceId)
+    .eq('active', true)
+    .order('sort_order', { ascending: true })
+    .order('created_at', { ascending: true });
+
+  if (error) {
+    if (isTableMissing(error)) return { tips: [], enabled: false };
+    return { tips: [], enabled: false };
+  }
+  return { tips: data ?? [], enabled: true };
+}
+
+/**
+ * 매출 팁 저장(추가/수정) — 해당 매장 매니저만. id 있으면 update, 없으면 insert.
+ */
+export async function saveSalesTip({ id, workplaceId, content, sortOrder }) {
+  const authClient = await createServerClient();
+  const { data: { user } } = await authClient.auth.getUser();
+  if (!user) return { ok: false, error: '로그인이 필요합니다.' };
+
+  const text = String(content ?? '').trim();
+  if (!text) return { ok: false, error: '내용을 입력해주세요.' };
+
+  const svc = getServiceClient();
+  const perms = await loadActorPerms(svc, user.id);
+
+  if (id) {
+    // 기존 팁 — 해당 팁의 매장으로 권한 검증
+    const { data: existing, error: fetchErr } = await svc
+      .from('sales_tips')
+      .select('workplace_id')
+      .eq('id', id)
+      .maybeSingle();
+    if (fetchErr) {
+      if (isTableMissing(fetchErr)) return { ok: false, error: TIPS_MIGRATION_MSG };
+      return { ok: false, error: fetchErr.message || '팁 저장 중 오류가 발생했습니다.' };
+    }
+    if (!existing) return { ok: false, error: '팁을 찾을 수 없습니다.' };
+    if (!perms.isManagerOf(existing.workplace_id)) {
+      return { ok: false, error: '이 매장의 팁을 수정할 권한이 없습니다.' };
+    }
+    const { error } = await svc
+      .from('sales_tips')
+      .update({ content: text, sort_order: Number(sortOrder) || 0, updated_at: new Date().toISOString() })
+      .eq('id', id);
+    if (error) {
+      if (isTableMissing(error)) return { ok: false, error: TIPS_MIGRATION_MSG };
+      return { ok: false, error: error.message || '팁 저장 중 오류가 발생했습니다.' };
+    }
+    return { ok: true };
+  }
+
+  // 신규 팁
+  if (!workplaceId) return { ok: false, error: '사업장이 필요합니다.' };
+  if (!perms.isManagerOf(workplaceId)) {
+    return { ok: false, error: '이 매장의 팁을 추가할 권한이 없습니다.' };
+  }
+  const { error } = await svc.from('sales_tips').insert({
+    workplace_id: workplaceId,
+    content: text,
+    sort_order: Number(sortOrder) || 0,
+    created_by: user.id,
+  });
+  if (error) {
+    if (isTableMissing(error)) return { ok: false, error: TIPS_MIGRATION_MSG };
+    return { ok: false, error: error.message || '팁 저장 중 오류가 발생했습니다.' };
+  }
+  return { ok: true };
+}
+
+/**
+ * 매출 팁 삭제(하드 삭제) — 해당 매장 매니저만.
+ */
+export async function deleteSalesTip({ id }) {
+  const authClient = await createServerClient();
+  const { data: { user } } = await authClient.auth.getUser();
+  if (!user) return { ok: false, error: '로그인이 필요합니다.' };
+  if (!id) return { ok: false, error: '삭제할 팁이 없습니다.' };
+
+  const svc = getServiceClient();
+  const perms = await loadActorPerms(svc, user.id);
+
+  const { data: existing, error: fetchErr } = await svc
+    .from('sales_tips')
+    .select('workplace_id')
+    .eq('id', id)
+    .maybeSingle();
+  if (fetchErr) {
+    if (isTableMissing(fetchErr)) return { ok: false, error: TIPS_MIGRATION_MSG };
+    return { ok: false, error: fetchErr.message || '팁 삭제 중 오류가 발생했습니다.' };
+  }
+  if (!existing) return { ok: true }; // 이미 없음
+  if (!perms.isManagerOf(existing.workplace_id)) {
+    return { ok: false, error: '이 매장의 팁을 삭제할 권한이 없습니다.' };
+  }
+
+  const { error } = await svc.from('sales_tips').delete().eq('id', id);
+  if (error) {
+    if (isTableMissing(error)) return { ok: false, error: TIPS_MIGRATION_MSG };
+    return { ok: false, error: error.message || '팁 삭제 중 오류가 발생했습니다.' };
   }
   return { ok: true };
 }
