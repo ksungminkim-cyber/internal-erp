@@ -169,14 +169,27 @@ export default function MembersClient({ workplaces, profiles, memberships, curre
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 12, alignItems: 'start' }}>
               {workplaceGroups.map((g) => (
                 <div key={g.workplace.id} className="card" style={{ padding: 0, overflow: 'visible' }}>
-                  {/* 컬럼 헤더 */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '11px 14px', borderBottom: '1px solid var(--border)' }}>
-                    <Building2 size={15} color="var(--accent)" />
-                    <span className="h4" style={{ flex: 1 }}>{g.workplace.name}</span>
-                    <span className="tag tag-accent" style={{ fontSize: 11 }}>{g.rows.length}</span>
-                  </div>
+                  {/* 컬럼 헤더 — 매장명 + 인원 + 시급 합계 */}
+                  {(() => {
+                    const wageSum = g.rows.reduce((s, r) => s + (Number(r.profile.hourly_wage) || 0), 0);
+                    return (
+                      <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <Building2 size={16} color="var(--accent)" />
+                          <span className="h4" style={{ flex: 1, fontSize: 15 }}>{g.workplace.name}</span>
+                          <span className="tag tag-accent">{g.rows.length}명</span>
+                        </div>
+                        {wageSum > 0 && (
+                          <div className="text-muted" style={{ fontSize: 12, marginTop: 7 }}>
+                            시급 합계 <strong className="num" style={{ color: 'var(--text)' }}>{formatCurrency(wageSum)}</strong>원
+                            <span style={{ opacity: 0.6 }}> / 시간</span>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
 
-                  {/* 멤버 행 — 촘촘하게 */}
+                  {/* 멤버 행 */}
                   {g.rows.map(({ membership: m, profile: p }, idx) => {
                     const isMe = p.user_id === currentUserId;
                     const roleMeta = ROLE_META[m.role];
@@ -185,30 +198,30 @@ export default function MembersClient({ workplaces, profiles, memberships, curre
                       <div
                         key={`${g.workplace.id}-${p.user_id}`}
                         style={{
-                          display: 'flex', alignItems: 'center', gap: 9,
-                          padding: '7px 12px',
-                          borderTop: idx > 0 ? '1px solid var(--border-soft, var(--border))' : 'none',
+                          display: 'flex', alignItems: 'center', gap: 11,
+                          padding: '11px 16px',
+                          borderTop: idx > 0 ? '1px solid var(--border)' : 'none',
                           position: 'relative',
                         }}
                       >
                         <Avatar name={p.name} userId={p.user_id} size="sm" />
                         <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                            <span style={{ fontWeight: 700, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <span style={{ fontWeight: 700, fontSize: 14, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                               {p.name || '이름 없음'}
                             </span>
-                            {isMe && <span className="tag tag-accent" style={{ fontSize: 9, padding: '0 5px' }}>나</span>}
-                            {(p.is_super_admin || p.is_executive) && <Crown size={11} color="var(--accent)" />}
+                            {isMe && <span className="tag tag-accent" style={{ fontSize: 10 }}>나</span>}
+                            {(p.is_super_admin || p.is_executive) && <Crown size={12} color="var(--accent)" />}
                           </div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 1 }}>
-                            <span className={`tag ${roleMeta?.tag ?? 'tag'}`} style={{ fontSize: 9, padding: '0 5px' }}>
-                              {RoleIcon && <RoleIcon size={9} />} {roleMeta?.label ?? m.role}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
+                            <span className={`tag ${roleMeta?.tag ?? 'tag'}`} style={{ fontSize: 11 }}>
+                              {RoleIcon && <RoleIcon size={11} />} {roleMeta?.label ?? m.role}
                             </span>
                             {Number(p.hourly_wage) > 0 && (
-                              <span className="text-muted num" style={{ fontSize: 10 }}>{formatCurrency(p.hourly_wage)}원</span>
+                              <span className="text-muted num" style={{ fontSize: 12 }}>{formatCurrency(p.hourly_wage)}원</span>
                             )}
                             {p.can_close_books && !p.is_super_admin && !p.is_executive && (
-                              <span className="tag tag-mint" style={{ fontSize: 9, padding: '0 5px' }}>마감</span>
+                              <span className="tag tag-mint" style={{ fontSize: 10 }}>마감</span>
                             )}
                           </div>
                         </div>
