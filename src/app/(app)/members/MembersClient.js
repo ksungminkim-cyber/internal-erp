@@ -130,13 +130,13 @@ export default function MembersClient({ workplaces, profiles, memberships, curre
               <p className="text-muted" style={{ fontSize: 13, textAlign: 'center' }}>모두 배정되어 있어요</p>
             </div>
           ) : (
-            <div className="stack stack-2">
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 8 }}>
               {unassigned.map((p) => (
-                <div key={p.user_id} className="card compact" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <Avatar name={p.name} userId={p.user_id} />
+                <div key={p.user_id} className="card compact" style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '8px 12px' }}>
+                  <Avatar name={p.name} userId={p.user_id} size="sm" />
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div className="h4">{p.name || '이름 없음'}</div>
-                    <div className="text-muted" style={{ fontSize: 12, marginTop: 2 }}>
+                    <div style={{ fontWeight: 700, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name || '이름 없음'}</div>
+                    <div className="text-muted" style={{ fontSize: 11, marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {p.phone || '연락처 없음'} · 가입 {formatRelative(p.created_at)}
                     </div>
                   </div>
@@ -145,7 +145,7 @@ export default function MembersClient({ workplaces, profiles, memberships, curre
                     className="btn btn-primary btn-sm"
                     onClick={() => setEditing({ profile: p, mode: 'assign' })}
                   >
-                    <UserPlus size={14} /> 배정
+                    <UserPlus size={13} /> 배정
                   </button>
                 </div>
               ))}
@@ -165,90 +165,96 @@ export default function MembersClient({ workplaces, profiles, memberships, curre
               <div className="empty-desc">아직 등록된 멤버가 없어요</div>
             </div>
           ) : (
-            <div className="stack stack-3">
+            // 업장을 가로 컬럼으로 — 데스크톱에서 한 눈에 (스크롤 최소화)
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 12, alignItems: 'start' }}>
               {workplaceGroups.map((g) => (
-                <div key={g.workplace.id} className="stack stack-2">
-                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-                    <h3 className="h4" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <Building2 size={14} color="var(--text-muted)" /> {g.workplace.name}
-                    </h3>
-                    <span className="text-muted" style={{ fontSize: 12 }}>{g.rows.length}명</span>
+                <div key={g.workplace.id} className="card" style={{ padding: 0, overflow: 'visible' }}>
+                  {/* 컬럼 헤더 */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '11px 14px', borderBottom: '1px solid var(--border)' }}>
+                    <Building2 size={15} color="var(--accent)" />
+                    <span className="h4" style={{ flex: 1 }}>{g.workplace.name}</span>
+                    <span className="tag tag-accent" style={{ fontSize: 11 }}>{g.rows.length}</span>
                   </div>
 
-                  {g.rows.map(({ membership: m, profile: p }) => {
+                  {/* 멤버 행 — 촘촘하게 */}
+                  {g.rows.map(({ membership: m, profile: p }, idx) => {
                     const isMe = p.user_id === currentUserId;
                     const roleMeta = ROLE_META[m.role];
                     const RoleIcon = roleMeta?.icon;
                     return (
-                      <div key={`${g.workplace.id}-${p.user_id}`} className="card compact" style={{ position: 'relative' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                          <Avatar name={p.name} userId={p.user_id} />
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                              <div className="h4">{p.name || '이름 없음'}</div>
-                              {isMe && <span className="tag tag-accent">나</span>}
-                              <span className={`tag ${roleMeta?.tag ?? 'tag'}`}>
-                                {RoleIcon && <RoleIcon size={10} />} {roleMeta?.label ?? m.role}
-                              </span>
-                              {(p.is_super_admin || p.is_executive) && <span className="tag tag-accent"><Crown size={10} /> 전체관리</span>}
-                              {p.can_close_books && !p.is_super_admin && !p.is_executive && <span className="tag tag-mint">마감권한</span>}
-                            </div>
-                            <div className="text-muted" style={{ fontSize: 12, marginTop: 2 }}>
-                              {p.phone || '연락처 없음'}
-                            </div>
+                      <div
+                        key={`${g.workplace.id}-${p.user_id}`}
+                        style={{
+                          display: 'flex', alignItems: 'center', gap: 9,
+                          padding: '7px 12px',
+                          borderTop: idx > 0 ? '1px solid var(--border-soft, var(--border))' : 'none',
+                          position: 'relative',
+                        }}
+                      >
+                        <Avatar name={p.name} userId={p.user_id} size="sm" />
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                            <span style={{ fontWeight: 700, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {p.name || '이름 없음'}
+                            </span>
+                            {isMe && <span className="tag tag-accent" style={{ fontSize: 9, padding: '0 5px' }}>나</span>}
+                            {(p.is_super_admin || p.is_executive) && <Crown size={11} color="var(--accent)" />}
                           </div>
-
-                          {isExecutive && (
-                            <div onClick={(e) => e.stopPropagation()} style={{ position: 'relative' }}>
-                              <button
-                                type="button"
-                                className="btn btn-ghost btn-icon"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setMenuOpenId(menuOpenId === p.user_id ? null : p.user_id);
-                                }}
-                              >
-                                <MoreVertical size={16} />
-                              </button>
-                              {menuOpenId === p.user_id && (
-                                <div style={{
-                                  position: 'absolute', top: '100%', right: 0, marginTop: 4,
-                                  background: 'var(--surface)', border: '1px solid var(--border)',
-                                  borderRadius: 12, padding: 4,
-                                  boxShadow: 'var(--sh-md)', minWidth: 180, zIndex: 30,
-                                }}>
-                                  <Link
-                                    href={`/members/${p.user_id}`}
-                                    onClick={() => setMenuOpenId(null)}
-                                    style={{ ...menuItemStyle, textDecoration: 'none', color: 'var(--text)' }}
-                                  >
-                                    <BarChart3 size={14} /> 통계 보기
-                                  </Link>
-                                  <button
-                                    type="button"
-                                    onClick={() => { setMenuOpenId(null); setEditing({ profile: p, mode: 'edit' }); }}
-                                    style={menuItemStyle}
-                                  >
-                                    <Building2 size={14} /> 배정 수정
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => { setMenuOpenId(null); setRetiring(p); }}
-                                    style={menuItemStyle}
-                                  >
-                                    <UserMinus size={14} color="var(--danger)" /> 퇴사 처리
-                                  </button>
-                                </div>
-                              )}
-                            </div>
-                          )}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 1 }}>
+                            <span className={`tag ${roleMeta?.tag ?? 'tag'}`} style={{ fontSize: 9, padding: '0 5px' }}>
+                              {RoleIcon && <RoleIcon size={9} />} {roleMeta?.label ?? m.role}
+                            </span>
+                            {Number(p.hourly_wage) > 0 && (
+                              <span className="text-muted num" style={{ fontSize: 10 }}>{formatCurrency(p.hourly_wage)}원</span>
+                            )}
+                            {p.can_close_books && !p.is_super_admin && !p.is_executive && (
+                              <span className="tag tag-mint" style={{ fontSize: 9, padding: '0 5px' }}>마감</span>
+                            )}
+                          </div>
                         </div>
 
-                        {Number(p.hourly_wage) > 0 && (
-                          <div style={{ marginTop: 10, display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
-                            <span className="tag" style={{ marginLeft: 'auto', fontWeight: 700 }}>
-                              시급 <span className="num">{formatCurrency(p.hourly_wage)}</span>원
-                            </span>
+                        {isExecutive && (
+                          <div onClick={(e) => e.stopPropagation()} style={{ position: 'relative' }}>
+                            <button
+                              type="button"
+                              className="btn btn-ghost btn-icon btn-sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setMenuOpenId(menuOpenId === `${g.workplace.id}-${p.user_id}` ? null : `${g.workplace.id}-${p.user_id}`);
+                              }}
+                            >
+                              <MoreVertical size={15} />
+                            </button>
+                            {menuOpenId === `${g.workplace.id}-${p.user_id}` && (
+                              <div style={{
+                                position: 'absolute', top: '100%', right: 0, marginTop: 4,
+                                background: 'var(--surface)', border: '1px solid var(--border)',
+                                borderRadius: 12, padding: 4,
+                                boxShadow: 'var(--sh-md)', minWidth: 180, zIndex: 30,
+                              }}>
+                                <Link
+                                  href={`/members/${p.user_id}`}
+                                  onClick={() => setMenuOpenId(null)}
+                                  style={{ ...menuItemStyle, textDecoration: 'none', color: 'var(--text)' }}
+                                >
+                                  <BarChart3 size={14} /> 통계 보기
+                                </Link>
+                                <button
+                                  type="button"
+                                  onClick={() => { setMenuOpenId(null); setEditing({ profile: p, mode: 'edit' }); }}
+                                  style={menuItemStyle}
+                                >
+                                  <Building2 size={14} /> 배정 수정
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => { setMenuOpenId(null); setRetiring(p); }}
+                                  style={menuItemStyle}
+                                >
+                                  <UserMinus size={14} color="var(--danger)" /> 퇴사 처리
+                                </button>
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>
@@ -267,14 +273,14 @@ export default function MembersClient({ workplaces, profiles, memberships, curre
               <h2 className="h3">퇴사한 직원</h2>
               <span className="text-muted" style={{ fontSize: 12 }}>{retired.length}명</span>
             </div>
-            <div className="stack stack-2">
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 8 }}>
               {retired.map((p) => (
-                <div key={p.user_id} className="card compact" style={{ display: 'flex', alignItems: 'center', gap: 12, opacity: 0.7 }}>
-                  <Avatar name={p.name} userId={p.user_id} />
+                <div key={p.user_id} className="card compact" style={{ display: 'flex', alignItems: 'center', gap: 9, opacity: 0.72, padding: '8px 12px' }}>
+                  <Avatar name={p.name} userId={p.user_id} size="sm" />
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div className="h4" style={{ textDecoration: 'line-through' }}>{p.name || '이름 없음'}</div>
-                    <div className="text-muted" style={{ fontSize: 12, marginTop: 2 }}>
-                      퇴사 {ymd(new Date(p.retired_at))}{p.retired_reason ? ` · ${p.retired_reason}` : ''}
+                    <div style={{ fontWeight: 700, fontSize: 13, textDecoration: 'line-through', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name || '이름 없음'}</div>
+                    <div className="text-muted" style={{ fontSize: 11, marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {ymd(new Date(p.retired_at))}{p.retired_reason ? ` · ${p.retired_reason}` : ''}
                     </div>
                   </div>
                   <button
@@ -289,7 +295,7 @@ export default function MembersClient({ workplaces, profiles, memberships, curre
                       } catch (e) { alert(String(e?.message || e)); }
                     }}
                   >
-                    <UserCheck size={14} color="var(--success)" /> 복직
+                    <UserCheck size={13} color="var(--success)" /> 복직
                   </button>
                 </div>
               ))}
