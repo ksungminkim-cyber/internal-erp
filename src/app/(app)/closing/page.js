@@ -11,7 +11,7 @@ import { downloadCsv, fmtDate } from '@/lib/csvExport';
 import { calcLabor, formatMinutes } from '@/lib/laborCalc';
 import { getProfileNames } from '@/app/_actions/names';
 import { ymd } from '@/lib/date';
-import { confirmMonthClosing, unlockMonthClosing, linkClosingApproval, submitClosingApproval } from './actions';
+import { confirmMonthClosing, unlockMonthClosing, linkClosingApproval, submitClosingApproval, getClosingSourceData } from './actions';
 import {
   ChevronLeft, ChevronRight, Lock, Unlock, Download, Check, AlertCircle,
   Send, Printer, X, Plus, Clock, FileCheck,
@@ -108,31 +108,12 @@ export default function ClosingPage() {
     setExistingClosing(null);
     setClosingApproval(null);
 
-    // 실시간 집계
-    const [sales, expenses, attendance, profilesData] = await Promise.all([
-      supabase
-        .from('sales_daily')
-        .select('sales_date, total_amount, transaction_count, cash_amount, card_amount, other_amount')
-        .eq('workplace_id', currentWorkplaceId)
-        .gte('sales_date', ymd(start))
-        .lt('sales_date', ymd(end))
-        .order('sales_date'),
-      supabase
-        .from('approval_requests')
-        .select('id, title, total_amount, decided_at, expense_items(category, amount, description, kind)')
-        .eq('workplace_id', currentWorkplaceId)
-        .eq('status', 'approved')
-        .gte('submitted_at', start.toISOString())
-        .lt('submitted_at', end.toISOString()),
-      supabase
-        .from('attendance_logs')
-        .select('user_id, event_type, event_at')
-        .eq('workplace_id', currentWorkplaceId)
-        .gte('event_at', start.toISOString())
-        .lt('event_at', end.toISOString())
-        .order('event_at'),
-      supabase.from('profiles').select('user_id, name, hourly_wage'),
-    ]);
+    // 실시간 집계 — 서버 액션(서비스 롤)으로 RLS 우회
+    const src = await getClosingSourceData(currentWorkplaceId, start.toISOString(), end.toISOString());
+    const sales = { data: src.sales };
+    const expenses = { data: src.expenses };
+    const attendance = { data: src.attendance };
+    const profilesData = { data: src.profiles };
 
     // 매출 집계
     const salesRows = sales.data ?? [];

@@ -4,6 +4,52 @@ import { getServiceClient, getActor, loadActorPerms, friendlyDbError } from '@/l
 import { formatCurrency } from '@/lib/format';
 
 /**
+ * 월 마감용 데이터 (매출/지출/근태/직원) — 서비스 롤 조회.
+ * 클라이언트 profiles(name, hourly_wage)가 RLS로 빈 결과 나던 문제 해결.
+ */
+export async function getClosingSourceData(workplaceId, startISO, endISO) {
+  const user = await getActor();
+  if (!user) return { sales: [], expenses: [], attendance: [], profiles: [] };
+  if (!workplaceId) return { sales: [], expenses: [], attendance: [], profiles: [] };
+
+  const svc = getServiceClient();
+  const startDate = startISO.slice(0, 10);
+  const endDate = endISO.slice(0, 10);
+
+  const [sales, expenses, attendance, profiles] = await Promise.all([
+    svc
+      .from('sales_daily')
+      .select('sales_date, total_amount, transaction_count, cash_amount, card_amount, other_amount')
+      .eq('workplace_id', workplaceId)
+      .gte('sales_date', startDate)
+      .lt('sales_date', endDate)
+      .order('sales_date'),
+    svc
+      .from('approval_requests')
+      .select('id, title, total_amount, decided_at, expense_items(category, amount, description, kind)')
+      .eq('workplace_id', workplaceId)
+      .eq('status', 'approved')
+      .gte('submitted_at', startISO)
+      .lt('submitted_at', endISO),
+    svc
+      .from('attendance_logs')
+      .select('user_id, event_type, event_at')
+      .eq('workplace_id', workplaceId)
+      .gte('event_at', startISO)
+      .lt('event_at', endISO)
+      .order('event_at'),
+    svc.from('profiles').select('user_id, name, hourly_wage'),
+  ]);
+
+  return {
+    sales: sales.data ?? [],
+    expenses: expenses.data ?? [],
+    attendance: attendance.data ?? [],
+    profiles: profiles.data ?? [],
+  };
+}
+
+/**
  * 월 마감 확정 — month_closings upsert (서비스 롤 + 코드 권한검증)
  */
 export async function confirmMonthClosing({
