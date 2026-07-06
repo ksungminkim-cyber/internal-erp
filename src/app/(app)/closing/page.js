@@ -9,6 +9,7 @@ import BottomSheet from '@/components/BottomSheet';
 import { formatCurrency } from '@/lib/format';
 import { downloadCsv, fmtDate } from '@/lib/csvExport';
 import { calcLabor, formatMinutes } from '@/lib/laborCalc';
+import { getProfileNames } from '@/app/_actions/names';
 import { ymd } from '@/lib/date';
 import { confirmMonthClosing, unlockMonthClosing, linkClosingApproval, submitClosingApproval } from './actions';
 import {
@@ -125,7 +126,7 @@ export default function ClosingPage() {
         .lt('submitted_at', end.toISOString()),
       supabase
         .from('attendance_logs')
-        .select('user_id, event_type, event_at, profiles:profiles!attendance_logs_user_id_fkey(name, hourly_wage)')
+        .select('user_id, event_type, event_at')
         .eq('workplace_id', currentWorkplaceId)
         .gte('event_at', start.toISOString())
         .lt('event_at', end.toISOString())
@@ -659,13 +660,15 @@ function SubmitClosingApproval({
     (async () => {
       const { data } = await supabase
         .from('memberships')
-        .select('user_id, role, profiles!memberships_user_id_fkey(name)')
+        .select('user_id, role')
         .eq('workplace_id', workplaceId)
         .eq('active', true)
         .in('role', ['manager', 'owner'])
         .neq('user_id', userId);
+      const rows = data ?? [];
+      const names = await getProfileNames(rows.map((m) => m.user_id));
       setCandidates(
-        (data ?? []).map((m) => ({ user_id: m.user_id, name: m.profiles?.name || '—', role: m.role }))
+        rows.map((m) => ({ user_id: m.user_id, name: names[m.user_id] || '—', role: m.role }))
       );
     })();
   }, [supabase, workplaceId, userId]);
