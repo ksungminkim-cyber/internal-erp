@@ -119,13 +119,24 @@ export default function ReportsPage() {
       logsByUser[uid].logs.push(l);
     });
     const userHours = Object.entries(logsByUser).map(([uid, { name, logs }]) => {
+      // 휴게시간 차감한 실근무 (월마감 laborCalc와 동일 기준)
       let mins = 0;
       let openIn = null;
+      let breakMins = 0;
+      let breakStart = null;
       logs.forEach((l) => {
-        if (l.event_type === 'clock_in') openIn = new Date(l.event_at).getTime();
-        if (l.event_type === 'clock_out' && openIn) {
-          mins += Math.max(0, Math.floor((new Date(l.event_at).getTime() - openIn) / 60000));
+        const t = new Date(l.event_at).getTime();
+        if (l.event_type === 'clock_in') { openIn = t; breakMins = 0; breakStart = null; }
+        else if (l.event_type === 'break_start' && openIn) breakStart = t;
+        else if (l.event_type === 'break_end' && breakStart) {
+          breakMins += Math.max(0, Math.floor((t - breakStart) / 60000));
+          breakStart = null;
+        }
+        else if (l.event_type === 'clock_out' && openIn) {
+          if (breakStart) { breakMins += Math.max(0, Math.floor((t - breakStart) / 60000)); breakStart = null; }
+          mins += Math.max(0, Math.floor((t - openIn) / 60000) - breakMins);
           openIn = null;
+          breakMins = 0;
         }
       });
       return { user_id: uid, name, minutes: mins };
@@ -236,13 +247,13 @@ export default function ReportsPage() {
               </div>
               <div className="bento">
                 <div className="bento-label text-secondary">
-                  <TrendingUp size={14} /> 순이익(추정)
+                  <TrendingUp size={14} /> 매출-지출(추정)
                 </div>
                 <div className="bento-value sm num" style={{ color: profit >= 0 ? 'var(--success)' : 'var(--danger)' }}>
                   {profit >= 0 ? '+' : ''}{formatCurrency(profit)}
                 </div>
                 <div className="bento-sub text-muted">
-                  마진 {profitMargin.toFixed(1)}%
+                  마진 {profitMargin.toFixed(1)}% · 인건비 미포함 — 정확한 손익은 월 마감
                 </div>
               </div>
             </section>
