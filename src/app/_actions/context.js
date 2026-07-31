@@ -20,32 +20,31 @@ function getServiceClient() {
 export async function getMyContext() {
   const authClient = await createServerClient();
   const { data: { user } } = await authClient.auth.getUser();
-  if (!user) return { profile: null, memberships: [] };
+  if (!user) return { user: null, profile: null, memberships: [] };
 
   const svc = getServiceClient();
-  const [{ data: profile }, { data: rawMemberships }] = await Promise.all([
+  // workplaces는 몇 행 안 되므로 무조건 병렬 조회 — HQ 분기 시 순차 왕복 1회 제거
+  const [{ data: profile }, { data: rawMemberships }, { data: allWps }] = await Promise.all([
     svc.from('profiles').select('*').eq('user_id', user.id).maybeSingle(),
     svc
       .from('memberships')
       .select('id, workplace_id, role, active, workplaces(id, name, address)')
       .eq('user_id', user.id)
       .eq('active', true),
+    svc.from('workplaces').select('id, name, address').order('name'),
   ]);
 
   let memberships = rawMemberships ?? [];
   const isHQ = profile?.is_super_admin || memberships.some((m) => m.workplaces?.name === '본사');
-  if (isHQ) {
-    const { data: allWps } = await svc.from('workplaces').select('id, name, address').order('name');
-    if (allWps?.length) {
-      const realWpIds = new Set(memberships.map((m) => m.workplace_id));
-      const virtualMems = allWps
-        .filter((w) => !realWpIds.has(w.id))
-        .map((w) => ({ id: `virtual_${w.id}`, workplace_id: w.id, role: 'manager', active: true, workplaces: w }));
-      memberships = [...memberships, ...virtualMems];
-    }
+  if (isHQ && allWps?.length) {
+    const realWpIds = new Set(memberships.map((m) => m.workplace_id));
+    const virtualMems = allWps
+      .filter((w) => !realWpIds.has(w.id))
+      .map((w) => ({ id: `virtual_${w.id}`, workplace_id: w.id, role: 'manager', active: true, workplaces: w }));
+    memberships = [...memberships, ...virtualMems];
   }
 
-  return { profile: profile ?? null, memberships };
+  return { user, profile: profile ?? null, memberships };
 }
 
 /**

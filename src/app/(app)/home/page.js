@@ -51,6 +51,7 @@ export default async function HomePage() {
   const [
     board, inboxSteps, anns, reads, todayLogs, annTotal,
     salesToday, inv, todayShifts, handover,
+    myProfileRes, myMemsRes, allWpsRes,
   ] = await Promise.all([
     supabase
       .from('attendance_current_status')
@@ -104,6 +105,10 @@ export default async function HomePage() {
       .select('id', { count: 'exact', head: true })
       .eq('workplace_id', wpId)
       .eq('resolved', false),
+    // 본사/super_admin 판정 + 전 매장 목록 — 순차 왕복 제거 위해 같은 배치에서 조회
+    supabase.from('profiles').select('is_super_admin').eq('user_id', user.id).maybeSingle(),
+    supabase.from('memberships').select('workplaces(name)').eq('user_id', user.id).eq('active', true),
+    supabase.from('workplaces').select('id, name').neq('name', '본사').order('name'),
   ]);
 
   const readIds    = new Set((reads.data ?? []).map((r) => r.announcement_id));
@@ -129,38 +134,28 @@ export default async function HomePage() {
   };
 
   // ── 본사/super_admin 이면 전 매장 출근 현황 추가 조회 ──
-  const [{ data: myProfile }, { data: myMems }] = await Promise.all([
-    supabase.from('profiles').select('is_super_admin').eq('user_id', user.id).maybeSingle(),
-    supabase.from('memberships').select('workplaces(name)').eq('user_id', user.id).eq('active', true),
-  ]);
-  const isHQ = myProfile?.is_super_admin === true
-    || (myMems ?? []).some((m) => m.workplaces?.name === '본사');
+  const isHQ = myProfileRes.data?.is_super_admin === true
+    || (myMemsRes.data ?? []).some((m) => m.workplaces?.name === '본사');
 
   let hqWorkplaceStatuses = null;
-  if (isHQ) {
-    const { data: allWps } = await supabase
-      .from('workplaces')
-      .select('id, name')
-      .neq('name', '본사')
-      .order('name');
-    if (allWps?.length) {
-      hqWorkplaceStatuses = await Promise.all(
-        allWps.map(async (wp) => {
-          const { data: brd } = await supabase
-            .from('attendance_current_status')
-            .select('user_id, status, name')
-            .eq('workplace_id', wp.id);
-          const working = (brd ?? []).filter((b) => b.status === 'working' || b.status === 'on_break');
-          return {
-            id: wp.id,
-            name: wp.name,
-            workingCount: working.length,
-            workingNames: working.map((b) => b.name).filter(Boolean),
-            totalToday: (brd ?? []).length,
-          };
-        })
-      );
-    }
+  const allWps = allWpsRes.data ?? [];
+  if (isHQ && allWps.length) {
+    // 매장별 개별 쿼리 대신 in() 한 방 — 매장 수만큼의 왕복 제거
+    const { data: allBoards } = await supabase
+      .from('attendance_current_status')
+      .select('workplace_id, user_id, status, name')
+      .in('workplace_id', allWps.map((w) => w.id));
+    hqWorkplaceStatuses = allWps.map((wp) => {
+      const brd = (allBoards ?? []).filter((b) => b.workplace_id === wp.id);
+      const working = brd.filter((b) => b.status === 'working' || b.status === 'on_break');
+      return {
+        id: wp.id,
+        name: wp.name,
+        workingCount: working.length,
+        workingNames: working.map((b) => b.name).filter(Boolean),
+        totalToday: brd.length,
+      };
+    });
   }
 
   return (

@@ -25,7 +25,10 @@ export async function updateSession(request) {
   );
 
   // access_token 만료 시 내부적으로 자동 refresh → setAll 콜백으로 새 쿠키 반영됨
-  const { data: { user } } = await supabase.auth.getUser();
+  // getClaims: JWT를 로컬 검증 (비대칭 키) — 매 요청 auth 서버 왕복 제거.
+  // 라우트 보호 용도로만 사용하고, 실제 데이터 접근 권한은 layout/서버액션의 getUser가 재검증.
+  const { data: claimsData } = await supabase.auth.getClaims();
+  const user = claimsData?.claims ?? null;
 
   const url = request.nextUrl;
   const isAuthRoute = url.pathname.startsWith('/login') || url.pathname.startsWith('/auth');
