@@ -10,6 +10,7 @@ import BottomSheet from '@/components/BottomSheet';
 import { Plus, ChevronLeft, ChevronRight, X, Trash2, Send, CheckCircle2, AlertCircle, Lock, FileText, Copy } from 'lucide-react';
 import { isHoliday } from '@/lib/holidays';
 import { getScheduleData, saveShift, deleteShift, submitScheduleApproval, copyPreviousShifts } from './actions';
+import { getApproverCandidates } from '../approvals/actions';
 
 const DOW = ['일', '월', '화', '수', '목', '금', '토'];
 
@@ -387,10 +388,7 @@ export default function SchedulePage() {
           year={anchor.getFullYear()}
           month={anchor.getMonth() + 1}
           shiftCount={unsubmittedCount}
-          coworkers={coworkers}
-          userId={user.id}
           workplaceId={currentWorkplaceId}
-          supabase={supabase}
           shifts={shifts.filter((s) => !s.approval_request_id && s.status !== 'cancelled')}
           onClose={() => setEditing(null)}
           onSaved={(approvalId) => {
@@ -591,24 +589,25 @@ function ShiftEditor({ shift, initial, coworkers, workplaceId, userId, supabase,
   );
 }
 
-function SubmitScheduleApproval({ year, month, shiftCount, coworkers, userId, workplaceId, supabase, shifts, onClose, onSaved }) {
+function SubmitScheduleApproval({ year, month, shiftCount, workplaceId, shifts, onClose, onSaved }) {
   const [approvers, setApprovers] = useState([]);
   const [candidates, setCandidates] = useState([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
 
   useEffect(() => {
+    let cancelled = false;
     (async () => {
-      const { data } = await supabase
-        .from('memberships')
-        .select('user_id, role, profiles!memberships_user_id_fkey(name)')
-        .eq('workplace_id', workplaceId)
-        .eq('active', true)
-        .in('role', ['manager', 'owner'])
-        .neq('user_id', userId);
-      setCandidates((data ?? []).map((m) => ({ user_id: m.user_id, name: m.profiles?.name || '—', role: m.role })));
+      // 서버 액션으로 결재자 후보 조회 (서비스 롤 — 매장 매니저/대표 + 본사 멤버)
+      try {
+        const list = await getApproverCandidates(workplaceId);
+        if (!cancelled) setCandidates(list);
+      } catch {
+        if (!cancelled) setCandidates([]);
+      }
     })();
-  }, [supabase, workplaceId, userId]);
+    return () => { cancelled = true; };
+  }, [workplaceId]);
 
   function addApprover(uid) {
     if (approvers.some((a) => a.user_id === uid)) return;
@@ -670,7 +669,9 @@ function SubmitScheduleApproval({ year, month, shiftCount, coworkers, userId, wo
                   fontSize: 12, fontWeight: 800,
                 }}>{idx + 1}</span>
                 <span style={{ flex: 1, fontWeight: 600, fontSize: 14 }}>{a.name}</span>
-                <span className="tag" style={{ fontSize: 10 }}>{a.role === 'owner' ? '대표' : '매니저'}</span>
+                <span className="tag" style={{ fontSize: 10 }}>
+                  {a.isExecutive || a.role === 'owner' ? '대표' : a.source === 'hq' ? '본사' : '매니저'}
+                </span>
                 <button type="button" onClick={() => removeApprover(a.user_id)} className="btn btn-ghost btn-icon">
                   <X size={14} color="var(--danger)" />
                 </button>
@@ -680,7 +681,7 @@ function SubmitScheduleApproval({ year, month, shiftCount, coworkers, userId, wo
         )}
 
         {candidates.length === 0 ? (
-          <p className="text-muted" style={{ fontSize: 13 }}>같은 사업장의 매니저/대표가 없어요</p>
+          <p className="text-muted" style={{ fontSize: 13 }}>지정 가능한 결재자가 없어요 (매장 매니저·대표 또는 본사 직원)</p>
         ) : (
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
             {candidates.filter((c) => !approvers.find((a) => a.user_id === c.user_id)).map((c) => (
