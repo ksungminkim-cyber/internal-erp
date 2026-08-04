@@ -1,6 +1,7 @@
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { AppProvider } from '@/context/AppContext';
+import { FeedbackProvider } from '@/context/FeedbackContext';
 import { getMyContext } from '@/app/_actions/context';
 import BottomNav from '@/components/BottomNav';
 import Sidebar from '@/components/Sidebar';
@@ -28,10 +29,12 @@ export default async function AppLayout({ children }) {
       initialMemberships={memberships}
       initialWorkplaceId={initialWorkplaceId}
     >
-      <Sidebar />
-      <div className="app-shell">{children}</div>
-      <BottomNav />
-      <WelcomeModal />
+      <FeedbackProvider>
+        <Sidebar />
+        <div className="app-shell">{children}</div>
+        <BottomNav />
+        <WelcomeModal />
+      </FeedbackProvider>
     </AppProvider>
   );
 }

@@ -22,21 +22,22 @@ const OPS_LINKS = [
   { href: '/handover', label: '인수인계', icon: ClipboardCheck },
   { href: '/checklists', label: '체크리스트', icon: ListTodo },
   { href: '/inventory', label: '재고·발주', icon: Package },
-  { href: '/equipment', label: '장비 점검', icon: Wrench },
+  // 미사용 기능 숨김 (2026-08 사용량 0건 — 필요 시 주석 해제로 복원)
+  // { href: '/equipment', label: '장비 점검', icon: Wrench },
   { href: '/recipes', label: '레시피', icon: BookOpen },
-  { href: '/complaints', label: '고객 클레임', icon: MessageCircle },
+  // { href: '/complaints', label: '고객 클레임', icon: MessageCircle },
   { href: '/sales', label: '매출', icon: TrendingUp },
   { href: '/kpis', label: 'KPI', icon: Target },
   { href: '/reports', label: '월별 리포트', icon: BarChart3 },
   { href: '/announcements', label: '공지사항', icon: Megaphone },
-  { href: '/suggestions', label: '건의함', icon: MessageSquare },
+  // { href: '/suggestions', label: '건의함', icon: MessageSquare },
   { href: '/guide', label: '사용 가이드', icon: HelpCircle },
 ];
 
 const ADMIN_LINKS = [
   { href: '/closing', label: '월 마감', icon: Lock },
   { href: '/members', label: '직원 관리', icon: User },
-  { href: '/delegations', label: '결재 위임', icon: UserCheck },
+  // { href: '/delegations', label: '결재 위임', icon: UserCheck }, // 미사용 숨김
   { href: '/audit', label: '감사 로그', icon: FileSearch },
 ];
 

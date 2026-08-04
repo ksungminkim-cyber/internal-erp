@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useApp } from '@/context/AppContext';
+import { useFeedback } from '@/context/FeedbackContext';
 import PageHeader from '@/components/PageHeader';
 import BottomSheet from '@/components/BottomSheet';
 import { formatTime } from '@/lib/format';
@@ -257,6 +258,7 @@ export default function AttendanceHistoryPage() {
 
 // ───── 근태 보정 시트 (시각/구분 수정 · 삭제) ─────
 function CorrectSheet({ log, onClose, onDone }) {
+  const { confirmDialog } = useFeedback();
   const [eventType, setEventType] = useState(log.event_type);
   const [eventAt, setEventAt] = useState(toLocalInput(log.event_at));
   const [note, setNote] = useState(log.note ?? '');
@@ -284,7 +286,7 @@ function CorrectSheet({ log, onClose, onDone }) {
   }
 
   async function remove() {
-    if (!confirm('이 기록을 삭제하시겠습니까?')) return;
+    if (!(await confirmDialog({ message: '이 기록을 삭제하시겠습니까?', confirmLabel: '삭제', danger: true }))) return;
     setSaving(true);
     try {
       const res = await deleteAttendanceLog({ logId: log.id });

@@ -6,8 +6,8 @@ import { useApp } from '@/context/AppContext';
 import PageHeader from '@/components/PageHeader';
 import {
   Calendar, ClipboardCheck, ListTodo, Package, TrendingUp, Megaphone,
-  AlertCircle, Sparkles, Wrench, BookOpen, MessageCircle, BarChart3, UserCog, Lock,
-  Target, MessageSquare, HelpCircle,
+  AlertCircle, Sparkles, BookOpen, BarChart3, UserCog, Lock,
+  Target, HelpCircle,
 } from 'lucide-react';
 
 export default function OperationsMenu() {
@@ -86,8 +86,6 @@ export default function OperationsMenu() {
   const urgentItems = [
     stats.lowStock > 0 && { href: '/inventory', label: `발주 ${stats.lowStock}품목` },
     stats.handoverUnresolved > 0 && { href: '/handover', label: `인수인계 ${stats.handoverUnresolved}건` },
-    stats.equipmentIssue > 0 && { href: '/equipment', label: `장비 ${stats.equipmentIssue}대` },
-    stats.complaintOpen > 0 && { href: '/complaints', label: `클레임 ${stats.complaintOpen}건` },
   ].filter(Boolean);
 
   return (
@@ -116,7 +114,7 @@ export default function OperationsMenu() {
 
         <section className="stack stack-3">
           <h2 className="h3">매장 운영</h2>
-          <div className="grid-4">
+          <div className="grid-4 stagger">
             <OpsCard href="/schedule"    icon={Calendar}        label="시프트"     desc="근무 일정"
               accent="violet" badge={stats.todayShifts > 0 ? `오늘 ${stats.todayShifts}` : null} />
             <OpsCard href="/handover"    icon={ClipboardCheck}  label="인수인계"   desc="교대 메모"
@@ -124,29 +122,19 @@ export default function OperationsMenu() {
             <OpsCard href="/checklists"  icon={ListTodo}        label="체크리스트" desc="오픈·마감 루틴"   accent="accent" />
             <OpsCard href="/inventory"   icon={Package}         label="재고·발주"  desc="식자재·비품"
               accent="warm" badge={stats.lowStock > 0 ? `${stats.lowStock} 부족` : null} urgent={stats.lowStock > 0} />
-          </div>
-        </section>
-
-        <section className="stack stack-3">
-          <h2 className="h3">품질 · 서비스</h2>
-          <div className="grid-4">
-            <OpsCard href="/equipment"  icon={Wrench}        label="장비 점검"   desc="머신·기기 관리"
-              accent="violet" badge={stats.equipmentIssue > 0 ? `${stats.equipmentIssue}` : null} urgent={stats.equipmentIssue > 0} />
             <OpsCard href="/recipes"    icon={BookOpen}      label="레시피"      desc="두 매장 공통"      accent="mint" />
-            <OpsCard href="/complaints" icon={MessageCircle} label="고객 클레임" desc="불만·요청 기록"
-              accent="warm" badge={stats.complaintOpen > 0 ? `${stats.complaintOpen}` : null} urgent={stats.complaintOpen > 0} />
           </div>
         </section>
+        {/* 미사용 기능 숨김 (2026-08 사용량 0건): 장비 점검·고객 클레임·건의함 — 복원 시 git 이력 참조 */}
 
         <section className="stack stack-3">
           <h2 className="h3">매출 · 인사이트</h2>
-          <div className="grid-4">
+          <div className="grid-4 stagger">
             <OpsCard href="/sales"          icon={TrendingUp} label="매출"       desc="일별 매출"      accent="success" />
             <OpsCard href="/kpis"           icon={Target}     label="KPI"        desc="월별 목표·결재"  accent="violet" />
             <OpsCard href="/reports"        icon={BarChart3}  label="월별 리포트" desc="통합 대시보드"  accent="accent" />
             <OpsCard href="/announcements"  icon={Megaphone}  label="공지사항"   desc="전직원 공지"
               accent="neutral" badge={stats.unreadAnn > 0 ? `${stats.unreadAnn} 신규` : null} urgent={stats.unreadAnn > 0} />
-            <OpsCard href="/suggestions"    icon={MessageSquare} label="건의함" desc="본사로 의견 전달" accent="mint" />
             <OpsCard href="/guide"          icon={HelpCircle}    label="사용 가이드" desc="PDF 저장 가능"   accent="violet" />
           </div>
         </section>
@@ -154,7 +142,7 @@ export default function OperationsMenu() {
         {isAdmin && (
           <section className="stack stack-3">
             <h2 className="h3">관리</h2>
-            <div className="grid-4">
+            <div className="grid-4 stagger">
               <OpsCard href="/closing" icon={Lock} label="월 마감" desc="손익·인건비·지출" accent="accent" />
               <OpsCard href="/members" icon={UserCog} label="직원 관리" desc="가입·배정·시급" accent="neutral" />
             </div>

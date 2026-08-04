@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useApp } from '@/context/AppContext';
+import { useFeedback } from '@/context/FeedbackContext';
 import PageHeader from '@/components/PageHeader';
 import BottomSheet from '@/components/BottomSheet';
 import { formatCurrency } from '@/lib/format';
@@ -30,6 +31,7 @@ function getCategoryKind(cat) {
 export default function ClosingPage() {
   const router = useRouter();
   const { user, profile, currentWorkplaceId, currentWorkplace, supabase, memberships } = useApp();
+  const { confirmDialog } = useFeedback();
   const isAdmin =
     profile?.is_super_admin === true
     || profile?.can_close_books === true
@@ -203,7 +205,11 @@ export default function ClosingPage() {
 
   async function confirmClose() {
     if (!data) return;
-    if (!confirm(`${year}년 ${month + 1}월 마감을 확정하시겠습니까? 확정 후에도 데이터 수정은 가능하지만 이 스냅샷은 보존됩니다.`)) return;
+    if (!(await confirmDialog({
+      title: '월 마감 확정',
+      message: `${year}년 ${month + 1}월 마감을 확정하시겠습니까? 확정 후에도 데이터 수정은 가능하지만 이 스냅샷은 보존됩니다.`,
+      confirmLabel: '마감 확정',
+    }))) return;
     setActing(true);
     setError(null);
     try {
@@ -228,7 +234,7 @@ export default function ClosingPage() {
   }
 
   async function unlockClose() {
-    if (!confirm('마감을 해제하시겠습니까? 다시 실시간 집계가 표시됩니다.')) return;
+    if (!(await confirmDialog({ message: '마감을 해제하시겠습니까? 다시 실시간 집계가 표시됩니다.', confirmLabel: '마감 해제', danger: true }))) return;
     setActing(true);
     try {
       const res = await unlockMonthClosing({

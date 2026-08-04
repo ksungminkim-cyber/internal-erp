@@ -3,11 +3,13 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useApp } from '@/context/AppContext';
+import { useFeedback } from '@/context/FeedbackContext';
 import PageHeader from '@/components/PageHeader';
 import BottomSheet from '@/components/BottomSheet';
 import { ChevronLeft, ListTodo, Check, Plus, X, Trash2, Edit3, Sun, Moon, Repeat, Calendar } from 'lucide-react';
 import { isChecklistDueToday, frequencyLabel } from '@/lib/checklist';
 import { todayKey } from '@/lib/date';
+import { getPageCache, setPageCache } from '@/lib/pageCache';
 import { saveChecklistCompletion, saveChecklistTemplate, deleteChecklistTemplate } from './actions';
 
 const TYPE_META = {
@@ -20,8 +22,9 @@ const TYPE_META = {
 export default function ChecklistsPage() {
   const router = useRouter();
   const { user, currentWorkplaceId, supabase, isManager } = useApp();
-  const [templates, setTemplates] = useState([]);
-  const [completions, setCompletions] = useState({}); // template_id -> completion row
+  const cached = getPageCache(`checklists:${currentWorkplaceId}`);
+  const [templates, setTemplates] = useState(cached?.templates ?? []);
+  const [completions, setCompletions] = useState(cached?.completions ?? {}); // template_id -> completion row
   const [loading, setLoading] = useState(false);
   const [activeTemplate, setActiveTemplate] = useState(null);
   const [editingTemplate, setEditingTemplate] = useState(null);
@@ -42,13 +45,15 @@ export default function ChecklistsPage() {
         .eq('workplace_id', currentWorkplaceId)
         .eq('completion_date', today),
     ]);
-    setTemplates((tpl ?? []).map((t) => ({
+    const tplSorted = (tpl ?? []).map((t) => ({
       ...t,
       checklist_items: (t.checklist_items ?? []).sort((a, b) => a.order_idx - b.order_idx),
-    })));
+    }));
     const cmap = {};
     (comps ?? []).forEach((c) => { cmap[c.template_id] = c; });
+    setTemplates(tplSorted);
     setCompletions(cmap);
+    setPageCache(`checklists:${currentWorkplaceId}`, { templates: tplSorted, completions: cmap });
     setLoading(false);
   }, [supabase, currentWorkplaceId]);
 
@@ -185,6 +190,7 @@ export default function ChecklistsPage() {
 }
 
 function ChecklistRunner({ template, completion, supabase, userId, workplaceId, isManager, onEdit, onClose, onChanged }) {
+  const { toast } = useFeedback();
   const total = template.checklist_items?.length ?? 0;
   const initialItems = completion?.items ?? {};
   const [items, setItems] = useState(initialItems);
@@ -216,13 +222,13 @@ function ChecklistRunner({ template, completion, supabase, userId, workplaceId, 
       });
       if (res?.error) {
         setItems(items); // 실패 시 롤백
-        alert(res.error);
+        toast(res.error, 'error');
         return;
       }
       onChanged?.();
     } catch (e) {
       setItems(items); // 실패 시 롤백
-      alert(String(e?.message || e));
+      toast(String(e?.message || e), 'error');
     } finally {
       setSaving(false);
     }
@@ -306,6 +312,7 @@ const DOW_OPTIONS = [
 ];
 
 function ChecklistEditor({ template, supabase, workplaceId, onClose, onSaved }) {
+  const { confirmDialog } = useFeedback();
   const isEdit = !!template?.id;
   const [name, setName] = useState(template?.name ?? '');
   const [type, setType] = useState(template?.type ?? 'open');
@@ -363,7 +370,7 @@ function ChecklistEditor({ template, supabase, workplaceId, onClose, onSaved }) 
   }
 
   async function deleteTemplate() {
-    if (!confirm('이 체크리스트를 삭제하시겠습니까?')) return;
+    if (!(await confirmDialog({ message: '이 체크리스트를 삭제하시겠습니까?', confirmLabel: '삭제', danger: true }))) return;
     setSaving(true);
     try {
       const res = await deleteChecklistTemplate({ templateId: template.id });

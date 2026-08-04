@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, use } from 'react';
 import { useRouter } from 'next/navigation';
 import { useApp } from '@/context/AppContext';
+import { useFeedback } from '@/context/FeedbackContext';
 import PageHeader from '@/components/PageHeader';
 import { formatCurrency, formatRelative } from '@/lib/format';
 import { getProfileNames } from '@/app/_actions/names';
@@ -15,6 +16,7 @@ export default function RecipeDetail({ params }) {
   const { id } = use(params);
   const router = useRouter();
   const { user, supabase, isManager, profile, currentWorkplaceId, memberships } = useApp();
+  const { confirmDialog } = useFeedback();
   const isNew = id === 'new';
 
   const [loading, setLoading] = useState(!isNew);
@@ -103,7 +105,7 @@ export default function RecipeDetail({ params }) {
   }
 
   async function archive() {
-    if (!confirm('이 레시피를 보관 처리할까요?')) return;
+    if (!(await confirmDialog({ message: '이 레시피를 보관 처리할까요?', confirmLabel: '보관', danger: true }))) return;
     setSaving(true);
     try {
       const res = await archiveRecipe({ id });

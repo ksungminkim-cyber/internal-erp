@@ -4,11 +4,13 @@ import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useApp } from '@/context/AppContext';
+import { useFeedback } from '@/context/FeedbackContext';
 import PageHeader from '@/components/PageHeader';
 import Avatar from '@/components/Avatar';
 import BottomSheet from '@/components/BottomSheet';
 import { Plus, ChevronLeft, ChevronRight, X, Trash2, Send, CheckCircle2, AlertCircle, Lock, FileText, Copy } from 'lucide-react';
 import { isHoliday } from '@/lib/holidays';
+import { getPageCache, setPageCache } from '@/lib/pageCache';
 import { getScheduleData, saveShift, deleteShift, submitScheduleApproval, copyPreviousShifts } from './actions';
 import { getApproverCandidates } from '../approvals/actions';
 
@@ -142,6 +144,14 @@ export default function SchedulePage() {
 
   const load = useCallback(async () => {
     if (!currentWorkplaceId) return;
+    // 재방문/기간 이동 시 캐시된 데이터 즉시 표시 후 백그라운드 갱신
+    const cacheKey = `schedule:${currentWorkplaceId}:${periodStart.toISOString()}:${periodEnd.toISOString()}`;
+    const cached = getPageCache(cacheKey);
+    if (cached) {
+      setShifts(cached.shifts);
+      setLogs(cached.logs);
+      setCoworkers(cached.coworkers);
+    }
     // 서버 액션(서비스 롤)으로 조회 — profile JOIN RLS 충돌 회피 + 직원 이름 정확
     try {
       const { shifts: ss, logs: attLogs, coworkers: cw } = await getScheduleData(
@@ -152,8 +162,9 @@ export default function SchedulePage() {
       setShifts(ss ?? []);
       setLogs(attLogs ?? []);
       setCoworkers(cw ?? []);
+      setPageCache(cacheKey, { shifts: ss ?? [], logs: attLogs ?? [], coworkers: cw ?? [] });
     } catch {
-      setShifts([]); setLogs([]); setCoworkers([]);
+      if (!cached) { setShifts([]); setLogs([]); setCoworkers([]); }
     }
     setLoading(false);
   }, [currentWorkplaceId, periodStart, periodEnd]);
@@ -458,6 +469,7 @@ function ShiftBlock({ shift, attendance, onEdit }) {
 }
 
 function ShiftEditor({ shift, initial, coworkers, workplaceId, userId, supabase, onClose, onSaved }) {
+  const { confirmDialog } = useFeedback();
   const isEdit = !!shift?.id;
   const seed = isEdit ? shift : initial ?? {};
   const [userPick, setUserPick] = useState(shift?.user_id ?? '');
@@ -502,7 +514,7 @@ function ShiftEditor({ shift, initial, coworkers, workplaceId, userId, supabase,
   }
 
   async function del() {
-    if (!confirm('이 시프트를 삭제하시겠습니까?')) return;
+    if (!(await confirmDialog({ message: '이 시프트를 삭제하시겠습니까?', confirmLabel: '삭제', danger: true }))) return;
     setSaving(true);
     try {
       await deleteShift(shift.id);

@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useApp } from '@/context/AppContext';
+import { useFeedback } from '@/context/FeedbackContext';
 import PageHeader from '@/components/PageHeader';
 import BottomSheet from '@/components/BottomSheet';
 import { formatCurrency } from '@/lib/format';
@@ -201,6 +202,7 @@ export default function KpisPage() {
 }
 
 function KpiEditor({ kpi, memberships, currentWorkplaceId, isSuperAdmin, userId, supabase, onClose, onSaved }) {
+  const { confirmDialog } = useFeedback();
   const isEdit = !!kpi?.id;
   const category = 'kpi'; // KPI 단일 카테고리
   const [name, setName] = useState(kpi?.name ?? '');
@@ -268,7 +270,7 @@ function KpiEditor({ kpi, memberships, currentWorkplaceId, isSuperAdmin, userId,
   }
 
   async function archive() {
-    if (!confirm('이 지표를 보관 처리할까요?')) return;
+    if (!(await confirmDialog({ message: '이 지표를 보관 처리할까요?', confirmLabel: '보관', danger: true }))) return;
     setSaving(true);
     try {
       const res = await archiveKpi({ id: kpi.id });

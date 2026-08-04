@@ -278,7 +278,7 @@ input[type="password"], input[type="date"], input[type="time"], textarea, select
   min-height: 48px;
 }
 .btn:hover:not(:disabled) { background: var(--surface-strong); transform: translateY(-1px); }
-.btn:active:not(:disabled) { transform: translateY(0); transition-duration: var(--t-xs); }
+.btn:active:not(:disabled) { transform: translateY(0) scale(0.96); transition-duration: var(--t-xs); transition-timing-function: var(--ease-bounce); }
 .btn:disabled { opacity: 0.4; cursor: not-allowed; }
 .btn-primary { background: var(--accent); color: #fff; box-shadow: var(--sh-sm); }
 .btn-primary:hover:not(:disabled) { background: var(--accent-strong); box-shadow: var(--sh-accent); }
@@ -457,6 +457,9 @@ input[type="password"], input[type="date"], input[type="time"], textarea, select
 .stagger > *:nth-child(4) { animation-delay: 150ms; }
 .stagger > *:nth-child(5) { animation-delay: 200ms; }
 .stagger > *:nth-child(6) { animation-delay: 250ms; }
+.stagger > *:nth-child(7) { animation-delay: 300ms; }
+.stagger > *:nth-child(8) { animation-delay: 340ms; }
+.stagger > *:nth-child(n+9) { animation-delay: 380ms; }
 
 /* ─── Skeleton (정적 placeholder) ─── */
 /* 깜빡임/시머 애니메이션 제거하여 차분한 placeholder로 표시.
@@ -482,13 +485,120 @@ input[type="password"], input[type="date"], input[type="time"], textarea, select
   padding: 16px var(--content-pad) 12px;
 }
 
-/* main content wrapper */
+/* main content wrapper — 페이지 도착 안무: 살짝 아래에서 떠오르며 등장 */
 .page-main {
   max-width: var(--content-max);
   margin: 0 auto;
   padding: 20px var(--content-pad);
+  animation: pageEnter .4s var(--ease) both;
+}
+@keyframes pageEnter {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* 하단 탭 아이콘 — 활성화 시 스프링 팝 */
+.tab-icon.is-active { animation: tabPop .35s var(--ease-bounce); }
+@keyframes tabPop {
+  0%   { transform: scale(0.82); }
+  60%  { transform: scale(1.1); }
+  100% { transform: scale(1); }
+}
+
+/* 접근성 — 모션 최소화 설정 존중 */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 /* ─── Divider ─── */
 .divider { height: 1px; background: var(--border); border: none; margin: 16px 0; }
 .divider-strong { background: var(--border-strong); }
+
+/* ─── 토스트 ─── */
+.toast-stack {
+  position: fixed;
+  top: calc(env(safe-area-inset-top, 0px) + 14px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  pointer-events: none;
+  width: min(92vw, 420px);
+}
+.toast {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-radius: var(--r-full);
+  background: var(--grad-night);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  box-shadow: var(--sh-lg);
+  animation: toastIn .38s var(--ease-bounce) both;
+  max-width: 100%;
+}
+.toast span { overflow-wrap: anywhere; }
+.toast-success svg { color: var(--success); flex-shrink: 0; }
+.toast-error svg { color: var(--danger); flex-shrink: 0; }
+.toast-info svg { color: #7cb3ff; flex-shrink: 0; }
+@keyframes toastIn {
+  from { opacity: 0; transform: translateY(-14px) scale(0.95); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* ─── 확인 다이얼로그 ─── */
+.dialog-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  background: rgba(15, 23, 42, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  animation: fadeIn .18s var(--ease) both;
+}
+.dialog-card {
+  background: var(--surface);
+  border-radius: var(--r-lg);
+  padding: 24px;
+  width: min(100%, 380px);
+  box-shadow: var(--sh-lg);
+  animation: popIn .28s var(--ease-bounce) both;
+}
+.dialog-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: var(--r-full);
+  background: var(--warning-soft);
+  color: var(--warning);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 12px;
+}
+.dialog-icon.danger {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+.dialog-message {
+  font-size: 14px;
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  margin-bottom: 18px;
+}
+.dialog-actions {
+  display: flex;
+  gap: 8px;
+}
+.dialog-actions .btn { flex: 1; }

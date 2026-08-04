@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useApp } from '@/context/AppContext';
+import { useFeedback } from '@/context/FeedbackContext';
 import PageHeader from '@/components/PageHeader';
 import { getProfileNames } from '@/app/_actions/names';
 import { createDelegation, deactivateDelegation, deleteDelegation } from './actions';
@@ -12,6 +13,7 @@ import { ChevronLeft, Plus, X, Trash2, UserCheck } from 'lucide-react';
 export default function DelegationsPage() {
   const router = useRouter();
   const { user, currentWorkplaceId, supabase } = useApp();
+  const { toast, confirmDialog } = useFeedback();
   const [list, setList] = useState([]);
   const [coworkers, setCoworkers] = useState([]);
   const [composing, setComposing] = useState(false);
@@ -51,24 +53,24 @@ export default function DelegationsPage() {
   useEffect(() => { load(); }, [load]);
 
   async function deactivate(id) {
-    if (!confirm('이 위임을 비활성화할까요?')) return;
+    if (!(await confirmDialog({ message: '이 위임을 비활성화할까요?', confirmLabel: '비활성화' }))) return;
     try {
       const res = await deactivateDelegation({ id });
-      if (res?.error) { alert(res.error); return; }
+      if (res?.error) { toast(res.error, 'error'); return; }
       load();
     } catch (e) {
-      alert(String(e?.message || e));
+      toast(String(e?.message || e), 'error');
     }
   }
 
   async function removeOne(id) {
-    if (!confirm('이 위임을 삭제할까요?')) return;
+    if (!(await confirmDialog({ message: '이 위임을 삭제할까요?', confirmLabel: '삭제', danger: true }))) return;
     try {
       const res = await deleteDelegation({ id });
-      if (res?.error) { alert(res.error); return; }
+      if (res?.error) { toast(res.error, 'error'); return; }
       load();
     } catch (e) {
-      alert(String(e?.message || e));
+      toast(String(e?.message || e), 'error');
     }
   }
 

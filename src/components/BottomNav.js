@@ -61,6 +61,7 @@ export default function BottomNav() {
                 }}
               >
                 <div
+                  className={`tab-icon${active ? ' is-active' : ''}`}
                   style={{
                     width: 36, height: 32,
                     display: 'flex', alignItems: 'center', justifyContent: 'center',

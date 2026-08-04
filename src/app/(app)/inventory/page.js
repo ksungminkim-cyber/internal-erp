@@ -3,9 +3,11 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useApp } from '@/context/AppContext';
+import { useFeedback } from '@/context/FeedbackContext';
 import PageHeader from '@/components/PageHeader';
 import BottomSheet from '@/components/BottomSheet';
 import { formatRelative } from '@/lib/format';
+import { getPageCache, setPageCache } from '@/lib/pageCache';
 import { closeInventoryMonth, deleteInventoryClosing, saveInventoryItem, archiveInventoryItem, recordInventoryTransaction, getInventoryItemHistory } from './actions';
 import { ChevronLeft, Plus, X, Package, AlertTriangle, TrendingUp, TrendingDown, Edit3, Trash2, Search, Lock, ClipboardList } from 'lucide-react';
 
@@ -14,7 +16,7 @@ const CATEGORY_OPTIONS = ['식자재', '음료/시럽', '주류', '컵·뚜껑',
 export default function InventoryPage() {
   const router = useRouter();
   const { user, currentWorkplaceId, supabase } = useApp();
-  const [items, setItems] = useState([]);
+  const [items, setItems] = useState(() => getPageCache(`inventory:${currentWorkplaceId}`) ?? []);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState('all');
@@ -32,6 +34,7 @@ export default function InventoryPage() {
       .order('category')
       .order('name');
     setItems(data ?? []);
+    setPageCache(`inventory:${currentWorkplaceId}`, data ?? []);
     setLoading(false);
   }, [supabase, currentWorkplaceId]);
 
@@ -199,6 +202,7 @@ export default function InventoryPage() {
 }
 
 function InventoryClosingDialog({ items, supabase, userId, workplaceId, onClose }) {
+  const { toast, confirmDialog } = useFeedback();
   const now = new Date();
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth() + 1);
@@ -227,7 +231,11 @@ function InventoryClosingDialog({ items, supabase, userId, workplaceId, onClose 
   const totalQty = items.reduce((s, i) => s + Number(i.current_qty || 0), 0);
 
   async function closeMonth() {
-    if (!confirm(`${year}년 ${month}월 재고를 마감하시겠습니까?\n현재 ${items.length}개 품목의 수량을 스냅샷으로 저장합니다.`)) return;
+    if (!(await confirmDialog({
+      title: '재고 마감',
+      message: `${year}년 ${month}월 재고를 마감하시겠습니까?\n현재 ${items.length}개 품목의 수량을 스냅샷으로 저장합니다.`,
+      confirmLabel: '마감',
+    }))) return;
     setSaving(true);
     setError(null);
     try {
@@ -255,13 +263,13 @@ function InventoryClosingDialog({ items, supabase, userId, workplaceId, onClose 
   }
 
   async function deleteClosing(id) {
-    if (!confirm('이 마감 기록을 삭제하시겠습니까?')) return;
+    if (!(await confirmDialog({ message: '이 마감 기록을 삭제하시겠습니까?', confirmLabel: '삭제', danger: true }))) return;
     try {
       const res = await deleteInventoryClosing({ id });
-      if (res?.error) { alert(res.error); return; }
+      if (res?.error) { toast(res.error, 'error'); return; }
       load();
     } catch (e) {
-      alert(String(e?.message || e));
+      toast(String(e?.message || e), 'error');
     }
   }
 
@@ -366,6 +374,7 @@ function InventoryRow({ item, onAdjust, onEdit }) {
 }
 
 function InventoryEditor({ item, supabase, workplaceId, onClose, onSaved }) {
+  const { confirmDialog } = useFeedback();
   const isEdit = !!item?.id;
   const [name, setName] = useState(item?.name ?? '');
   const [category, setCategory] = useState(item?.category ?? '식자재');
@@ -402,7 +411,7 @@ function InventoryEditor({ item, supabase, workplaceId, onClose, onSaved }) {
   }
 
   async function archive() {
-    if (!confirm('이 품목을 보관 처리할까요? (목록에서 사라집니다)')) return;
+    if (!(await confirmDialog({ message: '이 품목을 보관 처리할까요? (목록에서 사라집니다)', confirmLabel: '보관', danger: true }))) return;
     setSaving(true);
     try {
       const res = await archiveInventoryItem({ id: item.id });

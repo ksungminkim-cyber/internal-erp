@@ -4,6 +4,7 @@ import { createContext, useContext, useEffect, useState, useCallback } from 'rea
 import { createClient } from '@/lib/supabase/client';
 import { remindMyOverdueApprovals } from '@/app/(app)/approvals/actions';
 import { getMyContext } from '@/app/_actions/context';
+import { clearPageCache } from '@/lib/pageCache';
 
 const AppContext = createContext(null);
 
@@ -67,6 +68,7 @@ export function AppProvider({ children, initialUser, initialProfile = null, init
     }
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === 'SIGNED_OUT') {
+        clearPageCache();
         setUser(null);
         setProfile(null);
         setMemberships([]);

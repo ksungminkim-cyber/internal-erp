@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useFeedback } from '@/context/FeedbackContext';
 import { useRouter } from 'next/navigation';
 import PageHeader from '@/components/PageHeader';
 import Avatar from '@/components/Avatar';
@@ -31,6 +32,7 @@ const HQ_ROLES = [
 ];
 
 export default function MembersClient({ workplaces, profiles, memberships, currentUserId, isExecutive = false }) {
+  const { toast, confirmDialog } = useFeedback();
   const router = useRouter();
   const [editing, setEditing] = useState(null);
   const [retiring, setRetiring] = useState(null); // 퇴사 처리 대상 프로필
@@ -300,12 +302,12 @@ export default function MembersClient({ workplaces, profiles, memberships, curre
                     type="button"
                     className="btn btn-soft btn-sm"
                     onClick={async () => {
-                      if (!confirm(`${p.name || '직원'}님의 퇴사 처리를 해제(복직)할까요?`)) return;
+                      if (!(await confirmDialog({ message: `${p.name || '직원'}님의 퇴사 처리를 해제(복직)할까요?`, confirmLabel: '복직' }))) return;
                       try {
                         const res = await unretireMember(p.user_id);
-                        if (res?.error) { alert(res.error); return; }
+                        if (res?.error) { toast(res.error, 'error'); return; }
                         router.refresh();
-                      } catch (e) { alert(String(e?.message || e)); }
+                      } catch (e) { toast(String(e?.message || e), 'error'); }
                     }}
                   >
                     <UserCheck size={13} color="var(--success)" /> 복직

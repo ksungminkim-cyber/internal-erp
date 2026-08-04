@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, use } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useApp } from '@/context/AppContext';
+import { useFeedback } from '@/context/FeedbackContext';
 import PageHeader from '@/components/PageHeader';
 import Avatar from '@/components/Avatar';
 import { formatDateTime, formatCurrency } from '@/lib/format';
@@ -28,6 +29,7 @@ export default function ApprovalDetailPage({ params }) {
   const { id } = use(params);
   const router = useRouter();
   const { user, supabase } = useApp();
+  const { toast, confirmDialog } = useFeedback();
 
   const [req, setReq] = useState(null);
   const [items, setItems] = useState([]);
@@ -98,7 +100,7 @@ export default function ApprovalDetailPage({ params }) {
   }
 
   async function cancelRequest() {
-    if (!confirm('이 기안을 취소하시겠습니까?')) return;
+    if (!(await confirmDialog({ message: '이 기안을 취소하시겠습니까?', confirmLabel: '기안 취소', danger: true }))) return;
     setActing(true);
     try {
       const res = await cancelApprovalRequest({ requestId: id });
@@ -113,7 +115,7 @@ export default function ApprovalDetailPage({ params }) {
 
   async function downloadAttachment(att) {
     const { data, error } = await supabase.storage.from('receipts').createSignedUrl(att.file_path, 60);
-    if (error) return alert('다운로드 실패: ' + error.message);
+    if (error) return toast('다운로드 실패: ' + error.message, 'error');
     window.open(data.signedUrl, '_blank');
   }
 
@@ -239,7 +241,7 @@ export default function ApprovalDetailPage({ params }) {
         ) : (
           <section className="card">
             <h2 className="h3" style={{ marginBottom: 12 }}>지출 항목</h2>
-            <div className="stack stack-2">
+            <div className="stack stack-2 stagger">
               {items.map((it) => (
                 <div
                   key={it.id}
@@ -327,7 +329,7 @@ export default function ApprovalDetailPage({ params }) {
         {/* 결재선 */}
         <section className="card">
           <h2 className="h3" style={{ marginBottom: 12 }}>결재선</h2>
-          <div className="stack stack-2">
+          <div className="stack stack-2 stagger">
             {steps.map((s) => {
               const sm = STEP_META[s.status];
               const isCurrent = req.status === 'pending' && s.step_order === req.current_step;

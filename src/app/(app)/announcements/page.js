@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useApp } from '@/context/AppContext';
+import { useFeedback } from '@/context/FeedbackContext';
 import PageHeader from '@/components/PageHeader';
 import Avatar from '@/components/Avatar';
 import BottomSheet from '@/components/BottomSheet';
@@ -12,6 +13,7 @@ import { Plus, Pin, Megaphone, X, MoreVertical, Edit3, Trash2 } from 'lucide-rea
 
 export default function AnnouncementsPage() {
   const { user, currentWorkplaceId, supabase, isManager } = useApp();
+  const { toast, confirmDialog } = useFeedback();
   const [items, setItems] = useState([]);
   const [readIds, setReadIds] = useState(new Set());
   const [loading, setLoading] = useState(false);
@@ -67,13 +69,13 @@ export default function AnnouncementsPage() {
   }
 
   async function deleteAnnouncement(id) {
-    if (!confirm('이 공지를 삭제하시겠습니까?')) return;
+    if (!(await confirmDialog({ message: '이 공지를 삭제하시겠습니까?', confirmLabel: '삭제', danger: true }))) return;
     try {
       const res = await deleteAnnouncementAction(id);
-      if (res?.error) alert(res.error);
+      if (res?.error) toast(res.error, 'error');
       else load();
     } catch (e) {
-      alert(String(e?.message || e));
+      toast(String(e?.message || e), 'error');
     }
   }
 

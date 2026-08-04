@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useApp } from '@/context/AppContext';
+import { useFeedback } from '@/context/FeedbackContext';
 import PageHeader from '@/components/PageHeader';
 import BottomSheet from '@/components/BottomSheet';
 import { formatRelative } from '@/lib/format';
@@ -175,6 +176,7 @@ export default function EquipmentPage() {
 }
 
 function EquipmentEditor({ equipment, workplaceId, onClose, onSaved }) {
+  const { confirmDialog } = useFeedback();
   const isEdit = !!equipment?.id;
   const [name, setName] = useState(equipment?.name ?? '');
   const [category, setCategory] = useState(equipment?.category ?? '에스프레소 머신');
@@ -217,7 +219,7 @@ function EquipmentEditor({ equipment, workplaceId, onClose, onSaved }) {
   }
 
   async function archive() {
-    if (!confirm('이 장비를 보관 처리할까요?')) return;
+    if (!(await confirmDialog({ message: '이 장비를 보관 처리할까요?', confirmLabel: '보관', danger: true }))) return;
     setSaving(true);
     try {
       const res = await archiveEquipment({ id: equipment.id });
