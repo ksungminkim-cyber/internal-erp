@@ -342,7 +342,7 @@ export default function PrintApprovalPage({ params }) {
                   <td style={{ textAlign: 'center', fontVariantNumeric: 'tabular-nums' }}>
                     {s.decided_at ? new Date(s.decided_at).toLocaleString('ko-KR', { hour12: false }) : ''}
                   </td>
-                  <td>{s.comment ?? ''}</td>
+                  <td style={{ overflowWrap: 'anywhere' }}>{s.comment ?? ''}</td>
                 </tr>
               ))}
             </tbody>

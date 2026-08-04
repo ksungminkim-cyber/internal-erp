@@ -470,9 +470,7 @@ input[type="password"], input[type="date"], input[type="time"], textarea, select
 
 /* ─── 헤더 ─── */
 .page-header {
-  background: var(--glass-bg);
-  backdrop-filter: saturate(180%) blur(20px);
-  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  background: var(--surface);
   border-bottom: 1px solid var(--border);
   position: sticky;
   top: 0;

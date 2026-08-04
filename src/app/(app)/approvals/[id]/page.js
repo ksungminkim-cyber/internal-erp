@@ -192,9 +192,9 @@ export default function ApprovalDetailPage({ params }) {
               <StatusIcon size={11} /> {meta.label}
             </span>
           </div>
-          <h1 className="h2">{req.title}</h1>
+          <h1 className="h2" style={{ overflowWrap: 'anywhere' }}>{req.title}</h1>
           {req.body && (
-            <p style={{ marginTop: 12, fontSize: 14, color: 'var(--text-secondary)', whiteSpace: 'pre-wrap' }}>
+            <p style={{ marginTop: 12, fontSize: 14, color: 'var(--text-secondary)', whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
               {req.body}
             </p>
           )}
@@ -248,9 +248,9 @@ export default function ApprovalDetailPage({ params }) {
                     background: 'var(--surface-soft)', borderRadius: 12,
                   }}
                 >
-                  <div style={{ flex: 1 }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
                     <div className="h4" style={{ fontSize: 14, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                      <span>{it.description}</span>
+                      <span style={{ overflowWrap: 'anywhere' }}>{it.description}</span>
                       {it.product_url && (
                         <a
                           href={it.product_url}
@@ -269,7 +269,7 @@ export default function ApprovalDetailPage({ params }) {
                       {it.vendor}
                     </div>
                   </div>
-                  <span className="num" style={{ fontWeight: 700, fontSize: 15, alignSelf: 'center' }}>
+                  <span className="num" style={{ fontWeight: 700, fontSize: 15, alignSelf: 'center', flexShrink: 0 }}>
                     {formatCurrency(it.amount)}원
                   </span>
                 </div>
@@ -316,7 +316,7 @@ export default function ApprovalDetailPage({ params }) {
                   >
                     <Paperclip size={16} />
                   </div>
-                  <span style={{ flex: 1, fontSize: 13, fontWeight: 600 }}>{a.file_name}</span>
+                  <span style={{ flex: 1, minWidth: 0, fontSize: 13, fontWeight: 600, overflowWrap: 'anywhere' }}>{a.file_name}</span>
                   <Download size={14} className="text-muted" />
                 </button>
               ))}
@@ -345,7 +345,7 @@ export default function ApprovalDetailPage({ params }) {
                   <span
                     className="num"
                     style={{
-                      width: 28, height: 28, borderRadius: 999,
+                      width: 28, height: 28, borderRadius: 999, flexShrink: 0,
                       background: isCurrent ? 'var(--accent)' :
                                   s.status === 'approved' ? 'var(--success)' :
                                   s.status === 'rejected' ? 'var(--danger)' : 'var(--surface)',
@@ -356,10 +356,10 @@ export default function ApprovalDetailPage({ params }) {
                   >
                     {s.step_order}
                   </span>
-                  <div style={{ flex: 1 }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
                     <div className="h4" style={{ fontSize: 14 }}>{s.approver?.name || '—'}</div>
                     {s.comment && (
-                      <div className="text-secondary" style={{ fontSize: 12, marginTop: 2 }}>“{s.comment}”</div>
+                      <div className="text-secondary" style={{ fontSize: 12, marginTop: 2, overflowWrap: 'anywhere' }}>“{s.comment}”</div>
                     )}
                     {s.decided_at && (
                       <div className="text-muted" style={{ fontSize: 11, marginTop: 2 }}>
@@ -367,7 +367,7 @@ export default function ApprovalDetailPage({ params }) {
                       </div>
                     )}
                   </div>
-                  <span className={`tag ${sm.tag}`}>{sm.label}</span>
+                  <span className={`tag ${sm.tag}`} style={{ flexShrink: 0 }}>{sm.label}</span>
                 </div>
               );
             })}
