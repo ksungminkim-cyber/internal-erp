@@ -6,6 +6,7 @@ import { getMyContext } from '@/app/_actions/context';
 import BottomNav from '@/components/BottomNav';
 import Sidebar from '@/components/Sidebar';
 import WelcomeModal from '@/components/WelcomeModal';
+import AttendanceReminderBanner from '@/components/AttendanceReminderBanner';
 
 export default async function AppLayout({ children }) {
   // profile + memberships 를 서비스롤로 로드 (RLS로 본인 멤버십이 누락돼
@@ -31,7 +32,10 @@ export default async function AppLayout({ children }) {
     >
       <FeedbackProvider>
         <Sidebar />
-        <div className="app-shell">{children}</div>
+        <div className="app-shell">
+          <AttendanceReminderBanner />
+          {children}
+        </div>
         <BottomNav />
         <WelcomeModal />
       </FeedbackProvider>
