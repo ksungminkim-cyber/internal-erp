@@ -233,6 +233,89 @@ export async function getWorkplaceMembers(workplaceId) {
 }
 
 /**
+ * 리마인더 배너용 — 본인 시프트(어제 00:00 ~ 내일 00:00 시작) + 본인 로그.
+ * 본인 데이터만 반환하므로 별도 권한 검증 불필요.
+ */
+export async function getMyShiftReminders(workplaceId) {
+  const authClient = await createServerClient();
+  const { data: { user } } = await authClient.auth.getUser();
+  if (!user || !workplaceId) return { shifts: [], logs: [] };
+
+  const svc = getServiceClient();
+  const from = new Date();
+  from.setHours(0, 0, 0, 0);
+  from.setDate(from.getDate() - 1);
+  const to = new Date();
+  to.setHours(0, 0, 0, 0);
+  to.setDate(to.getDate() + 1);
+  // 시프트 시작 전 출근(±2h 창)까지 잡도록 로그는 2시간 앞서 조회
+  const logFrom = new Date(from.getTime() - 2 * 3600000);
+
+  const [{ data: shifts }, { data: logs }] = await Promise.all([
+    svc
+      .from('shifts')
+      .select('id, user_id, start_at, end_at, status')
+      .eq('workplace_id', workplaceId)
+      .eq('user_id', user.id)
+      .gte('start_at', from.toISOString())
+      .lt('start_at', to.toISOString()),
+    svc
+      .from('attendance_logs')
+      .select('id, user_id, event_type, event_at')
+      .eq('workplace_id', workplaceId)
+      .eq('user_id', user.id)
+      .gte('event_at', logFrom.toISOString()),
+  ]);
+  return { shifts: shifts ?? [], logs: logs ?? [] };
+}
+
+/**
+ * 관리자 누락 위젯용 — 기간 내 시프트(취소 제외, 이름 enrich) + 근태 로그.
+ * 누락 판정은 클라이언트에서 공용 lib(shiftRecordStatus)로 수행.
+ */
+export async function getMissingAttendance(workplaceId, fromISO, toISO) {
+  const authClient = await createServerClient();
+  const { data: { user } } = await authClient.auth.getUser();
+  if (!user || !workplaceId) return { shifts: [], logs: [] };
+
+  const svc = getServiceClient();
+  if (!(await isManagerOf(svc, user.id, workplaceId))) return { shifts: [], logs: [] };
+
+  // 로그 매칭 창(±2h)을 커버하도록 로그 조회 범위 확장
+  const logFrom = new Date(new Date(fromISO).getTime() - 2 * 3600000);
+  const logTo = new Date(new Date(toISO).getTime() + 2 * 3600000);
+
+  const [{ data: shifts }, { data: logs }] = await Promise.all([
+    svc
+      .from('shifts')
+      .select('id, user_id, start_at, end_at, status')
+      .eq('workplace_id', workplaceId)
+      .neq('status', 'cancelled')
+      .gte('start_at', fromISO)
+      .lt('start_at', toISO)
+      .order('start_at'),
+    svc
+      .from('attendance_logs')
+      .select('id, user_id, event_type, event_at')
+      .eq('workplace_id', workplaceId)
+      .gte('event_at', logFrom.toISOString())
+      .lte('event_at', logTo.toISOString()),
+  ]);
+
+  const ids = [...new Set((shifts ?? []).map((s) => s.user_id).filter(Boolean))];
+  let nameMap = new Map();
+  if (ids.length > 0) {
+    const { data: profs } = await svc.from('profiles').select('user_id, name').in('user_id', ids);
+    nameMap = new Map((profs ?? []).map((p) => [p.user_id, p.name]));
+  }
+
+  return {
+    shifts: (shifts ?? []).map((s) => ({ ...s, user: { name: nameMap.get(s.user_id) ?? null } })),
+    logs: logs ?? [],
+  };
+}
+
+/**
  * 과거 출퇴근 기록 조회 (기간 + 매장 + 본인필터)
  * 서비스 롤로 직접 조회 — RLS/네트워크 hang 회피.
  */
