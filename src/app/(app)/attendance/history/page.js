@@ -9,13 +9,15 @@ import PageHeader from '@/components/PageHeader';
 import BottomSheet from '@/components/BottomSheet';
 import { formatTime } from '@/lib/format';
 import { downloadCsv, fmtDateTime } from '@/lib/csvExport';
-import { ChevronLeft, Download, Calendar, Users, Plus, Pencil, Trash2, X } from 'lucide-react';
+import { shiftRecordStatus } from '@/lib/attendanceMatch';
+import { ChevronLeft, Download, Calendar, Users, Plus, Pencil, Trash2, X, AlertTriangle } from 'lucide-react';
 import {
   getAttendanceHistory,
   correctAttendanceLog,
   addAttendanceLog,
   deleteAttendanceLog,
   getWorkplaceMembers,
+  getMissingAttendance,
 } from '../actions';
 
 const EVENT_LABEL = {
@@ -66,8 +68,35 @@ export default function AttendanceHistoryPage() {
   const [loading, setLoading] = useState(false);
   const [userFilter, setUserFilter] = useState('all'); // 'all' | 'mine'
   const [editing, setEditing] = useState(null); // 보정 대상 로그
-  const [adding, setAdding] = useState(false);   // 기록 추가 시트
+  const [adding, setAdding] = useState(false);   // 기록 추가 시트 (false | true | prefill 객체)
   const [members, setMembers] = useState([]);    // 직원 목록 (추가용)
+  const [missing, setMissing] = useState([]);    // 최근 7일 기록 누락 (관리자)
+
+  const loadMissing = useCallback(async () => {
+    if (!isManager || !currentWorkplaceId) return;
+    try {
+      const fromD = new Date();
+      fromD.setHours(0, 0, 0, 0);
+      fromD.setDate(fromD.getDate() - 7);
+      const { shifts, logs } = await getMissingAttendance(
+        currentWorkplaceId, fromD.toISOString(), new Date().toISOString()
+      );
+      const rows = [];
+      for (const s of shifts ?? []) {
+        const st = shiftRecordStatus(s, logs ?? []);
+        if (!st) continue;
+        if (st.graceInPassed) rows.push({ shift: s, type: 'clock_in' });
+        else if (st.graceOutPassed) rows.push({ shift: s, type: 'clock_out' });
+      }
+      setMissing(rows);
+    } catch {
+      setMissing([]);
+    }
+  }, [isManager, currentWorkplaceId]);
+
+  // setState는 await 이후 비동기 실행 — 동기 setState 아님 (룰 오탐)
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => { loadMissing(); }, [loadMissing]);
 
   const load = useCallback(async () => {
     if (!currentWorkplaceId || !user) return;
@@ -128,6 +157,47 @@ export default function AttendanceHistoryPage() {
       />
 
       <main className="fade-in page-main" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        {/* 기록 누락 (관리자, 최근 7일) */}
+        {isManager && missing.length > 0 && (
+          <section className="card" style={{ display: 'flex', flexDirection: 'column', gap: 10, border: '1px solid var(--warning)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <AlertTriangle size={16} color="var(--warning)" />
+              <h2 className="h4">기록 누락</h2>
+              <span className="text-muted" style={{ fontSize: 12 }}>최근 7일 · {missing.length}건</span>
+            </div>
+            <div>
+              {missing.map(({ shift, type }, i) => {
+                const d = new Date(shift.start_at);
+                const dateLabel = d.toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', weekday: 'short' });
+                const range = `${formatTime(shift.start_at)}~${formatTime(shift.end_at)}`;
+                return (
+                  <div key={`${shift.id}:${type}`}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 2px', flexWrap: 'wrap' }}>
+                      <span className="text-muted" style={{ fontSize: 12, width: 90 }}>{dateLabel}</span>
+                      <span style={{ fontSize: 13, fontWeight: 600, flex: 1 }}>{shift.user?.name || '—'}</span>
+                      <span className="num text-muted" style={{ fontSize: 12 }}>{range}</span>
+                      <span className={`tag ${type === 'clock_in' ? 'tag-danger' : 'tag-warning'}`} style={{ fontSize: 11 }}>
+                        {type === 'clock_in' ? '출근 누락' : '퇴근 누락'}
+                      </span>
+                      <button
+                        className="btn btn-soft btn-xs"
+                        onClick={() => setAdding({
+                          userId: shift.user_id,
+                          eventType: type,
+                          eventAt: toLocalInput(type === 'clock_in' ? shift.start_at : shift.end_at),
+                        })}
+                      >
+                        <Plus size={12} /> 기록 채우기
+                      </button>
+                    </div>
+                    {i < missing.length - 1 && <hr className="divider" style={{ margin: 0 }} />}
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        )}
+
         {/* 필터 카드 */}
         <section className="card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -248,8 +318,9 @@ export default function AttendanceHistoryPage() {
           workplaceId={currentWorkplaceId}
           members={members}
           defaultDate={to}
+          initial={typeof adding === 'object' ? adding : null}
           onClose={() => setAdding(false)}
-          onDone={() => { setAdding(false); load(); }}
+          onDone={() => { setAdding(false); load(); loadMissing(); }}
         />
       )}
     </>
@@ -350,10 +421,10 @@ function CorrectSheet({ log, onClose, onDone }) {
 }
 
 // ───── 누락 기록 추가 시트 ─────
-function AddSheet({ workplaceId, members, defaultDate, onClose, onDone }) {
-  const [userId, setUserId] = useState('');
-  const [eventType, setEventType] = useState('clock_in');
-  const [eventAt, setEventAt] = useState(`${defaultDate}T09:00`);
+function AddSheet({ workplaceId, members, defaultDate, initial, onClose, onDone }) {
+  const [userId, setUserId] = useState(initial?.userId ?? '');
+  const [eventType, setEventType] = useState(initial?.eventType ?? 'clock_in');
+  const [eventAt, setEventAt] = useState(initial?.eventAt ?? `${defaultDate}T09:00`);
   const [note, setNote] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
