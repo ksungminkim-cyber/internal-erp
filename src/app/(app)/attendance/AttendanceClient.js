@@ -6,8 +6,9 @@ import { useApp } from '@/context/AppContext';
 import PageHeader from '@/components/PageHeader';
 import Avatar from '@/components/Avatar';
 import { formatTime, formatRelative, todayBoundary } from '@/lib/format';
-import { LogIn, LogOut, Coffee, Play, Sparkles, Users, History } from 'lucide-react';
-import { recordAttendance, getTodayAttendance } from './actions';
+import { shiftRecordStatus } from '@/lib/attendanceMatch';
+import { LogIn, LogOut, Coffee, Play, Sparkles, Users, History, AlertTriangle, ChevronRight } from 'lucide-react';
+import { recordAttendance, getTodayAttendance, getMissingAttendance } from './actions';
 
 const EVENT_LABEL = {
   clock_in: '출근',
@@ -33,6 +34,31 @@ export default function AttendanceClient({
   const [board, setBoard]         = useState(initialBoard ?? []);
   const [actionLoading, setActionLoading] = useState(null);
   const [error, setError] = useState(null);
+  const [missingCount, setMissingCount] = useState(0); // 최근 7일 기록 누락 (관리자)
+
+  // 비관리자 전환 시 카운트는 남지만 렌더 조건(isManager)이 가드
+  useEffect(() => {
+    if (!isManager || !currentWorkplaceId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const fromD = new Date();
+        fromD.setHours(0, 0, 0, 0);
+        fromD.setDate(fromD.getDate() - 7);
+        const { shifts, logs } = await getMissingAttendance(
+          currentWorkplaceId, fromD.toISOString(), new Date().toISOString()
+        );
+        const count = (shifts ?? []).reduce((n, s) => {
+          const st = shiftRecordStatus(s, logs ?? []);
+          return n + (st && (st.graceInPassed || st.graceOutPassed) ? 1 : 0);
+        }, 0);
+        if (!cancelled) setMissingCount(count);
+      } catch {
+        if (!cancelled) setMissingCount(0);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [isManager, currentWorkplaceId]);
 
   const todayMine  = todayLogs.filter((l) => l.user_id === (user?.id ?? userId));
   const latestMine = todayMine[0];
@@ -190,6 +216,27 @@ export default function AttendanceClient({
       />
 
       <main className="fade-in page-main" style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+        {/* 기록 누락 안내 (관리자) */}
+        {isManager && missingCount > 0 && (
+          <Link
+            href="/attendance/history"
+            className="card interactive"
+            style={{
+              display: 'flex', alignItems: 'center', gap: 10,
+              padding: '10px 14px', textDecoration: 'none', color: 'inherit',
+              border: '1px solid var(--warning)',
+            }}
+          >
+            <AlertTriangle size={16} color="var(--warning)" />
+            <span style={{ flex: 1, fontSize: 13, fontWeight: 600 }}>
+              최근 7일 근태 기록 누락 <strong style={{ color: 'var(--warning)' }}>{missingCount}건</strong>
+            </span>
+            <span className="text-muted" style={{ fontSize: 12, display: 'flex', alignItems: 'center' }}>
+              보정하기 <ChevronRight size={14} />
+            </span>
+          </Link>
+        )}
+
         {/* 본인 상태 카드 */}
         <section
           className={`bento ${myStatus === 'working' ? 'mint' : myStatus === 'on_break' ? 'warm' : 'dark'}`}
