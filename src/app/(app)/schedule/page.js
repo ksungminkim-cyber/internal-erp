@@ -10,6 +10,7 @@ import Avatar from '@/components/Avatar';
 import BottomSheet from '@/components/BottomSheet';
 import { Plus, ChevronLeft, ChevronRight, X, Trash2, Send, CheckCircle2, AlertCircle, Lock, FileText, Copy } from 'lucide-react';
 import { isHoliday } from '@/lib/holidays';
+import { matchAttendance } from '@/lib/attendanceMatch';
 import { getPageCache, setPageCache } from '@/lib/pageCache';
 import { getScheduleData, saveShift, deleteShift, submitScheduleApproval, copyPreviousShifts } from './actions';
 import { getApproverCandidates } from '../approvals/actions';
@@ -45,67 +46,6 @@ const SHIFT_STATUS_META = {
   swap_requested: { label: '교환요청', tag: 'tag-warning' },
   cancelled: { label: '취소', tag: 'tag-danger' },
 };
-
-const LATE_THRESHOLD_MIN = 10; // 10분 이내는 정시
-
-function matchAttendance(shift, logs) {
-  // 해당 시프트 시간 범위 안의 user 출퇴근 로그 찾기
-  const start = new Date(shift.start_at);
-  const end = new Date(shift.end_at);
-  const dayWindow = 2 * 3600000; // ±2시간 여유
-  const userLogs = logs
-    .filter((l) => l.user_id === shift.user_id)
-    .filter((l) => {
-      const t = new Date(l.event_at).getTime();
-      return t >= start.getTime() - dayWindow && t <= end.getTime() + dayWindow;
-    })
-    .sort((a, b) => new Date(a.event_at) - new Date(b.event_at));
-
-  const clockIn = userLogs.find((l) => l.event_type === 'clock_in');
-  const clockOut = [...userLogs].reverse().find((l) => l.event_type === 'clock_out');
-
-  if (!clockIn) {
-    // 시프트 시작 후 30분 이상 지나도 출근 없으면 결근
-    if (Date.now() > start.getTime() + 30 * 60000) {
-      return { status: 'absent', label: '결근', tag: 'tag-danger' };
-    }
-    return null; // 아직 출근 전
-  }
-
-  const lateMs = new Date(clockIn.event_at).getTime() - start.getTime();
-  const lateMin = Math.round(lateMs / 60000);
-
-  let status, label, tag;
-  if (lateMin <= LATE_THRESHOLD_MIN) {
-    status = 'on_time';
-    label = '정시';
-    tag = 'tag-success';
-  } else if (lateMin > 0) {
-    status = 'late';
-    label = `지각 ${lateMin}분`;
-    tag = 'tag-warning';
-  } else {
-    status = 'early';
-    label = `${Math.abs(lateMin)}분 일찍`;
-    tag = 'tag-success';
-  }
-
-  // 조퇴 체크
-  if (clockOut) {
-    const earlyOutMs = end.getTime() - new Date(clockOut.event_at).getTime();
-    const earlyOutMin = Math.round(earlyOutMs / 60000);
-    if (earlyOutMin > 10) {
-      label = `${label} · 조퇴 ${earlyOutMin}분`;
-      tag = 'tag-warning';
-    }
-  }
-
-  return {
-    status, label, tag,
-    clockInAt: clockIn.event_at,
-    clockOutAt: clockOut?.event_at ?? null,
-  };
-}
 
 export default function SchedulePage() {
   const router = useRouter();
