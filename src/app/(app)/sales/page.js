@@ -8,6 +8,7 @@ import BottomSheet from '@/components/BottomSheet';
 import { formatCurrency } from '@/lib/format';
 import { downloadCsv } from '@/lib/csvExport';
 import { ymd } from '@/lib/date';
+import { getPageCache, setPageCache } from '@/lib/pageCache';
 import { saveSales, getSalesSummary, getSalesTips, saveSalesTip, deleteSalesTip } from './actions';
 import { ChevronLeft, ChevronRight, TrendingUp, Plus, X, Info, Calendar, CreditCard, Banknote, Download, Lightbulb, Sparkles, Pencil, Trash2 } from 'lucide-react';
 
@@ -30,8 +31,8 @@ const DEFAULT_TIP_STRINGS = SALES_TIPS.map((t) => `${t.icon} ${t.title} — ${t.
 export default function SalesPage() {
   const router = useRouter();
   const { user, currentWorkplaceId, supabase, isManager } = useApp();
-  const [rows, setRows] = useState([]);
-  const [summary, setSummary] = useState(null); // 누적/이번 달 합계
+  const [rows, setRows] = useState(() => getPageCache(`sales:${currentWorkplaceId}`) ?? []);
+  const [summary, setSummary] = useState(() => getPageCache(`salesSummary:${currentWorkplaceId}`) ?? null); // 누적/이번 달 합계
   const [loading, setLoading] = useState(false);
   const [editing, setEditing] = useState(null);
   const [showGuide, setShowGuide] = useState(false);
@@ -51,9 +52,13 @@ export default function SalesPage() {
       .gte('sales_date', ymd(start))
       .order('sales_date', { ascending: false });
     setRows(data ?? []);
+    setPageCache(`sales:${currentWorkplaceId}`, data ?? []);
     setLoading(false);
     // 누적/이번 달 합계는 서버액션으로 별도 집계 (30일 조회와 무관하게 전체)
-    getSalesSummary(currentWorkplaceId).then(setSummary).catch(() => {});
+    getSalesSummary(currentWorkplaceId).then((s) => {
+      setSummary(s);
+      setPageCache(`salesSummary:${currentWorkplaceId}`, s);
+    }).catch(() => {});
     // 매장별 매출 팁 (서버액션)
     getSalesTips(currentWorkplaceId).then(setTipsData).catch(() => setTipsData({ tips: [], enabled: false }));
   }, [supabase, currentWorkplaceId, start]);

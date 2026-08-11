@@ -8,6 +8,7 @@ import Avatar from '@/components/Avatar';
 import { formatCurrency } from '@/lib/format';
 import { getProfileNames } from '@/app/_actions/names';
 import { ymd } from '@/lib/date';
+import { getPageCache, setPageCache } from '@/lib/pageCache';
 import {
   ChevronLeft, ChevronRight, TrendingUp, TrendingDown, Calendar,
   Users, DollarSign, MessageCircle, Clock, FileText, Package,
@@ -36,6 +37,10 @@ export default function ReportsPage() {
 
   const load = useCallback(async () => {
     if (!currentWorkplaceId) return;
+    // 재방문/월 이동 시 캐시된 집계 즉시 표시 후 백그라운드 갱신
+    const cacheKey = `reports:${currentWorkplaceId}:${year}-${month}`;
+    const cachedData = getPageCache(cacheKey);
+    if (cachedData) setData(cachedData);
     const [
       sales, prevSales, expenses, attendance, shifts, complaints,
     ] = await Promise.all([
@@ -148,7 +153,7 @@ export default function ReportsPage() {
     const openComplaints = cmpRows.filter((c) => c.status !== 'resolved').length;
     const highSeverity = cmpRows.filter((c) => c.severity === 'high').length;
 
-    setData({
+    const nextData = {
       totalSales, totalTx, cashSum, cardSum, otherSum,
       daysWithSales, avgDaily, bestDay, worstDay,
       prevTotal, salesGrowth,
@@ -157,9 +162,11 @@ export default function ReportsPage() {
       shiftsCount: shifts.count ?? 0,
       complaints: { total: cmpRows.length, open: openComplaints, high: highSeverity },
       salesRows,
-    });
+    };
+    setData(nextData);
+    setPageCache(cacheKey, nextData);
     setLoading(false);
-  }, [supabase, currentWorkplaceId, start, end, prevStart, prevEnd]);
+  }, [supabase, currentWorkplaceId, year, month, start, end, prevStart, prevEnd]);
 
   useEffect(() => { load(); }, [load]);
 

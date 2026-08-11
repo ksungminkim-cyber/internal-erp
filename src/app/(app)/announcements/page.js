@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useApp } from '@/context/AppContext';
 import { useFeedback } from '@/context/FeedbackContext';
+import { getPageCache, setPageCache } from '@/lib/pageCache';
 import PageHeader from '@/components/PageHeader';
 import Avatar from '@/components/Avatar';
 import BottomSheet from '@/components/BottomSheet';
@@ -14,8 +15,8 @@ import { Plus, Pin, Megaphone, X, MoreVertical, Edit3, Trash2 } from 'lucide-rea
 export default function AnnouncementsPage() {
   const { user, currentWorkplaceId, supabase, isManager } = useApp();
   const { toast, confirmDialog } = useFeedback();
-  const [items, setItems] = useState([]);
-  const [readIds, setReadIds] = useState(new Set());
+  const [items, setItems] = useState(() => getPageCache(`announcements:${currentWorkplaceId}`)?.items ?? []);
+  const [readIds, setReadIds] = useState(() => new Set(getPageCache(`announcements:${currentWorkplaceId}`)?.readIds ?? []));
   const [loading, setLoading] = useState(false);
   const [editing, setEditing] = useState(null);
   const [menuOpenId, setMenuOpenId] = useState(null);
@@ -35,8 +36,11 @@ export default function AnnouncementsPage() {
     const authorIds = [...new Set((anns ?? []).map((a) => a.author_id).filter(Boolean))];
     // 서비스롤 서버액션으로 이름 매핑 — 타 매장/본사 작성자도 RLS 무관하게 표시
     const authorNames = await getProfileNames(authorIds);
-    setItems((anns ?? []).map((a) => ({ ...a, author: { name: authorNames[a.author_id] ?? null } })));
-    setReadIds(new Set((reads ?? []).map((r) => r.announcement_id)));
+    const mapped = (anns ?? []).map((a) => ({ ...a, author: { name: authorNames[a.author_id] ?? null } }));
+    const readArr = (reads ?? []).map((r) => r.announcement_id);
+    setItems(mapped);
+    setReadIds(new Set(readArr));
+    setPageCache(`announcements:${currentWorkplaceId}`, { items: mapped, readIds: readArr });
     setLoading(false);
   }, [supabase, currentWorkplaceId, user]);
 

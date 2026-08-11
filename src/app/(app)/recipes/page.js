@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useApp } from '@/context/AppContext';
 import PageHeader from '@/components/PageHeader';
 import { formatCurrency } from '@/lib/format';
+import { getPageCache, setPageCache } from '@/lib/pageCache';
 import { ChevronLeft, Plus, Search, BookOpen, Coffee, Cake, IceCream, Building2 } from 'lucide-react';
 
 const CATEGORY_ICON = {
@@ -20,8 +21,8 @@ const CATEGORY_ICON = {
 export default function RecipesPage() {
   const router = useRouter();
   const { supabase, isManager, currentWorkplaceId, currentWorkplace, memberships } = useApp();
-  const [items, setItems] = useState([]);
-  const [workplaces, setWorkplaces] = useState([]);
+  const [items, setItems] = useState(() => getPageCache('recipes')?.items ?? []);
+  const [workplaces, setWorkplaces] = useState(() => getPageCache('recipes')?.workplaces ?? []);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('all');
@@ -41,6 +42,7 @@ export default function RecipesPage() {
     ]);
     setItems(rec ?? []);
     setWorkplaces(wps ?? []);
+    setPageCache('recipes', { items: rec ?? [], workplaces: wps ?? [] });
     setLoading(false);
   }, [supabase]);
 
