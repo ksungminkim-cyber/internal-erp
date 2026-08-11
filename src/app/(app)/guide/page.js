@@ -31,7 +31,7 @@ export default function GuidePage() {
           max-width: 210mm;
           margin: 0 auto;
           padding: 28px 32px 60px;
-          font-family: 'Pretendard Variable', Pretendard, system-ui, sans-serif;
+          font-family: var(--font-pretendard), 'Pretendard Variable', Pretendard, system-ui, sans-serif;
           font-size: 15.5px;
           line-height: 1.78;
           letter-spacing: -0.005em;

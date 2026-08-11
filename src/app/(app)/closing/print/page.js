@@ -146,7 +146,7 @@ export default function ClosingPrintPage() {
           padding: 24px 28px;
           border: 1px solid var(--border);
           border-radius: 8px;
-          font-family: 'Pretendard Variable', Pretendard, system-ui, sans-serif;
+          font-family: var(--font-pretendard), 'Pretendard Variable', Pretendard, system-ui, sans-serif;
           font-size: 13px;
           line-height: 1.55;
           letter-spacing: -0.01em;
