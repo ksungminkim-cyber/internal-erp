@@ -4,6 +4,7 @@ import { createClient as createServiceClient } from '@supabase/supabase-js';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import MemberStatsClient from './MemberStatsClient';
+import { sliceSessionLogs } from '@/lib/laborCalc';
 
 function getServiceClient() {
   return createServiceClient(
@@ -72,8 +73,16 @@ export default async function MemberStatsPage({ params, searchParams }) {
   const year = Number(sp?.year) || today.getFullYear();
   const month = Number(sp?.month) || (today.getMonth() + 1);
 
-  const monthStart = new Date(year, month - 1, 1);
-  const monthEnd = new Date(year, month, 1);
+  // 서버 런타임은 UTC — KST 자정 기준으로 월 경계를 잡아야 1일 00~09시 기록이 안 밀림
+  const pad = (n) => String(n).padStart(2, '0');
+  const nextY = month === 12 ? year + 1 : year;
+  const nextM = month === 12 ? 1 : month + 1;
+  const monthStart = new Date(`${year}-${pad(month)}-01T00:00:00+09:00`);
+  const monthEnd = new Date(`${nextY}-${pad(nextM)}-01T00:00:00+09:00`);
+  // 월 경계를 넘는 야간 세션까지 잡기 위해 앞뒤 하루씩 넓게 조회 후 출근 시각 기준으로 잘라냄
+  const DAY_MS = 24 * 60 * 60 * 1000;
+  const logsFrom = new Date(monthStart.getTime() - DAY_MS).toISOString();
+  const logsTo = new Date(monthEnd.getTime() + DAY_MS).toISOString();
 
   // 쿠키 workplace 우선, 없으면 전 사업장
   const cookieStore = await cookies();
@@ -83,8 +92,8 @@ export default async function MemberStatsPage({ params, searchParams }) {
     .from('attendance_logs')
     .select('event_at, event_type, workplace_id, workplaces(name)')
     .eq('user_id', userId)
-    .gte('event_at', monthStart.toISOString())
-    .lt('event_at', monthEnd.toISOString())
+    .gte('event_at', logsFrom)
+    .lt('event_at', logsTo)
     .order('event_at');
   if (cookieWpId) logsQuery = logsQuery.eq('workplace_id', cookieWpId);
 
@@ -114,7 +123,7 @@ export default async function MemberStatsPage({ params, searchParams }) {
       target={target}
       year={year}
       month={month}
-      logs={logs ?? []}
+      logs={sliceSessionLogs(logs, monthStart.toISOString(), monthEnd.toISOString())}
       shifts={shifts ?? []}
       wageHistory={wageHist ?? []}
       memberships={mems ?? []}

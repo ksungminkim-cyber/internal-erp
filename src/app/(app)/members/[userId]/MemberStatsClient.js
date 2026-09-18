@@ -149,7 +149,7 @@ export default function MemberStatsClient({
               <div className="bento-decor" />
               <div className="bento-label"><Clock size={14} /> 근무시간</div>
               <div className="bento-value num">
-                {laborSummary ? `${Math.floor(laborSummary.totalMinutes / 60)}h ${laborSummary.totalMinutes % 60}m` : '0h 0m'}
+                {laborSummary ? `${Math.floor(laborSummary.baseMinutes / 60)}h ${laborSummary.baseMinutes % 60}m` : '0h 0m'}
               </div>
               <div className="bento-sub">{logs.filter((l) => l.event_type === 'clock_in').length}회 출근</div>
             </div>
@@ -157,7 +157,7 @@ export default function MemberStatsClient({
             <div className="bento" style={{ minHeight: 130 }}>
               <div className="bento-label text-secondary"><Wallet size={14} /> 인건비</div>
               <div className="bento-value sm num">
-                {laborSummary ? formatCurrency(Math.round(laborSummary.totalPay)) : '0'}
+                {laborSummary ? formatCurrency(Math.round(laborSummary.totalLabor)) : '0'}
                 <span style={{ fontSize: 14, color: 'var(--text-muted)', marginLeft: 4 }}>원</span>
               </div>
               <div className="bento-sub text-muted">기본 + 야간 + 연장 + 주휴</div>
@@ -182,9 +182,9 @@ export default function MemberStatsClient({
                 <div className="card" style={{ gridColumn: '1 / -1', padding: 14 }}>
                   <div className="h4" style={{ marginBottom: 10 }}>수당 분류</div>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                    <Detail label="기본" minutes={laborSummary.baseMinutes} amount={laborSummary.basePay} />
-                    {laborSummary.nightMinutes > 0 && <Detail label="야간" minutes={laborSummary.nightMinutes} amount={laborSummary.nightPay} accent="violet" />}
-                    {laborSummary.overtimeMinutes > 0 && <Detail label="연장" minutes={laborSummary.overtimeMinutes} amount={laborSummary.overtimePay} accent="warning" />}
+                    <Detail label="기본" minutes={laborSummary.baseMinutes} amount={laborSummary.baseCost} />
+                    {laborSummary.nightMinutes > 0 && <Detail label="야간" minutes={laborSummary.nightMinutes} amount={laborSummary.nightPremium} accent="violet" />}
+                    {laborSummary.overtimeMinutes > 0 && <Detail label="연장" minutes={laborSummary.overtimeMinutes} amount={laborSummary.overtimePremium} accent="warning" />}
                     {laborSummary.weeklyRestPay > 0 && <Detail label="주휴" minutes={0} amount={laborSummary.weeklyRestPay} accent="success" />}
                   </div>
                 </div>

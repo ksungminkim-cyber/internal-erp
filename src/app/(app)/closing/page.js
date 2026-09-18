@@ -9,7 +9,7 @@ import PageHeader from '@/components/PageHeader';
 import BottomSheet from '@/components/BottomSheet';
 import { formatCurrency } from '@/lib/format';
 import { downloadCsv, fmtDate } from '@/lib/csvExport';
-import { calcLabor, formatMinutes } from '@/lib/laborCalc';
+import { calcLaborBreakdown, formatMinutes } from '@/lib/laborCalc';
 import { getProfileNames } from '@/app/_actions/names';
 import { ymd } from '@/lib/date';
 import { confirmMonthClosing, unlockMonthClosing, linkClosingApproval, submitClosingApproval, getClosingSourceData } from './actions';
@@ -143,39 +143,8 @@ export default function ClosingPage() {
     const totalOpex = expenseByKind.opex;
     const totalUtilities = expenseByKind.utilities;
 
-    // 인건비 집계 (근로기준법 — 야간/연장/주휴 수당 자동 산정)
-    const wageMap = new Map();
-    (profilesData.data ?? []).forEach((p) => {
-      wageMap.set(p.user_id, { name: p.name, hourly_wage: Number(p.hourly_wage || 0) });
-    });
-    const logsByUser = {};
-    (attendance.data ?? []).forEach((l) => {
-      if (!logsByUser[l.user_id]) logsByUser[l.user_id] = [];
-      logsByUser[l.user_id].push(l);
-    });
-    const laborBreakdown = [];
-    let totalLabor = 0;
-    for (const [uid, logs] of Object.entries(logsByUser)) {
-      const wage = wageMap.get(uid)?.hourly_wage ?? 0;
-      const name = wageMap.get(uid)?.name ?? '—';
-      const calc = calcLabor(logs, wage);
-      totalLabor += calc.totalLabor;
-      laborBreakdown.push({
-        user_id: uid,
-        name,
-        hourly_wage: wage,
-        minutes: calc.baseMinutes,
-        night_minutes: calc.nightMinutes,
-        overtime_minutes: calc.overtimeMinutes,
-        weekly_rest_minutes: calc.weeklyRestMinutes,
-        base_cost: calc.baseCost,
-        night_premium: calc.nightPremium,
-        overtime_premium: calc.overtimePremium,
-        weekly_rest_pay: calc.weeklyRestPay,
-        labor: calc.totalLabor,
-      });
-    }
-    laborBreakdown.sort((a, b) => b.labor - a.labor);
+    // 인건비 집계 (근로기준법 — 야간/연장/주휴 수당 자동 산정) — 월별 리포트와 공용 헬퍼
+    const { breakdown: laborBreakdown, totalLabor } = calcLaborBreakdown(attendance.data, profilesData.data);
 
     const netProfit = totalRevenue - totalLabor - totalExpense;
     const grossProfit = totalRevenue - totalCogs;

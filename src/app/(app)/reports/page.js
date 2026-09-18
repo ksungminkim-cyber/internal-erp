@@ -6,7 +6,8 @@ import { useApp } from '@/context/AppContext';
 import PageHeader from '@/components/PageHeader';
 import Avatar from '@/components/Avatar';
 import { formatCurrency } from '@/lib/format';
-import { getProfileNames } from '@/app/_actions/names';
+import { calcLaborBreakdown } from '@/lib/laborCalc';
+import { getClosingSourceData } from '@/app/(app)/closing/actions';
 import { ymd } from '@/lib/date';
 import { getPageCache, setPageCache } from '@/lib/pageCache';
 import {
@@ -41,16 +42,11 @@ export default function ReportsPage() {
     const cacheKey = `reports:${currentWorkplaceId}:${year}-${month}`;
     const cachedData = getPageCache(cacheKey);
     if (cachedData) setData(cachedData);
+    // 매출/승인 지출/근태/시급은 월 마감과 동일한 서버 액션으로 조회 → 두 화면 수치가 항상 일치
     const [
-      sales, prevSales, expenses, attendance, shifts, complaints,
+      src, prevSales, pendingExpenses, shifts, complaints,
     ] = await Promise.all([
-      supabase
-        .from('sales_daily')
-        .select('sales_date, total_amount, transaction_count, cash_amount, card_amount, other_amount')
-        .eq('workplace_id', currentWorkplaceId)
-        .gte('sales_date', ymd(start))
-        .lt('sales_date', ymd(end))
-        .order('sales_date'),
+      getClosingSourceData(currentWorkplaceId, start.toISOString(), end.toISOString()),
       supabase
         .from('sales_daily')
         .select('total_amount')
@@ -59,18 +55,12 @@ export default function ReportsPage() {
         .lt('sales_date', ymd(prevEnd)),
       supabase
         .from('approval_requests')
-        .select('total_amount, expense_items(category, amount)')
+        .select('total_amount')
         .eq('workplace_id', currentWorkplaceId)
-        .eq('status', 'approved')
+        .eq('doc_type', 'expense')
+        .eq('status', 'pending')
         .gte('submitted_at', start.toISOString())
         .lt('submitted_at', end.toISOString()),
-      supabase
-        .from('attendance_logs')
-        .select('user_id, event_type, event_at')
-        .eq('workplace_id', currentWorkplaceId)
-        .gte('event_at', start.toISOString())
-        .lt('event_at', end.toISOString())
-        .order('event_at'),
       supabase
         .from('shifts')
         .select('id', { count: 'exact', head: true })
@@ -86,7 +76,7 @@ export default function ReportsPage() {
     ]);
 
     // Sales aggregates
-    const salesRows = sales.data ?? [];
+    const salesRows = src.sales ?? [];
     const totalSales = salesRows.reduce((s, r) => s + Number(r.total_amount || 0), 0);
     const totalTx = salesRows.reduce((s, r) => s + Number(r.transaction_count || 0), 0);
     const cashSum = salesRows.reduce((s, r) => s + Number(r.cash_amount || 0), 0);
@@ -102,51 +92,36 @@ export default function ReportsPage() {
     const prevTotal = (prevSales.data ?? []).reduce((s, r) => s + Number(r.total_amount || 0), 0);
     const salesGrowth = prevTotal > 0 ? ((totalSales - prevTotal) / prevTotal) * 100 : 0;
 
-    // Expense aggregates
-    const expRows = expenses.data ?? [];
+    // Expense aggregates — 승인된 지출결의서(doc_type=expense)만. 회계 분류(kind)별 합계도 산출
+    const expRows = src.expenses ?? [];
     const totalExpense = expRows.reduce((s, r) => s + Number(r.total_amount || 0), 0);
     const expenseByCat = {};
+    const expenseByKind = { cogs: 0, opex: 0, utilities: 0 };
     expRows.forEach((r) => {
       (r.expense_items ?? []).forEach((it) => {
         const k = it.category || '기타';
-        expenseByCat[k] = (expenseByCat[k] ?? 0) + Number(it.amount || 0);
+        const amt = Number(it.amount || 0);
+        expenseByCat[k] = (expenseByCat[k] ?? 0) + amt;
+        const kind = it.kind || 'opex';
+        expenseByKind[kind] = (expenseByKind[kind] ?? 0) + amt;
       });
     });
     const expenseTop = Object.entries(expenseByCat).sort((a, b) => b[1] - a[1]);
+    const pendRows = pendingExpenses.data ?? [];
+    const pendingExpense = {
+      count: pendRows.length,
+      amount: pendRows.reduce((s, r) => s + Number(r.total_amount || 0), 0),
+    };
 
-    // Attendance hours (clock_in to clock_out pairs, by user)
-    const attRows = attendance.data ?? [];
-    const attNames = await getProfileNames(attRows.map((l) => l.user_id));
-    const logsByUser = {};
-    attRows.forEach((l) => {
-      const uid = l.user_id;
-      if (!logsByUser[uid]) logsByUser[uid] = { name: attNames[uid] ?? '—', logs: [] };
-      logsByUser[uid].logs.push(l);
-    });
-    const userHours = Object.entries(logsByUser).map(([uid, { name, logs }]) => {
-      // 휴게시간 차감한 실근무 (월마감 laborCalc와 동일 기준)
-      let mins = 0;
-      let openIn = null;
-      let breakMins = 0;
-      let breakStart = null;
-      logs.forEach((l) => {
-        const t = new Date(l.event_at).getTime();
-        if (l.event_type === 'clock_in') { openIn = t; breakMins = 0; breakStart = null; }
-        else if (l.event_type === 'break_start' && openIn) breakStart = t;
-        else if (l.event_type === 'break_end' && breakStart) {
-          breakMins += Math.max(0, Math.floor((t - breakStart) / 60000));
-          breakStart = null;
-        }
-        else if (l.event_type === 'clock_out' && openIn) {
-          if (breakStart) { breakMins += Math.max(0, Math.floor((t - breakStart) / 60000)); breakStart = null; }
-          mins += Math.max(0, Math.floor((t - openIn) / 60000) - breakMins);
-          openIn = null;
-          breakMins = 0;
-        }
-      });
-      return { user_id: uid, name, minutes: mins };
-    }).sort((a, b) => b.minutes - a.minutes);
+    // 근무시간·인건비 — 월 마감과 같은 calcLabor 기준 (휴게 차감, 야간/연장/주휴 수당 포함)
+    // 시급은 관리자(laborVisible)에게만 내려오므로, 그 외에는 근무시간만 표시
+    const { breakdown: userHours, totalLabor } = calcLaborBreakdown(src.attendance, src.profiles);
     const totalMinutes = userHours.reduce((s, u) => s + u.minutes, 0);
+    const laborVisible = src.laborVisible === true;
+
+    // 손익 (월 마감 손익계산서와 동일 산식)
+    const grossProfit = totalSales - expenseByKind.cogs;
+    const operatingProfit = grossProfit - totalLabor - expenseByKind.opex - expenseByKind.utilities;
 
     // Complaints aggregates
     const cmpRows = complaints.data ?? [];
@@ -157,8 +132,8 @@ export default function ReportsPage() {
       totalSales, totalTx, cashSum, cardSum, otherSum,
       daysWithSales, avgDaily, bestDay, worstDay,
       prevTotal, salesGrowth,
-      totalExpense, expenseTop,
-      userHours, totalMinutes,
+      totalExpense, expenseTop, expenseByKind, pendingExpense,
+      userHours, totalMinutes, totalLabor, laborVisible, grossProfit, operatingProfit,
       shiftsCount: shifts.count ?? 0,
       complaints: { total: cmpRows.length, open: openComplaints, high: highSeverity },
       salesRows,
@@ -183,6 +158,8 @@ export default function ReportsPage() {
   const monthLabel = `${year}년 ${month + 1}월`;
   const profit = data ? data.totalSales - data.totalExpense : 0;
   const profitMargin = data && data.totalSales > 0 ? (profit / data.totalSales) * 100 : 0;
+  // 매출 대비 비율 (%)
+  const pctOfSales = (v) => (data && data.totalSales > 0 ? (Math.abs(v) / data.totalSales) * 100 : 0);
 
   return (
     <>
@@ -241,7 +218,7 @@ export default function ReportsPage() {
               </div>
             </section>
 
-            {/* 지출 & 이익 */}
+            {/* 지출 & 인건비(관리자) / 매출-지출(일반) */}
             <section style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
               <div className="bento">
                 <div className="bento-label text-secondary">
@@ -250,20 +227,71 @@ export default function ReportsPage() {
                 <div className="bento-value sm num" style={{ color: 'var(--danger)' }}>
                   {formatCurrency(data.totalExpense)}
                 </div>
-                <div className="bento-sub text-muted">승인된 지출결의서</div>
-              </div>
-              <div className="bento">
-                <div className="bento-label text-secondary">
-                  <TrendingUp size={14} /> 매출-지출(추정)
-                </div>
-                <div className="bento-value sm num" style={{ color: profit >= 0 ? 'var(--success)' : 'var(--danger)' }}>
-                  {profit >= 0 ? '+' : ''}{formatCurrency(profit)}
-                </div>
                 <div className="bento-sub text-muted">
-                  마진 {profitMargin.toFixed(1)}% · 인건비 미포함 — 정확한 손익은 월 마감
+                  승인 결의서 · 매출 대비 {pctOfSales(data.totalExpense).toFixed(1)}%
+                  {data.pendingExpense.count > 0 && ` · 대기 ${data.pendingExpense.count}건`}
                 </div>
               </div>
+              {data.laborVisible ? (
+                <div className="bento">
+                  <div className="bento-label text-secondary">
+                    <Users size={14} /> 인건비
+                  </div>
+                  <div className="bento-value sm num" style={{ color: 'var(--danger)' }}>
+                    {formatCurrency(data.totalLabor)}
+                  </div>
+                  <div className="bento-sub text-muted">
+                    근태 × 시급 · 매출 대비 {pctOfSales(data.totalLabor).toFixed(1)}%
+                  </div>
+                </div>
+              ) : (
+                <div className="bento">
+                  <div className="bento-label text-secondary">
+                    <TrendingUp size={14} /> 매출-지출(추정)
+                  </div>
+                  <div className="bento-value sm num" style={{ color: profit >= 0 ? 'var(--success)' : 'var(--danger)' }}>
+                    {profit >= 0 ? '+' : ''}{formatCurrency(profit)}
+                  </div>
+                  <div className="bento-sub text-muted">
+                    마진 {profitMargin.toFixed(1)}% · 인건비 미포함 — 정확한 손익은 월 마감
+                  </div>
+                </div>
+              )}
             </section>
+
+            {/* 손익 — 월 마감 손익계산서와 동일 산식 + 매출 대비 비율 */}
+            {data.laborVisible && (
+              <section className="card">
+                <h2 className="h3" style={{ marginBottom: 12 }}>손익 · 매출 대비 비율</h2>
+                <div className="stack stack-2">
+                  <PlRow label="매출" value={data.totalSales} pct={100} />
+                  <PlRow label="(–) 매출원가 — 식자재·음료·주류" value={-data.expenseByKind.cogs} pct={pctOfSales(data.expenseByKind.cogs)} small />
+                  <hr className="divider" style={{ margin: '4px 0' }} />
+                  <PlRow
+                    label="매출총이익"
+                    value={data.grossProfit}
+                    pct={pctOfSales(data.grossProfit)}
+                    color={data.grossProfit >= 0 ? 'var(--text)' : 'var(--danger)'}
+                  />
+                  <PlRow label="(–) 인건비" value={-data.totalLabor} pct={pctOfSales(data.totalLabor)} small />
+                  <PlRow label="(–) 일반관리비 — 비품·소모품·수리·마케팅" value={-data.expenseByKind.opex} pct={pctOfSales(data.expenseByKind.opex)} small />
+                  <PlRow label="(–) 공과잡비 — 전기·수도·가스·통신·임차료" value={-data.expenseByKind.utilities} pct={pctOfSales(data.expenseByKind.utilities)} small />
+                  <hr className="divider" style={{ margin: '4px 0', borderColor: 'var(--border-strong)' }} />
+                  <PlRow
+                    label="영업이익"
+                    value={data.operatingProfit}
+                    pct={pctOfSales(data.operatingProfit)}
+                    color={data.operatingProfit >= 0 ? 'var(--success)' : 'var(--danger)'}
+                    large
+                  />
+                </div>
+                <p className="text-muted" style={{ fontSize: 11, marginTop: 10, lineHeight: 1.5 }}>
+                  인건비 = 출퇴근 기록 × 시급 (야간·연장·주휴 수당 포함, 휴게 차감). 지출 = 이 달에 올린 승인 지출결의서.
+                  {data.pendingExpense.count > 0 && ` 승인 대기 ${data.pendingExpense.count}건 ${formatCurrency(data.pendingExpense.amount)}원은 미반영.`}
+                  {' '}확정 수치는 월 마감에서 확인.
+                </p>
+              </section>
+            )}
 
             {/* 일평균/최고/최저 */}
             <section className="card">
@@ -318,7 +346,13 @@ export default function ReportsPage() {
               <h2 className="h3" style={{ marginBottom: 4 }}>근무 시간</h2>
               <p className="text-muted" style={{ fontSize: 12, marginBottom: 12 }}>
                 총 {Math.floor(data.totalMinutes / 60)}시간 {data.totalMinutes % 60}분 · 시프트 {data.shiftsCount}건
+                {data.laborVisible && ` · 인건비 ${formatCurrency(data.totalLabor)}원`}
               </p>
+              {data.laborVisible && data.userHours.some((u) => u.hourly_wage === 0) && (
+                <div style={{ marginBottom: 12, padding: 10, background: 'var(--warning-soft)', color: '#c2410c', borderRadius: 10, fontSize: 12 }}>
+                  시급이 설정되지 않은 직원은 인건비 0원으로 계산됩니다. 직원관리에서 시급을 입력해주세요.
+                </div>
+              )}
 
               {data.userHours.length === 0 ? (
                 <p className="text-muted" style={{ fontSize: 13 }}>기록 없음</p>
@@ -336,6 +370,9 @@ export default function ReportsPage() {
                             <span style={{ fontWeight: 600, fontSize: 13 }}>{u.name}</span>
                             <span className="num" style={{ fontSize: 13, fontWeight: 700 }}>
                               {hh}<span style={{ fontSize: 10, color: 'var(--text-muted)' }}>h</span> {mm}<span style={{ fontSize: 10, color: 'var(--text-muted)' }}>m</span>
+                              {data.laborVisible && (
+                                <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 6 }}>{formatCurrency(u.labor)}원</span>
+                              )}
                             </span>
                           </div>
                           <div style={{ height: 5, background: 'var(--surface-soft)', borderRadius: 999, overflow: 'hidden' }}>
@@ -370,6 +407,31 @@ function Row({ label, value }) {
     <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0' }}>
       <span className="text-muted">{label}</span>
       <span className="num" style={{ fontWeight: 700 }}>{value}</span>
+    </div>
+  );
+}
+
+function PlRow({ label, value, pct, large, small, color }) {
+  return (
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8, padding: '4px 0' }}>
+      <span style={{
+        flex: 1,
+        fontSize: large ? 15 : small ? 12 : 14,
+        fontWeight: large ? 800 : small ? 500 : 700,
+        color: small ? 'var(--text-secondary)' : 'var(--text)',
+      }}>
+        {label}
+      </span>
+      <span className="num text-muted" style={{ fontSize: 11, minWidth: 44, textAlign: 'right' }}>{pct.toFixed(1)}%</span>
+      <span className="num" style={{
+        fontSize: large ? 20 : small ? 13 : 15,
+        fontWeight: large ? 800 : 700,
+        color: color || (small ? 'var(--text-secondary)' : 'var(--text)'),
+        minWidth: 96,
+        textAlign: 'right',
+      }}>
+        {value < 0 ? '-' : ''}{formatCurrency(Math.abs(value))}<span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 2 }}>원</span>
+      </span>
     </div>
   );
 }

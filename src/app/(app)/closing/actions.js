@@ -2,21 +2,36 @@
 
 import { getServiceClient, getActor, loadActorPerms, friendlyDbError } from '@/lib/server/guard';
 import { formatCurrency } from '@/lib/format';
+import { kstDateKey } from '@/lib/date';
+import { sliceSessionLogs } from '@/lib/laborCalc';
+
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 /**
- * 월 마감용 데이터 (매출/지출/근태/직원) — 서비스 롤 조회.
+ * 월 마감·월별 리포트용 데이터 (매출/지출/근태/직원) — 서비스 롤 조회.
  * 클라이언트 profiles(name, hourly_wage)가 RLS로 빈 결과 나던 문제 해결.
+ * - 시급(hourly_wage)은 매장 관리자 또는 마감 권한자에게만 반환 (laborVisible)
+ * - 기간 종료 이후 시급이 바뀐 직원은 당시 시급으로 계산되도록 wage_history 반영
  */
 export async function getClosingSourceData(workplaceId, startISO, endISO) {
+  const empty = { sales: [], expenses: [], attendance: [], profiles: [], laborVisible: false };
   const user = await getActor();
-  if (!user) return { sales: [], expenses: [], attendance: [], profiles: [] };
-  if (!workplaceId) return { sales: [], expenses: [], attendance: [], profiles: [] };
+  if (!user || !workplaceId) return empty;
 
   const svc = getServiceClient();
-  const startDate = startISO.slice(0, 10);
-  const endDate = endISO.slice(0, 10);
+  const perms = await loadActorPerms(svc, user.id);
+  if (!perms.isMemberOf(workplaceId)) return empty;
+  const { data: me } = await svc.from('profiles').select('can_close_books').eq('user_id', user.id).maybeSingle();
+  const laborVisible = perms.isManagerOf(workplaceId) || me?.can_close_books === true;
 
-  const [sales, expenses, attendance, profiles] = await Promise.all([
+  // sales_date는 date 컬럼 — ISO(UTC)를 그대로 자르면 KST 기준 하루가 밀림 (전월 말일 포함·당월 말일 누락)
+  const startDate = kstDateKey(startISO);
+  const endDate = kstDateKey(endISO);
+  // 월 경계를 넘는 야간 세션까지 잡기 위해 앞뒤 하루씩 넓게 조회 후 출근 시각 기준으로 잘라냄
+  const attFrom = new Date(new Date(startISO).getTime() - DAY_MS).toISOString();
+  const attTo = new Date(new Date(endISO).getTime() + DAY_MS).toISOString();
+
+  const [sales, expenses, attendance, profiles, wageChanges] = await Promise.all([
     svc
       .from('sales_daily')
       .select('sales_date, total_amount, transaction_count, cash_amount, card_amount, other_amount')
@@ -28,6 +43,7 @@ export async function getClosingSourceData(workplaceId, startISO, endISO) {
       .from('approval_requests')
       .select('id, title, total_amount, decided_at, expense_items(category, amount, description, kind)')
       .eq('workplace_id', workplaceId)
+      .eq('doc_type', 'expense')
       .eq('status', 'approved')
       .gte('submitted_at', startISO)
       .lt('submitted_at', endISO),
@@ -35,17 +51,30 @@ export async function getClosingSourceData(workplaceId, startISO, endISO) {
       .from('attendance_logs')
       .select('user_id, event_type, event_at')
       .eq('workplace_id', workplaceId)
-      .gte('event_at', startISO)
-      .lt('event_at', endISO)
+      .gte('event_at', attFrom)
+      .lt('event_at', attTo)
       .order('event_at'),
-    svc.from('profiles').select('user_id, name, hourly_wage'),
+    svc.from('profiles').select(laborVisible ? 'user_id, name, hourly_wage' : 'user_id, name'),
+    laborVisible
+      ? svc.from('wage_history').select('user_id, old_wage').gte('changed_at', endISO).order('changed_at', { ascending: true })
+      : Promise.resolve({ data: [] }),
   ]);
+
+  // 기간 종료 후 첫 변경의 old_wage = 기간 종료 시점에 적용되던 시급
+  const wageAtPeriod = {};
+  (wageChanges.data ?? []).forEach((w) => {
+    if (!(w.user_id in wageAtPeriod)) wageAtPeriod[w.user_id] = Number(w.old_wage ?? 0);
+  });
+  const profileRows = (profiles.data ?? []).map((p) =>
+    p.user_id in wageAtPeriod ? { ...p, hourly_wage: wageAtPeriod[p.user_id] } : p
+  );
 
   return {
     sales: sales.data ?? [],
     expenses: expenses.data ?? [],
-    attendance: attendance.data ?? [],
-    profiles: profiles.data ?? [],
+    attendance: sliceSessionLogs(attendance.data ?? [], startISO, endISO),
+    profiles: profileRows,
+    laborVisible,
   };
 }
 

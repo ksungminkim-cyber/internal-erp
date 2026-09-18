@@ -165,3 +165,61 @@ export function formatMinutes(mins) {
   const m = mins % 60;
   return `${h}h ${m}m`;
 }
+
+/**
+ * 조회 기간 [startISO, endISO) 안에 출근(clock_in)한 세션의 로그만 남긴다.
+ * 월 경계를 넘는 야간 근무(31일 22시 출근 → 1일 02시 퇴근)가 출근한 달에
+ * 온전히 귀속되도록, 앞뒤로 넓게 조회한 로그를 여기서 잘라낸다.
+ */
+export function sliceSessionLogs(logs, startISO, endISO) {
+  const s = new Date(startISO).getTime();
+  const e = new Date(endISO).getTime();
+  let keep = false;
+  return (logs ?? []).filter((l) => {
+    if (l.event_type === 'clock_in') {
+      const t = new Date(l.event_at).getTime();
+      keep = t >= s && t < e;
+    }
+    return keep;
+  });
+}
+
+/**
+ * 사업장 전체 attendance_logs(시간순) + profiles(user_id, name, hourly_wage)
+ * → 직원별 인건비 내역. 월 마감과 월별 리포트가 같은 기준으로 계산하도록 공용화.
+ */
+export function calcLaborBreakdown(logs, profiles) {
+  const wageMap = new Map();
+  (profiles ?? []).forEach((p) => {
+    wageMap.set(p.user_id, { name: p.name, hourly_wage: Number(p.hourly_wage || 0) });
+  });
+  const logsByUser = {};
+  (logs ?? []).forEach((l) => {
+    if (!logsByUser[l.user_id]) logsByUser[l.user_id] = [];
+    logsByUser[l.user_id].push(l);
+  });
+  const breakdown = [];
+  let totalLabor = 0;
+  for (const [uid, userLogs] of Object.entries(logsByUser)) {
+    const wage = wageMap.get(uid)?.hourly_wage ?? 0;
+    const name = wageMap.get(uid)?.name ?? '—';
+    const calc = calcLabor(userLogs, wage);
+    totalLabor += calc.totalLabor;
+    breakdown.push({
+      user_id: uid,
+      name,
+      hourly_wage: wage,
+      minutes: calc.baseMinutes,
+      night_minutes: calc.nightMinutes,
+      overtime_minutes: calc.overtimeMinutes,
+      weekly_rest_minutes: calc.weeklyRestMinutes,
+      base_cost: calc.baseCost,
+      night_premium: calc.nightPremium,
+      overtime_premium: calc.overtimePremium,
+      weekly_rest_pay: calc.weeklyRestPay,
+      labor: calc.totalLabor,
+    });
+  }
+  breakdown.sort((a, b) => b.labor - a.labor);
+  return { breakdown, totalLabor };
+}
