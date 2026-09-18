@@ -29,12 +29,15 @@ export function calcLabor(logs, hourlyWage, { shifts = [], premiums = true } = {
   const sessions = parseSessions(logs);
 
   // 개근 판정: 취소되지 않은 시프트 날짜에 출근(세션 시작)이 없으면 결근 → 해당 주 주휴 제외
+  // 아직 시작하지 않은(미래) 시프트는 결근이 아님 — 진행 중인 달을 조회할 때 남은 시프트가 결근으로 잡히지 않도록
   const attendedDays = new Set(sessions.map((s) => ymd(s.start)));
   const absentWeeks = new Set();
   let absentDays = 0;
+  const nowMs = Date.now();
   for (const sh of shifts) {
     if (!sh?.start_at || sh.status === 'cancelled') continue;
     const d = new Date(sh.start_at);
+    if (d.getTime() > nowMs) continue;
     if (!attendedDays.has(ymd(d))) { absentDays += 1; absentWeeks.add(weekKey(d)); }
   }
 
