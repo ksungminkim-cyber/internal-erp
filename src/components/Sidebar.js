@@ -59,6 +59,10 @@ export default function Sidebar() {
   const [wpOpen, setWpOpen] = useState(false);
   const isHQMember = memberships.some((m) => m.workplaces?.name === '본사');
   const isAdmin = profile?.is_super_admin === true || isHQMember || memberships.some((m) => m.role === 'owner');
+  // 월별 리포트: 본사 소속(임원·super_admin 포함) 또는 현재 매장 매니저/오너만
+  const canViewReports = profile?.is_super_admin === true || profile?.is_executive === true || isHQMember
+    || role === 'manager' || role === 'owner';
+  const mainLinks = MAIN_LINKS.filter((l) => l.href !== '/reports' || canViewReports);
 
   const isActive = (href) => pathname === href || pathname.startsWith(href + '/');
   // 임원(본사 대표) → '대표' / 본사 매니저·직원 → '본사' / 그 외 → 현재 매장 role
@@ -159,7 +163,7 @@ export default function Sidebar() {
 
       {/* Main nav */}
       <nav style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4 }}>
-        {MAIN_LINKS.map(({ href, label, icon: Icon }) => (
+        {mainLinks.map(({ href, label, icon: Icon }) => (
           <NavLink key={href} href={href} icon={Icon} label={label} active={isActive(href)} />
         ))}
 

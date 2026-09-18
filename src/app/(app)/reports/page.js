@@ -6,7 +6,7 @@ import { useApp } from '@/context/AppContext';
 import PageHeader from '@/components/PageHeader';
 import Avatar from '@/components/Avatar';
 import { formatCurrency } from '@/lib/format';
-import { calcLaborBreakdown } from '@/lib/laborCalc';
+import { calcLaborBreakdown, MIN_HOURLY_WAGE } from '@/lib/laborCalc';
 import { getClosingSourceData } from '@/app/(app)/closing/actions';
 import { ymd } from '@/lib/date';
 import { getPageCache, setPageCache } from '@/lib/pageCache';
@@ -24,7 +24,13 @@ function monthEnd(year, month) {
 
 export default function ReportsPage() {
   const router = useRouter();
-  const { currentWorkplaceId, supabase, currentWorkplace } = useApp();
+  const { currentWorkplaceId, supabase, currentWorkplace, profile, memberships, isManager } = useApp();
+  // 열람 권한: 본사 소속(임원·super_admin 포함) 또는 현재 매장 매니저/오너
+  const canView =
+    profile?.is_super_admin === true
+    || profile?.is_executive === true
+    || memberships.some((m) => m.workplaces?.name === '본사')
+    || isManager;
   const now = new Date();
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth());
@@ -37,7 +43,7 @@ export default function ReportsPage() {
   const prevEnd = useMemo(() => monthEnd(year, month - 1), [year, month]);
 
   const load = useCallback(async () => {
-    if (!currentWorkplaceId) return;
+    if (!currentWorkplaceId || !canView) return;
     // 재방문/월 이동 시 캐시된 집계 즉시 표시 후 백그라운드 갱신
     const cacheKey = `reports:${currentWorkplaceId}:${year}-${month}`;
     const cachedData = getPageCache(cacheKey);
@@ -141,7 +147,7 @@ export default function ReportsPage() {
     setData(nextData);
     setPageCache(cacheKey, nextData);
     setLoading(false);
-  }, [supabase, currentWorkplaceId, year, month, start, end, prevStart, prevEnd]);
+  }, [supabase, currentWorkplaceId, canView, year, month, start, end, prevStart, prevEnd]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -190,7 +196,12 @@ export default function ReportsPage() {
           <button className="btn btn-ghost btn-icon" onClick={nextMonth} disabled={isCurrentMonth} aria-label="다음 달"><ChevronRight size={18} /></button>
         </div>
 
-        {loading || !data ? (
+        {!canView ? (
+          <div className="card empty">
+            <div className="empty-title">열람 권한이 없어요</div>
+            <div className="empty-desc">월별 리포트는 본사 직원과 매장 매니저·오너만 볼 수 있습니다.</div>
+          </div>
+        ) : loading || !data ? (
           <div className="stack stack-3">
             <div className="skeleton" style={{ height: 140 }} />
             <div className="skeleton" style={{ height: 200 }} />
@@ -286,7 +297,7 @@ export default function ReportsPage() {
                   />
                 </div>
                 <p className="text-muted" style={{ fontSize: 11, marginTop: 10, lineHeight: 1.5 }}>
-                  인건비 = 출퇴근 기록 × 시급 (야간·연장·주휴 수당 포함, 휴게 차감). 지출 = 이 달에 올린 승인 지출결의서.
+                  인건비 = 출퇴근 기록 × 시급 (휴게 차감 · 야간 22~06시 +50% · 연장 일 8h/주 40h 초과 +50% · 주휴 주 15h 이상). 지출 = 이 달에 올린 승인 지출결의서.
                   {data.pendingExpense.count > 0 && ` 승인 대기 ${data.pendingExpense.count}건 ${formatCurrency(data.pendingExpense.amount)}원은 미반영.`}
                   {' '}확정 수치는 월 마감에서 확인.
                 </p>
@@ -348,9 +359,9 @@ export default function ReportsPage() {
                 총 {Math.floor(data.totalMinutes / 60)}시간 {data.totalMinutes % 60}분 · 시프트 {data.shiftsCount}건
                 {data.laborVisible && ` · 인건비 ${formatCurrency(data.totalLabor)}원`}
               </p>
-              {data.laborVisible && data.userHours.some((u) => u.hourly_wage === 0) && (
+              {data.laborVisible && data.userHours.some((u) => u.hourly_wage < MIN_HOURLY_WAGE) && (
                 <div style={{ marginBottom: 12, padding: 10, background: 'var(--warning-soft)', color: '#c2410c', borderRadius: 10, fontSize: 12 }}>
-                  시급이 설정되지 않은 직원은 인건비 0원으로 계산됩니다. 직원관리에서 시급을 입력해주세요.
+                  시급이 미설정이거나 2026년 최저시급({formatCurrency(MIN_HOURLY_WAGE)}원) 미만인 직원이 있습니다. 직원관리에서 시급을 확인해주세요.
                 </div>
               )}
 

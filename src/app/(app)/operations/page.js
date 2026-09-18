@@ -11,9 +11,11 @@ import {
 } from 'lucide-react';
 
 export default function OperationsMenu() {
-  const { currentWorkplaceId, supabase, user, profile, memberships } = useApp();
+  const { currentWorkplaceId, supabase, user, profile, memberships, isManager } = useApp();
   const isHQMember = memberships.some((m) => m.workplaces?.name === '본사');
   const isAdmin = profile?.is_super_admin === true || isHQMember || memberships.some((m) => m.role === 'owner');
+  // 월별 리포트: 본사 소속(임원·super_admin 포함) 또는 현재 매장 매니저/오너만
+  const canViewReports = profile?.is_super_admin === true || profile?.is_executive === true || isHQMember || isManager;
   const [stats, setStats] = useState({
     todayShifts: 0,
     handoverUnresolved: 0,
@@ -132,7 +134,9 @@ export default function OperationsMenu() {
           <div className="grid-4 stagger">
             <OpsCard href="/sales"          icon={TrendingUp} label="매출"       desc="일별 매출"      accent="success" />
             <OpsCard href="/kpis"           icon={Target}     label="KPI"        desc="월별 목표·결재"  accent="violet" />
-            <OpsCard href="/reports"        icon={BarChart3}  label="월별 리포트" desc="통합 대시보드"  accent="accent" />
+            {canViewReports && (
+              <OpsCard href="/reports"      icon={BarChart3}  label="월별 리포트" desc="손익·인건비 대시보드" accent="accent" />
+            )}
             <OpsCard href="/announcements"  icon={Megaphone}  label="공지사항"   desc="전직원 공지"
               accent="neutral" badge={stats.unreadAnn > 0 ? `${stats.unreadAnn} 신규` : null} urgent={stats.unreadAnn > 0} />
             <OpsCard href="/guide"          icon={HelpCircle}    label="사용 가이드" desc="PDF 저장 가능"   accent="violet" />

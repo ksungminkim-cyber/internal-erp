@@ -9,7 +9,7 @@ import PageHeader from '@/components/PageHeader';
 import BottomSheet from '@/components/BottomSheet';
 import { formatCurrency } from '@/lib/format';
 import { downloadCsv, fmtDate } from '@/lib/csvExport';
-import { calcLaborBreakdown, formatMinutes } from '@/lib/laborCalc';
+import { calcLaborBreakdown, formatMinutes, MIN_HOURLY_WAGE } from '@/lib/laborCalc';
 import { getProfileNames } from '@/app/_actions/names';
 import { ymd } from '@/lib/date';
 import { confirmMonthClosing, unlockMonthClosing, linkClosingApproval, submitClosingApproval, getClosingSourceData } from './actions';
@@ -355,7 +355,7 @@ export default function ClosingPage() {
               <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 12, gap: 10, flexWrap: 'wrap' }}>
                 <h2 className="h3">직원별 인건비</h2>
                 <span className="text-muted" style={{ fontSize: 11 }}>
-                  근로기준법 — 야간(22~06시) +50% / 연장(8h 초과) +50% / 주휴(주 15h 이상)
+                  근로기준법 — 야간(22~06시) +50% / 연장(일 8h·주 40h 초과) +50% / 주휴(주 15h 이상)
                 </span>
               </div>
               {data.laborBreakdown.length === 0 ? (
@@ -432,10 +432,10 @@ export default function ClosingPage() {
                 </div>
               )}
 
-              {isAdmin && data.laborBreakdown.some((u) => u.hourly_wage === 0) && (
+              {isAdmin && data.laborBreakdown.some((u) => (u.hourly_wage ?? 0) < MIN_HOURLY_WAGE) && (
                 <div style={{ marginTop: 10, padding: 10, background: 'var(--warning-soft)', color: '#c2410c', borderRadius: 10, fontSize: 12, display: 'flex', gap: 8 }}>
                   <AlertCircle size={14} />
-                  시급이 설정되지 않은 직원은 인건비가 0원으로 계산됩니다. <strong>직원관리</strong>에서 시급을 입력해주세요.
+                  시급이 미설정이거나 2026년 최저시급({formatCurrency(MIN_HOURLY_WAGE)}원) 미만인 직원이 있습니다. <strong>직원관리</strong>에서 시급을 확인해주세요.
                 </div>
               )}
             </section>

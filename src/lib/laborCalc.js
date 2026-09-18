@@ -1,7 +1,10 @@
-// 근로기준법 기반 인건비 자동 계산
-// - 야간수당: 22:00 ~ 익일 06:00 근무분에 대해 +50%
-// - 연장수당: 1일 8시간 초과분에 대해 +50%
-// - 주휴수당: 1주 15시간 이상 근무 시 (주 근무 / 40) × 8h × 시급, 주 40h 상한
+// 근로기준법 기반 인건비 자동 계산 (5인 이상 사업장 가산수당 기준)
+// - 야간수당: 22:00 ~ 익일 06:00 근무분에 대해 +50% (제56조③)
+// - 연장수당: 1일 8시간 초과분 또는 1주 40시간 초과분(둘 중 큰 쪽, 중복 없음)에 대해 +50% (제50조·제56조①)
+//   · 야간과 연장이 겹치는 시간은 가산이 중복 적용됨 (기본 100% + 야간 50% + 연장 50%)
+// - 주휴수당: 1주 소정근로 15시간 이상 시 (소정근로 / 40) × 8h × 시급, 주 40h 상한 (제55조, 제18조③)
+//   · 소정근로 = 실근로 − 연장근로. 개근 여부는 근태 데이터로 판단할 수 없어 가정함
+// - 주 단위는 월요일 시작. 월 경계에 걸친 주는 해당 월 안의 근무만으로 판정됨
 
 const NIGHT_START_HOUR = 22;
 const NIGHT_END_HOUR = 6;
@@ -9,6 +12,9 @@ const OVERTIME_DAILY_MINUTES = 8 * 60;
 const WEEKLY_REST_THRESHOLD_MINUTES = 15 * 60;
 const WEEKLY_FULLTIME_CAP_MINUTES = 40 * 60;
 const PREMIUM_RATE = 0.5;
+
+// 2026년 최저시급 (시간당, 원) — 시급 검증 경고용
+export const MIN_HOURLY_WAGE = 10320;
 
 /**
  * 한 직원의 attendance_logs 를 받아 인건비 상세 산출
@@ -35,19 +41,23 @@ export function calcLabor(logs, hourlyWage) {
     weeklyMins[wKey] = (weeklyMins[wKey] ?? 0) + mins;
   }
 
-  // 연장: 일 8시간 초과
-  let overtimeMins = 0;
-  for (const m of Object.values(dailyMins)) {
-    if (m > OVERTIME_DAILY_MINUTES) overtimeMins += m - OVERTIME_DAILY_MINUTES;
+  // 연장: 주별로 (일 8h 초과분 합계) vs (주 40h 초과분) 중 큰 쪽 — 같은 시간을 두 번 세지 않음
+  const dailyOtByWeek = {};
+  for (const [day, m] of Object.entries(dailyMins)) {
+    const wKey = weekKey(new Date(`${day}T00:00:00`));
+    dailyOtByWeek[wKey] = (dailyOtByWeek[wKey] ?? 0) + Math.max(0, m - OVERTIME_DAILY_MINUTES);
   }
 
-  // 주휴: 1주 15h 이상이면 비례 산정
+  let overtimeMins = 0;
   let weeklyRestMins = 0;
-  for (const m of Object.values(weeklyMins)) {
-    if (m >= WEEKLY_REST_THRESHOLD_MINUTES) {
-      const cappedMins = Math.min(m, WEEKLY_FULLTIME_CAP_MINUTES);
-      // 1주 소정근로 / 40 × 8h
-      weeklyRestMins += Math.round((cappedMins / 40) * 8);
+  for (const [wKey, m] of Object.entries(weeklyMins)) {
+    const weekOt = Math.max(dailyOtByWeek[wKey] ?? 0, m - WEEKLY_FULLTIME_CAP_MINUTES, 0);
+    overtimeMins += weekOt;
+
+    // 주휴: 소정근로(실근로 − 연장)가 1주 15h 이상이면 (소정근로 / 40) × 8h, 40h 상한
+    const regularMins = Math.min(m - weekOt, WEEKLY_FULLTIME_CAP_MINUTES);
+    if (regularMins >= WEEKLY_REST_THRESHOLD_MINUTES) {
+      weeklyRestMins += Math.round((regularMins / 40) * 8);
     }
   }
 
