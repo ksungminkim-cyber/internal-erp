@@ -24,13 +24,12 @@ function monthEnd(year, month) {
 
 export default function ReportsPage() {
   const router = useRouter();
-  const { currentWorkplaceId, supabase, currentWorkplace, profile, memberships, isManager } = useApp();
-  // 열람 권한: 본사 소속(임원·super_admin 포함) 또는 현재 매장 매니저/오너
+  const { currentWorkplaceId, supabase, currentWorkplace, profile, memberships } = useApp();
+  // 열람 권한: 본사 소속(임원·super_admin 포함)만
   const canView =
     profile?.is_super_admin === true
     || profile?.is_executive === true
-    || memberships.some((m) => m.workplaces?.name === '본사')
-    || isManager;
+    || memberships.some((m) => m.workplaces?.name === '본사');
   const now = new Date();
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth());
@@ -121,9 +120,13 @@ export default function ReportsPage() {
 
     // 근무시간·인건비 — 월 마감과 같은 calcLabor 기준 (휴게 차감, 야간/연장/주휴 수당 포함)
     // 시급은 관리자(laborVisible)에게만 내려오므로, 그 외에는 근무시간만 표시
-    const { breakdown: userHours, totalLabor } = calcLaborBreakdown(src.attendance, src.profiles);
+    const { breakdown: userHours, totalLabor } = calcLaborBreakdown(src.attendance, src.profiles, {
+      shifts: src.shifts,
+      premiums: !src.premiumExempt,
+    });
     const totalMinutes = userHours.reduce((s, u) => s + u.minutes, 0);
     const laborVisible = src.laborVisible === true;
+    const premiumExempt = src.premiumExempt === true;
 
     // 손익 (월 마감 손익계산서와 동일 산식)
     const grossProfit = totalSales - expenseByKind.cogs;
@@ -139,7 +142,7 @@ export default function ReportsPage() {
       daysWithSales, avgDaily, bestDay, worstDay,
       prevTotal, salesGrowth,
       totalExpense, expenseTop, expenseByKind, pendingExpense,
-      userHours, totalMinutes, totalLabor, laborVisible, grossProfit, operatingProfit,
+      userHours, totalMinutes, totalLabor, laborVisible, premiumExempt, grossProfit, operatingProfit,
       shiftsCount: shifts.count ?? 0,
       complaints: { total: cmpRows.length, open: openComplaints, high: highSeverity },
       salesRows,
@@ -199,7 +202,7 @@ export default function ReportsPage() {
         {!canView ? (
           <div className="card empty">
             <div className="empty-title">열람 권한이 없어요</div>
-            <div className="empty-desc">월별 리포트는 본사 직원과 매장 매니저·오너만 볼 수 있습니다.</div>
+            <div className="empty-desc">월별 리포트는 본사 직원만 볼 수 있습니다.</div>
           </div>
         ) : loading || !data ? (
           <div className="stack stack-3">
@@ -297,7 +300,8 @@ export default function ReportsPage() {
                   />
                 </div>
                 <p className="text-muted" style={{ fontSize: 11, marginTop: 10, lineHeight: 1.5 }}>
-                  인건비 = 출퇴근 기록 × 시급 (휴게 차감 · 야간 22~06시 +50% · 연장 일 8h/주 40h 초과 +50% · 주휴 주 15h 이상). 지출 = 이 달에 올린 승인 지출결의서.
+                  인건비 = 출퇴근 기록 × 시급 (휴게 차감 · 주휴 주 15h 이상 + 시프트 개근
+                  {data.premiumExempt ? ' · 5인 미만 사업장이라 연장·야간 가산 미적용' : ' · 야간 22~06시 +50% · 연장 일 8h/주 40h 초과 +50%'}). 지출 = 이 달에 올린 승인 지출결의서.
                   {data.pendingExpense.count > 0 && ` 승인 대기 ${data.pendingExpense.count}건 ${formatCurrency(data.pendingExpense.amount)}원은 미반영.`}
                   {' '}확정 수치는 월 마감에서 확인.
                 </p>

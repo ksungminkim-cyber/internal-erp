@@ -16,16 +16,16 @@ function dateLabel(dateStr) {
 }
 
 export default function MemberStatsClient({
-  target, year, month, logs, shifts, wageHistory, memberships, isMe,
+  target, year, month, logs, shifts, premiumExempt = false, wageHistory, memberships, isMe,
 }) {
   const router = useRouter();
   const [tab, setTab] = useState('overview');
 
-  // 인건비 계산
+  // 인건비 계산 — 시프트 개근 판정, 5인 미만 사업장은 연장·야간 가산 제외 (월 마감과 동일 기준)
   const laborSummary = useMemo(() => {
     if (!logs?.length) return null;
-    return calcLabor(logs, Number(target.hourly_wage ?? 0));
-  }, [logs, target.hourly_wage]);
+    return calcLabor(logs, Number(target.hourly_wage ?? 0), { shifts, premiums: !premiumExempt });
+  }, [logs, shifts, premiumExempt, target.hourly_wage]);
 
   // 시프트 vs 근태 비교
   const shiftCheck = useMemo(() => {

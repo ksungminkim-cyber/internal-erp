@@ -144,7 +144,10 @@ export default function ClosingPage() {
     const totalUtilities = expenseByKind.utilities;
 
     // 인건비 집계 (근로기준법 — 야간/연장/주휴 수당 자동 산정) — 월별 리포트와 공용 헬퍼
-    const { breakdown: laborBreakdown, totalLabor } = calcLaborBreakdown(attendance.data, profilesData.data);
+    const { breakdown: laborBreakdown, totalLabor } = calcLaborBreakdown(attendance.data, profilesData.data, {
+      shifts: src.shifts,
+      premiums: !src.premiumExempt,
+    });
 
     const netProfit = totalRevenue - totalLabor - totalExpense;
     const grossProfit = totalRevenue - totalCogs;
@@ -154,6 +157,7 @@ export default function ClosingPage() {
       totalRevenue, totalLabor, totalExpense, netProfit,
       totalCogs, totalOpex, totalUtilities,
       grossProfit, operatingProfit,
+      premiumExempt: src.premiumExempt === true,
       revenueBreakdown: salesRows.map((r) => ({
         sales_date: r.sales_date,
         total: Number(r.total_amount),
@@ -355,7 +359,9 @@ export default function ClosingPage() {
               <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 12, gap: 10, flexWrap: 'wrap' }}>
                 <h2 className="h3">직원별 인건비</h2>
                 <span className="text-muted" style={{ fontSize: 11 }}>
-                  근로기준법 — 야간(22~06시) +50% / 연장(일 8h·주 40h 초과) +50% / 주휴(주 15h 이상)
+                  {data.premiumExempt
+                    ? '5인 미만 사업장 — 연장·야간 가산 미적용 / 주휴(주 15h 이상 + 개근)'
+                    : '근로기준법 — 야간(22~06시) +50% / 연장(일 8h·주 40h 초과) +50% / 주휴(주 15h 이상 + 개근)'}
                 </span>
               </div>
               {data.laborBreakdown.length === 0 ? (
@@ -384,6 +390,9 @@ export default function ClosingPage() {
                         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--text-muted)' }}>
                           <span>
                             근무 <span className="num">{formatMinutes(u.minutes)}</span>
+                            {(u.absent_days ?? 0) > 0 && (
+                              <span style={{ color: '#c2410c', marginLeft: 6 }}>결근 {u.absent_days}일 (해당 주 주휴 제외)</span>
+                            )}
                             {isAdmin && (
                               <> · 시급 <span className="num">
                                 {u.hourly_wage > 0 ? formatCurrency(u.hourly_wage) + '원' : '미설정'}

@@ -31,7 +31,7 @@ export async function getClosingSourceData(workplaceId, startISO, endISO) {
   const attFrom = new Date(new Date(startISO).getTime() - DAY_MS).toISOString();
   const attTo = new Date(new Date(endISO).getTime() + DAY_MS).toISOString();
 
-  const [sales, expenses, attendance, profiles, wageChanges] = await Promise.all([
+  const [sales, expenses, attendance, profiles, wageChanges, shifts, workplace] = await Promise.all([
     svc
       .from('sales_daily')
       .select('sales_date, total_amount, transaction_count, cash_amount, card_amount, other_amount')
@@ -58,6 +58,16 @@ export async function getClosingSourceData(workplaceId, startISO, endISO) {
     laborVisible
       ? svc.from('wage_history').select('user_id, old_wage').gte('changed_at', endISO).order('changed_at', { ascending: true })
       : Promise.resolve({ data: [] }),
+    // 주휴 개근 판정용 — 취소된 시프트 제외
+    svc
+      .from('shifts')
+      .select('user_id, start_at, status')
+      .eq('workplace_id', workplaceId)
+      .neq('status', 'cancelled')
+      .gte('start_at', startISO)
+      .lt('start_at', endISO),
+    // 5인 미만 사업장(연장·야간 가산 면제) 플래그 — 마이그레이션 36 미적용 시 컬럼 없음 → false 취급
+    svc.from('workplaces').select('labor_premium_exempt').eq('id', workplaceId).maybeSingle(),
   ]);
 
   // 기간 종료 후 첫 변경의 old_wage = 기간 종료 시점에 적용되던 시급
@@ -74,6 +84,8 @@ export async function getClosingSourceData(workplaceId, startISO, endISO) {
     expenses: expenses.data ?? [],
     attendance: sliceSessionLogs(attendance.data ?? [], startISO, endISO),
     profiles: profileRows,
+    shifts: shifts.data ?? [],
+    premiumExempt: workplace.data?.labor_premium_exempt === true,
     laborVisible,
   };
 }

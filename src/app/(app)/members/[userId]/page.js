@@ -97,12 +97,13 @@ export default async function MemberStatsPage({ params, searchParams }) {
     .order('event_at');
   if (cookieWpId) logsQuery = logsQuery.eq('workplace_id', cookieWpId);
 
-  const [{ data: logs }, { data: shifts }, { data: wageHist }, { data: mems }] = await Promise.all([
+  const [{ data: logs }, { data: shifts }, { data: wageHist }, { data: mems }, { data: wp }] = await Promise.all([
     logsQuery,
     svc
       .from('shifts')
-      .select('start_at, end_at, workplace_id, workplaces(name)')
+      .select('start_at, end_at, status, workplace_id, workplaces(name)')
       .eq('user_id', userId)
+      .neq('status', 'cancelled')
       .gte('start_at', monthStart.toISOString())
       .lt('start_at', monthEnd.toISOString())
       .order('start_at'),
@@ -116,6 +117,10 @@ export default async function MemberStatsPage({ params, searchParams }) {
       .from('memberships')
       .select('id, role, active, workplaces(id, name)')
       .eq('user_id', userId),
+    // 5인 미만 사업장(연장·야간 가산 면제) — 선택 매장 기준, 컬럼 미적용 시 false
+    cookieWpId
+      ? svc.from('workplaces').select('labor_premium_exempt').eq('id', cookieWpId).maybeSingle()
+      : Promise.resolve({ data: null }),
   ]);
 
   return (
@@ -125,6 +130,7 @@ export default async function MemberStatsPage({ params, searchParams }) {
       month={month}
       logs={sliceSessionLogs(logs, monthStart.toISOString(), monthEnd.toISOString())}
       shifts={shifts ?? []}
+      premiumExempt={wp?.labor_premium_exempt === true}
       wageHistory={wageHist ?? []}
       memberships={mems ?? []}
       isMe={user.id === userId}

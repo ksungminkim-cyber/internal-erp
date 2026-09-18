@@ -11,11 +11,11 @@ import {
 } from 'lucide-react';
 
 export default function OperationsMenu() {
-  const { currentWorkplaceId, supabase, user, profile, memberships, isManager } = useApp();
+  const { currentWorkplaceId, supabase, user, profile, memberships } = useApp();
   const isHQMember = memberships.some((m) => m.workplaces?.name === '본사');
   const isAdmin = profile?.is_super_admin === true || isHQMember || memberships.some((m) => m.role === 'owner');
-  // 월별 리포트: 본사 소속(임원·super_admin 포함) 또는 현재 매장 매니저/오너만
-  const canViewReports = profile?.is_super_admin === true || profile?.is_executive === true || isHQMember || isManager;
+  // 월별 리포트: 본사 소속(임원·super_admin 포함)만
+  const canViewReports = profile?.is_super_admin === true || profile?.is_executive === true || isHQMember;
   const [stats, setStats] = useState({
     todayShifts: 0,
     handoverUnresolved: 0,

@@ -20,10 +20,23 @@ export const MIN_HOURLY_WAGE = 10320;
  * 한 직원의 attendance_logs 를 받아 인건비 상세 산출
  * @param {Array} logs - {event_type, event_at} 시간 순 정렬
  * @param {number} hourlyWage
+ * @param {Object} [opts]
+ * @param {Array}  [opts.shifts]   - 해당 직원의 이 달 시프트 {start_at, status}. 시프트가 있는 날 출근 기록이 없으면 결근 → 그 주 주휴 제외
+ * @param {boolean} [opts.premiums=true] - false면 연장·야간 가산 미적용 (5인 미만 사업장)
  * @returns {Object} 상세 내역
  */
-export function calcLabor(logs, hourlyWage) {
+export function calcLabor(logs, hourlyWage, { shifts = [], premiums = true } = {}) {
   const sessions = parseSessions(logs);
+
+  // 개근 판정: 취소되지 않은 시프트 날짜에 출근(세션 시작)이 없으면 결근 → 해당 주 주휴 제외
+  const attendedDays = new Set(sessions.map((s) => ymd(s.start)));
+  const absentWeeks = new Set();
+  let absentDays = 0;
+  for (const sh of shifts) {
+    if (!sh?.start_at || sh.status === 'cancelled') continue;
+    const d = new Date(sh.start_at);
+    if (!attendedDays.has(ymd(d))) { absentDays += 1; absentWeeks.add(weekKey(d)); }
+  }
 
   let baseMins = 0;
   let nightMins = 0;
@@ -54,17 +67,18 @@ export function calcLabor(logs, hourlyWage) {
     const weekOt = Math.max(dailyOtByWeek[wKey] ?? 0, m - WEEKLY_FULLTIME_CAP_MINUTES, 0);
     overtimeMins += weekOt;
 
-    // 주휴: 소정근로(실근로 − 연장)가 1주 15h 이상이면 (소정근로 / 40) × 8h, 40h 상한
+    // 주휴: 소정근로(실근로 − 연장)가 1주 15h 이상 + 개근이면 (소정근로 / 40) × 8h, 40h 상한
     const regularMins = Math.min(m - weekOt, WEEKLY_FULLTIME_CAP_MINUTES);
-    if (regularMins >= WEEKLY_REST_THRESHOLD_MINUTES) {
+    if (regularMins >= WEEKLY_REST_THRESHOLD_MINUTES && !absentWeeks.has(wKey)) {
       weeklyRestMins += Math.round((regularMins / 40) * 8);
     }
   }
 
   const w = Number(hourlyWage) || 0;
+  const rate = premiums ? PREMIUM_RATE : 0; // 5인 미만 사업장: 가산 없음 (근무시간 자체는 기본급에 포함)
   const baseCost       = Math.round((baseMins        / 60) * w);
-  const nightPremium   = Math.round((nightMins       / 60) * w * PREMIUM_RATE);
-  const overtimePremium = Math.round((overtimeMins   / 60) * w * PREMIUM_RATE);
+  const nightPremium   = Math.round((nightMins       / 60) * w * rate);
+  const overtimePremium = Math.round((overtimeMins   / 60) * w * rate);
   const weeklyRestPay  = Math.round((weeklyRestMins  / 60) * w);
   const totalLabor = baseCost + nightPremium + overtimePremium + weeklyRestPay;
 
@@ -73,6 +87,7 @@ export function calcLabor(logs, hourlyWage) {
     nightMinutes: nightMins,
     overtimeMinutes: overtimeMins,
     weeklyRestMinutes: weeklyRestMins,
+    absentDays,
     baseCost, nightPremium, overtimePremium, weeklyRestPay,
     totalLabor,
   };
@@ -198,7 +213,7 @@ export function sliceSessionLogs(logs, startISO, endISO) {
  * 사업장 전체 attendance_logs(시간순) + profiles(user_id, name, hourly_wage)
  * → 직원별 인건비 내역. 월 마감과 월별 리포트가 같은 기준으로 계산하도록 공용화.
  */
-export function calcLaborBreakdown(logs, profiles) {
+export function calcLaborBreakdown(logs, profiles, { shifts = [], premiums = true } = {}) {
   const wageMap = new Map();
   (profiles ?? []).forEach((p) => {
     wageMap.set(p.user_id, { name: p.name, hourly_wage: Number(p.hourly_wage || 0) });
@@ -208,12 +223,17 @@ export function calcLaborBreakdown(logs, profiles) {
     if (!logsByUser[l.user_id]) logsByUser[l.user_id] = [];
     logsByUser[l.user_id].push(l);
   });
+  const shiftsByUser = {};
+  (shifts ?? []).forEach((s) => {
+    if (!shiftsByUser[s.user_id]) shiftsByUser[s.user_id] = [];
+    shiftsByUser[s.user_id].push(s);
+  });
   const breakdown = [];
   let totalLabor = 0;
   for (const [uid, userLogs] of Object.entries(logsByUser)) {
     const wage = wageMap.get(uid)?.hourly_wage ?? 0;
     const name = wageMap.get(uid)?.name ?? '—';
-    const calc = calcLabor(userLogs, wage);
+    const calc = calcLabor(userLogs, wage, { shifts: shiftsByUser[uid] ?? [], premiums });
     totalLabor += calc.totalLabor;
     breakdown.push({
       user_id: uid,
@@ -223,6 +243,7 @@ export function calcLaborBreakdown(logs, profiles) {
       night_minutes: calc.nightMinutes,
       overtime_minutes: calc.overtimeMinutes,
       weekly_rest_minutes: calc.weeklyRestMinutes,
+      absent_days: calc.absentDays,
       base_cost: calc.baseCost,
       night_premium: calc.nightPremium,
       overtime_premium: calc.overtimePremium,
