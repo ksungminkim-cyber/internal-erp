@@ -88,7 +88,12 @@ export default function Sidebar() {
   return (
     <aside className="sidebar">
       {/* Brand */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20, padding: '4px 8px' }}>
+      <Link
+        href="/home"
+        className="sidebar-brand"
+        aria-label="홈으로 이동"
+        style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20, padding: '4px 8px', textDecoration: 'none', color: 'inherit' }}
+      >
         <div
           style={{
             width: 36, height: 36, borderRadius: 10,
@@ -105,7 +110,7 @@ export default function Sidebar() {
           <div className="h4" style={{ fontSize: 14 }}>Counter</div>
           <div className="text-muted" style={{ fontSize: 11 }}>맥클린 사업장 운영 ERP</div>
         </div>
-      </div>
+      </Link>
 
       {/* Workplace switcher */}
       {memberships.length > 0 && (

@@ -161,6 +161,9 @@ body {
     z-index: 40;
   }
 }
+.sidebar-brand { border-radius: 12px; transition: all var(--t-sm) var(--ease); }
+.sidebar-brand:hover { background: var(--surface-soft); }
+.sidebar-brand:active { transform: scale(0.98); transition-duration: var(--t-xs); }
 
 /* hide bottom nav on desktop */
 @media (min-width: 1024px) {
