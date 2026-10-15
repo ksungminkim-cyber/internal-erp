@@ -245,8 +245,9 @@ export async function getProductSales({ workplaceId, from, to }) {
   if (!allowed) return null;
 
   // 합산은 SQL 함수에서 (뷰를 직접 읽으면 PostgREST 1000행 제한에 걸려 긴 기간이 조용히 적게 집계됨)
-  const [{ data: rows, error: rpcError }, { data: lastLog }] = await Promise.all([
+  const [{ data: rows, error: rpcError }, { data: days, error: dayError }, { data: lastLog }] = await Promise.all([
     svc.rpc('pos_product_sales', { p_workplace_id: workplaceId, p_from: from, p_to: to }),
+    svc.rpc('pos_daily_summary', { p_workplace_id: workplaceId, p_from: from, p_to: to }),
     svc.from('pos_sync_log')
       .select('finished_at')
       .eq('workplace_id', workplaceId)
@@ -258,13 +259,20 @@ export async function getProductSales({ workplaceId, from, to }) {
   ]);
 
   if (rpcError) throw new Error(`pos_product_sales: ${rpcError.message}`);
+  if (dayError) throw new Error(`pos_daily_summary: ${dayError.message}`);
+  // 기간 합계 — 주문 최종금액 기준 (상품 금액 합은 옵션·할인을 빼므로 따로 둔다)
+  const summary = (days ?? []).reduce((a, d) => ({
+    total: a.total + (Number(d.total_amount) || 0),
+    count: a.count + (Number(d.transaction_count) || 0),
+    days: a.days + 1,
+  }), { total: 0, count: 0, days: 0 });
   const items = (rows ?? []).map((r) => ({
     item_title: r.item_title,
     item_code: r.item_code ?? null,
     qty: Number(r.qty) || 0,
     amount: Number(r.amount) || 0,
   }));
-  return { items, lastSyncedAt: lastLog?.finished_at ?? null };
+  return { items, summary, lastSyncedAt: lastLog?.finished_at ?? null };
 }
 
 /**
