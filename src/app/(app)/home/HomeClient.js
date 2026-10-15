@@ -6,6 +6,7 @@ import { useApp } from '@/context/AppContext';
 import PageHeader from '@/components/PageHeader';
 import { formatRelative, formatCurrency, todayBoundary } from '@/lib/format';
 import { getProfileNames } from '@/app/_actions/names';
+import OrderSuggestionsCard from '@/components/OrderSuggestionsCard';
 import { todayKey, ymd } from '@/lib/date';
 import {
   Clock, FileText, Megaphone, Users, ChevronRight, Plus, Sparkles,
@@ -137,7 +138,8 @@ export default function HomeClient({
   userId,
   hqWorkplaceStatuses = null,
 }) {
-  const { currentWorkplaceId, currentWorkplace, supabase, profile, memberships } = useApp();
+  const { currentWorkplaceId, currentWorkplace, supabase, profile, memberships, isManager } = useApp();
+  const [orderCount, setOrderCount] = useState(0); // 발주 권장 품목 수 (OrderSuggestionsCard 가 채움)
 
   // SSR 데이터로 즉시 초기화 → 스켈레톤 없음
   const [stats, setStats] = useState(initialStats);
@@ -269,7 +271,7 @@ export default function HomeClient({
 
   const today       = new Date().toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', weekday: 'long' });
   const s           = stats ?? { working: 0, inbox: 0, unread: 0, todayCheckins: 0, todaySales: 0, lowStock: 0, todayShifts: 0, handoverUnresolved: 0 };
-  const urgentCount = s.lowStock + s.handoverUnresolved + s.inbox;
+  const urgentCount = orderCount + s.handoverUnresolved + s.inbox;
 
   return (
     <>
@@ -334,10 +336,22 @@ export default function HomeClient({
             <AlertTriangle size={18} color="#c2410c" />
             <div style={{ flex: 1, fontSize: 13, display: 'flex', flexWrap: 'wrap', gap: 12 }}>
               {s.inbox > 0 && <Link href="/approvals" style={{ color: '#c2410c', fontWeight: 700, textDecoration: 'none' }}>결재 {s.inbox}건</Link>}
-              {s.lowStock > 0 && <Link href="/inventory" style={{ color: '#c2410c', fontWeight: 700, textDecoration: 'none' }}>발주 {s.lowStock}품목</Link>}
+              {orderCount > 0 && <Link href="/inventory" style={{ color: '#c2410c', fontWeight: 700, textDecoration: 'none' }}>발주 권장 {orderCount}품목</Link>}
               {s.handoverUnresolved > 0 && <Link href="/handover" style={{ color: '#c2410c', fontWeight: 700, textDecoration: 'none' }}>인수인계 {s.handoverUnresolved}건</Link>}
             </div>
           </section>
+        )}
+
+        {/* 발주 권장 — POS 판매 예측(연결 품목) + 최소 수량(그 외). 매니저 이상은 기안 생성 */}
+        {currentWorkplaceId && (
+          <OrderSuggestionsCard
+            workplaceId={currentWorkplaceId}
+            workplaceName={currentWorkplace?.name}
+            canDraft={!!isManager}
+            limit={5}
+            showAllLink
+            onLoaded={({ count }) => setOrderCount(count)}
+          />
         )}
 
         {/* Hero — 매출 + 인원/결재 */}
@@ -432,7 +446,7 @@ export default function HomeClient({
             <QuickAction href="/approvals/new" icon={Plus}           label="지출결의서"  desc="새 기안"                                                              tone="mint"    />
             <QuickAction href="/schedule"      icon={Calendar}        label="시프트"     desc={`오늘 ${s.todayShifts}건`}                                             tone="violet"  />
             <QuickAction href="/checklists"    icon={ClipboardCheck}  label="체크리스트"  desc="오픈/마감"                                                            tone="warm"    />
-            <QuickAction href="/inventory"     icon={Package}         label="재고"       desc={s.lowStock > 0 ? `발주 ${s.lowStock}` : '재고 점검'}  tone={s.lowStock > 0 ? 'danger' : 'neutral'} />
+            <QuickAction href="/inventory"     icon={Package}         label="재고"       desc={orderCount > 0 ? `발주 권장 ${orderCount}` : '재고 점검'}  tone={orderCount > 0 ? 'danger' : 'neutral'} />
             <QuickAction href="/handover"      icon={ClipboardCheck}  label="인수인계"    desc={s.handoverUnresolved > 0 ? `미확인 ${s.handoverUnresolved}` : '교대 메모'} tone="neutral" />
           </div>
         </section>

@@ -56,7 +56,7 @@ async function syncWorkplace(svc, wp, window) {
     return { merchantId: wp.pos_store_code, workplaceId: wp.id, fetched: 0, upserted: 0, error: message };
   }
 
-  let fetched = 0, upserted = 0, filledDays = 0;
+  let fetched = 0, upserted = 0, filledDays = 0, deducted = 0;
   try {
     const orders = dedupe(await fetchOrders({ merchantId: wp.pos_store_code, from: window.from, to: window.to }));
     fetched = orders.length;
@@ -95,13 +95,22 @@ async function syncWorkplace(svc, wp, window) {
     if (e4) throw new Error(`pos_fill_sales_daily: ${e4.message}`);
     filledDays = Number(filled) || 0;
 
+    // 판매량 × 소요량 → 재고 자동 차감 (workplaces.pos_deduct_from 이후 날짜만, 차액만 반영)
+    const { data: ded, error: e5 } = await svc.rpc('pos_apply_usage_deductions', {
+      p_workplace_id: wp.id,
+      p_from: kstDate(new Date(window.from.getTime() - 86400_000)),
+      p_to: kstDate(window.to),
+    });
+    if (e5) throw new Error(`pos_apply_usage_deductions: ${e5.message}`);
+    deducted = Number(ded) || 0;
+
     await svc.from('pos_sync_log').update({ finished_at: new Date().toISOString(), fetched_count: fetched, upserted_count: upserted }).eq('id', log.id);
-    return { merchantId: wp.pos_store_code, workplaceId: wp.id, fetched, upserted, filledDays, error: null };
+    return { merchantId: wp.pos_store_code, workplaceId: wp.id, fetched, upserted, filledDays, deducted, error: null };
   } catch (err) {
     const message = String(err?.message ?? err).slice(0, 500);
     console.error('toss sync error', wp.pos_store_code, message);
     await svc.from('pos_sync_log').update({ finished_at: new Date().toISOString(), fetched_count: fetched, upserted_count: upserted, error: message }).eq('id', log.id);
-    return { merchantId: wp.pos_store_code, workplaceId: wp.id, fetched, upserted, filledDays, error: message };
+    return { merchantId: wp.pos_store_code, workplaceId: wp.id, fetched, upserted, filledDays, deducted, error: message };
   }
 }
 

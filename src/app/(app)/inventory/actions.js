@@ -90,6 +90,8 @@ export async function saveInventoryItem({ id, workplaceId, payload }) {
     vendor: payload.vendor,
     notes: payload.notes,
     ...(payload.lead_time_days != null ? { lead_time_days: Math.max(0, Math.round(Number.isFinite(Number(payload.lead_time_days)) && payload.lead_time_days !== '' ? Number(payload.lead_time_days) : 2)) } : {}),
+    ...('unit_cost' in payload ? { unit_cost: payload.unit_cost === '' || payload.unit_cost == null ? null : Math.max(0, Number(payload.unit_cost) || 0) } : {}),
+    ...('order_unit' in payload ? { order_unit: payload.order_unit === '' || payload.order_unit == null || !(Number(payload.order_unit) > 0) ? null : Number(payload.order_unit) } : {}),
   };
 
   let error;
@@ -219,4 +221,34 @@ export async function saveProductUsage({ workplaceId, inventoryItemId, rows }) {
     if (e2) return { ok: false, error: friendlyDbError(e2) };
   }
   return { ok: true, count: clean.length };
+}
+
+/**
+ * 발주 추천 — inventory_order_suggestions. 권장 수량 > 0 인 품목만, 남은 일수 적은 순.
+ * 홈·재고 페이지 공용. 멤버면 조회 가능.
+ */
+export async function getOrderSuggestions({ workplaceId }) {
+  const user = await getActor();
+  if (!user || !workplaceId) return null;
+  const svc = getServiceClient();
+  const perms = await loadActorPerms(svc, user.id);
+  if (!perms.isMemberOf(workplaceId)) return null;
+
+  const { data, error } = await svc.rpc('inventory_order_suggestions', { p_workplace_id: workplaceId });
+  if (error) throw new Error(`inventory_order_suggestions: ${error.message}`);
+  const rows = (data ?? []).map((r) => ({
+    ...r,
+    current_qty: Number(r.current_qty) || 0,
+    min_qty: Number(r.min_qty) || 0,
+    suggested_qty: Number(r.suggested_qty) || 0,
+    avg_daily_usage: r.avg_daily_usage == null ? null : Number(r.avg_daily_usage),
+    days_left: r.days_left == null ? null : Number(r.days_left),
+    forecast_usage: r.forecast_usage == null ? null : Number(r.forecast_usage),
+    unit_cost: r.unit_cost == null ? null : Number(r.unit_cost),
+    order_unit: r.order_unit == null ? null : Number(r.order_unit),
+  }));
+  return {
+    suggestions: rows.filter((r) => r.suggested_qty > 0),
+    daysLeftById: Object.fromEntries(rows.filter((r) => r.days_left != null).map((r) => [r.inventory_item_id, r.days_left])),
+  };
 }

@@ -40,6 +40,7 @@ export default function NewApprovalPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const revisionOfId = searchParams.get('revision_of');
+  const prefill = searchParams.get('prefill') === '1'; // 발주 권장 카드에서 넘어온 초안
   const { user, profile, currentWorkplaceId, supabase } = useApp();
   const drafterIsExec = profile?.is_executive === true;
 
@@ -81,6 +82,25 @@ export default function NewApprovalPage() {
       }
     })();
   }, [revisionOfId, user, supabase]);
+
+  // 발주 권장 카드가 sessionStorage 에 넣어 둔 초안 (제목·본문·항목). 한 번 쓰고 지운다
+  useEffect(() => {
+    if (!prefill) return;
+    let draft = null;
+    try {
+      const raw = sessionStorage.getItem('approvalPrefill');
+      if (raw) { draft = JSON.parse(raw); sessionStorage.removeItem('approvalPrefill'); }
+    } catch { draft = null; }
+    if (!draft || !Array.isArray(draft.items) || draft.items.length === 0) return;
+    Promise.resolve().then(() => {
+      setTitle(String(draft.title ?? ''));
+      setBody(String(draft.body ?? ''));
+      setItems(draft.items.map((it) => ({
+        description: String(it.description ?? ''), category: String(it.category ?? '식자재'),
+        amount: String(it.amount ?? ''), vendor: String(it.vendor ?? ''), product_url: String(it.product_url ?? ''),
+      })));
+    });
+  }, [prefill]);
 
   const total = items.reduce((sum, it) => sum + (parseFloat(it.amount) || 0), 0);
 
