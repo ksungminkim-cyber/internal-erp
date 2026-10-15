@@ -32,7 +32,8 @@ export async function updateSession(request) {
 
   const url = request.nextUrl;
   const isAuthRoute = url.pathname.startsWith('/login') || url.pathname.startsWith('/auth');
-  const isPublicRoute = url.pathname === '/' || url.pathname.startsWith('/_next') || url.pathname === '/manifest.json';
+  // /api/pos/* 는 서버 간 호출(pg_cron·POS 웹훅) — 세션 대신 각 라우트의 비밀키 헤더로 인증
+  const isPublicRoute = url.pathname === '/' || url.pathname.startsWith('/_next') || url.pathname === '/manifest.json' || url.pathname.startsWith('/api/pos/');
 
   // 리다이렉트 시에도 갱신된 쿠키를 반드시 전달해야 무한 로그아웃 루프 방지
   const carryCookies = (redirect) => {
