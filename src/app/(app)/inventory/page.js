@@ -15,6 +15,36 @@ import { closeInventoryMonth, deleteInventoryClosing, saveInventoryItem, archive
 import { ChevronLeft, Plus, X, Package, TrendingUp, TrendingDown, Edit3, Trash2, Search, Lock, ClipboardList, Link2 } from 'lucide-react';
 
 const CATEGORY_OPTIONS = ['식자재', '음료/시럽', '주류', '컵·뚜껑', '비품', '청소·세제', '포장', '기타'];
+// 세는 단위(입고·재고) / 소진 단위(판매 시 빠지는 단위)
+const COUNT_UNITS = ['개', '박스', '봉', '병', '캔', '팩', '통', '잔', 'kg', 'g', 'L', 'ml'];
+const USAGE_UNITS = ['개', 'g', 'ml', '잔', '샷', '스쿱', 'kg', 'L'];
+const CUSTOM = '__custom__';
+
+// 드롭박스 + 직접 입력
+function UnitSelect({ value, onChange, options, allowNone = false, noneLabel = '없음', ariaLabel }) {
+  const listed = options.includes(value) || (allowNone && value === '');
+  const [custom, setCustom] = useState(!listed && value !== '');
+  if (custom) {
+    return (
+      <div style={{ display: 'flex', gap: 6 }}>
+        <input className="input" value={value} onChange={(e) => onChange(e.target.value)} placeholder="단위 입력" aria-label={ariaLabel} autoFocus style={{ flex: 1 }} />
+        <button type="button" className="btn btn-ghost btn-xs" onClick={() => { setCustom(false); onChange(options[0]); }}>목록</button>
+      </div>
+    );
+  }
+  return (
+    <select
+      className="input"
+      value={listed ? value : CUSTOM}
+      aria-label={ariaLabel}
+      onChange={(e) => { if (e.target.value === CUSTOM) { setCustom(true); onChange(''); } else onChange(e.target.value); }}
+    >
+      {allowNone && <option value="">{noneLabel}</option>}
+      {options.map((u) => <option key={u} value={u}>{u}</option>)}
+      <option value={CUSTOM}>직접 입력…</option>
+    </select>
+  );
+}
 
 export default function InventoryPage() {
   const router = useRouter();
@@ -435,8 +465,9 @@ function InventoryEditor({ item, supabase, workplaceId, onClose, onSaved }) {
   async function save() {
     setError(null);
     if (!name.trim()) return setError('품목명을 입력해주세요.');
-    if ((usageUnit.trim() && !(Number(usagePerUnit) > 0)) || (!usageUnit.trim() && usagePerUnit !== '' && usagePerUnit != null)) {
-      return setError('소진 단위와 1단위당 수량은 함께 입력해주세요. (예: ml, 1000)');
+    if (!unit.trim()) return setError('세는 단위를 골라주세요.');
+    if (usageUnit.trim() && usageUnit.trim() !== unit.trim() && !(Number(usagePerUnit) > 0)) {
+      return setError(`1${unit}에 ${usageUnit}이(가) 몇인지 입력해주세요. (예: 1박스 = 1000개)`);
     }
     setSaving(true);
     const payload = {
@@ -449,8 +480,8 @@ function InventoryEditor({ item, supabase, workplaceId, onClose, onSaved }) {
       lead_time_days: leadTime === '' ? 2 : Number(leadTime),
       unit_cost: unitCost === '' ? '' : Number(unitCost),
       order_unit: orderUnit === '' ? '' : Number(orderUnit),
-      usage_unit: usageUnit.trim(),
-      usage_per_unit: usagePerUnit === '' ? '' : Number(usagePerUnit),
+      usage_unit: usageUnit.trim() === unit.trim() ? '' : usageUnit.trim(),
+      usage_per_unit: usageUnit.trim() === unit.trim() || usagePerUnit === '' ? '' : Number(usagePerUnit),
       supply_type: supplyType,
       vendor: vendor.trim() || null,
       notes: notes.trim() || null,
@@ -498,8 +529,8 @@ function InventoryEditor({ item, supabase, workplaceId, onClose, onSaved }) {
           </select>
         </div>
         <div>
-          <label className="label">단위</label>
-          <input className="input" value={unit} onChange={(e) => setUnit(e.target.value)} placeholder="개, kg, L" />
+          <label className="label">세는 단위</label>
+          <UnitSelect value={unit} onChange={setUnit} options={COUNT_UNITS} ariaLabel="세는 단위" />
         </div>
       </div>
 
@@ -515,14 +546,27 @@ function InventoryEditor({ item, supabase, workplaceId, onClose, onSaved }) {
       </div>
 
       <div style={{ marginTop: 12 }}>
-        <label className="label">소진 단위 (선택)</label>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-          <input className="input" value={usageUnit} onChange={(e) => setUsageUnit(e.target.value)} placeholder="ml, g" aria-label="소진 단위" />
-          <input className="input" type="number" inputMode="decimal" min="0" step="any" value={usagePerUnit} onChange={(e) => setUsagePerUnit(e.target.value)} placeholder={`1${unit || '개'}당 수량`} aria-label="1단위당 소진량" />
-        </div>
-        <div className="text-muted" style={{ fontSize: 11, marginTop: 4 }}>
-          재고는 {unit || '개'}로 세고 소진은 ml·g로 빠질 때 씁니다. 예) 우유 1L: ml, 1000 → 소요량을 ml로 입력하면 자동 환산.
-        </div>
+        <label className="label">소진 단위</label>
+        <UnitSelect value={usageUnit} onChange={setUsageUnit} options={USAGE_UNITS} allowNone noneLabel={`세는 단위와 같음 (${unit || '개'})`} ariaLabel="소진 단위" />
+        {usageUnit && usageUnit !== unit && (
+          <div style={{ marginTop: 8 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span className="num" style={{ fontSize: 13, fontWeight: 700, whiteSpace: 'nowrap' }}>1{unit || '개'} =</span>
+              <input
+                className="input" type="number" inputMode="decimal" min="0" step="any"
+                value={usagePerUnit} onChange={(e) => setUsagePerUnit(e.target.value)}
+                placeholder="수량" aria-label={`1${unit || '개'}당 ${usageUnit} 수량`} style={{ flex: 1 }}
+              />
+              <span style={{ fontSize: 13, fontWeight: 700, whiteSpace: 'nowrap' }}>{usageUnit}</span>
+            </div>
+            <div className="text-muted" style={{ fontSize: 11, marginTop: 4 }}>
+              판매로 {usageUnit}이(가) 빠지면 그만큼 {unit || '개'} 재고가 줄어듭니다. 예) 1박스 = 1000개, 1병 = 700ml.
+            </div>
+          </div>
+        )}
+        {usageUnit && usageUnit === unit && (
+          <div className="text-muted" style={{ fontSize: 11, marginTop: 4 }}>세는 단위와 같아요. &ldquo;세는 단위와 같음&rdquo;을 고르면 됩니다.</div>
+        )}
       </div>
 
       <div style={{ marginTop: 12 }}>
