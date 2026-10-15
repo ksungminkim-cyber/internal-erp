@@ -248,12 +248,9 @@ export async function getProductSales({ workplaceId, from, to }) {
   const allowed = (mems ?? []).some((m) => m.workplace_id === workplaceId) || isHQ || prof?.is_super_admin === true || prof?.is_executive === true;
   if (!allowed) return null;
 
-  const [{ data: rows }, { data: lastLog }] = await Promise.all([
-    svc.from('pos_product_daily')
-      .select('item_title, item_code, qty, amount')
-      .eq('workplace_id', workplaceId)
-      .gte('sales_date', from)
-      .lte('sales_date', to),
+  // 합산은 SQL 함수에서 (뷰를 직접 읽으면 PostgREST 1000행 제한에 걸려 긴 기간이 조용히 적게 집계됨)
+  const [{ data: rows, error: rpcError }, { data: lastLog }] = await Promise.all([
+    svc.rpc('pos_product_sales', { p_workplace_id: workplaceId, p_from: from, p_to: to }),
     svc.from('pos_sync_log')
       .select('finished_at')
       .eq('workplace_id', workplaceId)
@@ -264,14 +261,12 @@ export async function getProductSales({ workplaceId, from, to }) {
       .maybeSingle(),
   ]);
 
-  const agg = new Map();
-  for (const r of rows ?? []) {
-    const key = `${r.item_title}\u0000${r.item_code ?? ''}`;
-    const cur = agg.get(key) ?? { item_title: r.item_title, item_code: r.item_code ?? null, qty: 0, amount: 0 };
-    cur.qty += Number(r.qty) || 0;
-    cur.amount += Number(r.amount) || 0;
-    agg.set(key, cur);
-  }
-  const items = [...agg.values()].sort((a, b) => b.qty - a.qty);
+  if (rpcError) throw new Error(`pos_product_sales: ${rpcError.message}`);
+  const items = (rows ?? []).map((r) => ({
+    item_title: r.item_title,
+    item_code: r.item_code ?? null,
+    qty: Number(r.qty) || 0,
+    amount: Number(r.amount) || 0,
+  }));
   return { items, lastSyncedAt: lastLog?.finished_at ?? null };
 }
