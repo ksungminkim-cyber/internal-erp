@@ -35,27 +35,31 @@ export default function UsageEditor({ item, workplaceId, onClose, onSaved }) {
     if (!loaded) return {};
     const out = {};
     for (const p of products) {
-      const q = suggestQty(p.item_title, item.name, loaded.recipes);
-      if (q != null) out[p.item_title] = q;
+      const s = suggestQty(p.item_title, item.name, loaded.recipes);
+      if (s) out[p.item_title] = { ...s, sameUnit: !!s.unit && s.unit.toLowerCase() === String(item.unit ?? '').toLowerCase() };
     }
     return out;
-  }, [loaded, products, item.name]);
+  }, [loaded, products, item.name, item.unit]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     const list = q ? products.filter((p) => p.item_title.toLowerCase().includes(q)) : products;
-    // 연결된 상품을 위로
-    return [...list].sort((a, b) => (qtyByTitle[b.item_title] ? 1 : 0) - (qtyByTitle[a.item_title] ? 1 : 0));
-  }, [products, query, qtyByTitle]);
+    // 열 때 이미 연결돼 있던 상품을 위로 (스냅샷 기준 — 입력 중에 행이 움직이지 않도록)
+    const linked = new Set((loaded?.links ?? []).map((l) => l.item_title));
+    return [...list].sort((a, b) => (linked.has(b.item_title) ? 1 : 0) - (linked.has(a.item_title) ? 1 : 0));
+  }, [products, query, loaded]);
 
-  const linkedCount = Object.values(qtyByTitle).filter((v) => Number(v) > 0).length;
+  const checkedTitles = Object.keys(qtyByTitle);
+  const validCount = checkedTitles.filter((t) => Number(qtyByTitle[t]) > 0).length;
+  const emptyCount = checkedTitles.length - validCount;
 
   function setQty(title, v) { setQtyByTitle((m) => ({ ...m, [title]: v })); }
   function toggle(title) {
     setQtyByTitle((m) => {
-      if (m[title]) { const n = { ...m }; delete n[title]; return n; }
+      if (title in m) { const n = { ...m }; delete n[title]; return n; }
+      // 체크 시 기본값: 레시피 추천이 품목과 같은 단위일 때만 자동 입력, 아니면 일괄 값 또는 빈칸
       const s = suggestions[title];
-      return { ...m, [title]: s != null ? String(s) : (bulk || '1') };
+      return { ...m, [title]: s?.sameUnit ? String(s.qty) : (Number(bulk) > 0 ? bulk : '') };
     });
   }
   function applyBulk() {
@@ -64,7 +68,9 @@ export default function UsageEditor({ item, workplaceId, onClose, onSaved }) {
   }
 
   async function save() {
-    setError(null); setSaving(true);
+    setError(null);
+    if (emptyCount > 0) { setError(`소요량이 비어 있는 상품이 ${emptyCount}개 있어요. 값을 넣거나 체크를 해제해 주세요.`); return; }
+    setSaving(true);
     try {
       const rows = Object.entries(qtyByTitle).map(([item_title, v]) => ({ item_title, qty_per_unit: Number(v) }));
       const res = await saveProductUsage({ workplaceId, inventoryItemId: item.id, rows });
@@ -105,7 +111,7 @@ export default function UsageEditor({ item, workplaceId, onClose, onSaved }) {
           </div>
 
           <div className="stack stack-1" style={{ maxHeight: '45vh', overflowY: 'auto' }}>
-            {filtered.length === 0 && <div className="text-muted" style={{ fontSize: 12, padding: '8px 0' }}>최근 90일 판매 상품이 없어요</div>}
+            {filtered.length === 0 && <div className="text-muted" style={{ fontSize: 12, padding: '8px 0' }}>{query ? '검색 결과가 없어요' : '최근 90일 판매 상품이 없어요'}</div>}
             {filtered.map((p) => {
               const on = qtyByTitle[p.item_title] != null;
               const sug = suggestions[p.item_title];
@@ -116,9 +122,15 @@ export default function UsageEditor({ item, workplaceId, onClose, onSaved }) {
                     <div style={{ fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.item_title}</div>
                     <div className="text-muted" style={{ fontSize: 11 }}>
                       90일 {p.qty90}개
-                      {sug != null && (
-                        <button type="button" className="btn btn-soft btn-xs" style={{ marginLeft: 6, padding: '0 6px', minHeight: 18, fontSize: 10 }} onClick={() => setQty(p.item_title, String(sug))}>
-                          레시피 {sug}
+                      {sug && (
+                        <button
+                          type="button"
+                          className="btn btn-soft btn-xs"
+                          style={{ marginLeft: 6, padding: '0 6px', minHeight: 18, fontSize: 10, color: sug.sameUnit ? undefined : 'var(--danger)' }}
+                          title={sug.sameUnit ? '레시피 값 넣기' : `레시피 단위(${sug.unit || '?'})가 품목 단위(${item.unit})와 달라요. 환산해서 넣어 주세요.`}
+                          onClick={() => setQty(p.item_title, String(sug.qty))}
+                        >
+                          레시피 {sug.qty}{sug.unit}{sug.sameUnit ? '' : ' ≠' + item.unit}
                         </button>
                       )}
                     </div>
@@ -126,7 +138,7 @@ export default function UsageEditor({ item, workplaceId, onClose, onSaved }) {
                   <input
                     className="input" type="number" inputMode="decimal" min="0" step="any"
                     style={{ width: 86, textAlign: 'right' }}
-                    value={on ? qtyByTitle[p.item_title] : ''}
+                    value={on ? (qtyByTitle[p.item_title] ?? '') : ''}
                     placeholder="소요량"
                     onChange={(e) => setQty(p.item_title, e.target.value)}
                     aria-label={`${p.item_title} 소요량`}
@@ -139,12 +151,12 @@ export default function UsageEditor({ item, workplaceId, onClose, onSaved }) {
 
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 10 }}>
             <input className="input" type="number" inputMode="decimal" min="0" step="any" placeholder="선택한 상품 모두 같은 값" value={bulk} onChange={(e) => setBulk(e.target.value)} style={{ flex: 1 }} />
-            <button type="button" className="btn btn-soft btn-sm" onClick={applyBulk} disabled={!(Number(bulk) > 0) || linkedCount === 0}>일괄 적용</button>
+            <button type="button" className="btn btn-soft btn-sm" onClick={applyBulk} disabled={!(Number(bulk) > 0) || checkedTitles.length === 0}>일괄 적용</button>
           </div>
 
           {error && <p style={{ color: 'var(--danger)', fontSize: 12, marginTop: 8 }}>{error}</p>}
           <button type="button" className="btn btn-primary btn-block" onClick={save} disabled={saving} style={{ marginTop: 12 }}>
-            {saving ? '저장 중…' : `저장 (${linkedCount}개 연결)`}
+            {saving ? '저장 중…' : `저장 (${validCount}개 연결)`}
           </button>
         </>
       )}
