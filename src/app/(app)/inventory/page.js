@@ -6,10 +6,11 @@ import { useApp } from '@/context/AppContext';
 import { useFeedback } from '@/context/FeedbackContext';
 import PageHeader from '@/components/PageHeader';
 import BottomSheet from '@/components/BottomSheet';
+import UsageEditor from './UsageEditor';
 import { formatRelative } from '@/lib/format';
 import { getPageCache, setPageCache } from '@/lib/pageCache';
 import { closeInventoryMonth, deleteInventoryClosing, saveInventoryItem, archiveInventoryItem, recordInventoryTransaction, getInventoryItemHistory } from './actions';
-import { ChevronLeft, Plus, X, Package, AlertTriangle, TrendingUp, TrendingDown, Edit3, Trash2, Search, Lock, ClipboardList } from 'lucide-react';
+import { ChevronLeft, Plus, X, Package, AlertTriangle, TrendingUp, TrendingDown, Edit3, Trash2, Search, Lock, ClipboardList, Link2 } from 'lucide-react';
 
 const CATEGORY_OPTIONS = ['식자재', '음료/시럽', '주류', '컵·뚜껑', '비품', '청소·세제', '포장', '기타'];
 
@@ -23,6 +24,8 @@ export default function InventoryPage() {
   const [editing, setEditing] = useState(null);
   const [showClosing, setShowClosing] = useState(false);
   const [adjusting, setAdjusting] = useState(null);
+  const [usageItem, setUsageItem] = useState(null); // 소요량 연결 편집
+  const [usageCounts, setUsageCounts] = useState({}); // inventory_item_id → 연결 상품 수
 
   const load = useCallback(async () => {
     if (!currentWorkplaceId) return;
@@ -38,7 +41,16 @@ export default function InventoryPage() {
     setLoading(false);
   }, [supabase, currentWorkplaceId]);
 
-  useEffect(() => { load(); }, [load]);
+  // 품목별 소요량 연결 수 (RLS: 매장 멤버 조회 가능)
+  const loadUsageCounts = useCallback(async () => {
+    if (!currentWorkplaceId) return;
+    const { data } = await supabase.from('pos_product_usage').select('inventory_item_id').eq('workplace_id', currentWorkplaceId);
+    const counts = {};
+    for (const r of data ?? []) counts[r.inventory_item_id] = (counts[r.inventory_item_id] ?? 0) + 1;
+    setUsageCounts(counts);
+  }, [supabase, currentWorkplaceId]);
+
+  useEffect(() => { load(); loadUsageCounts(); }, [load, loadUsageCounts]);
 
   useEffect(() => {
     if (!currentWorkplaceId) return;
@@ -154,6 +166,8 @@ export default function InventoryPage() {
                       item={it}
                       onAdjust={() => setAdjusting(it)}
                       onEdit={() => setEditing(it)}
+                      onUsage={() => setUsageItem(it)}
+                      usageCount={usageCounts[it.id] ?? 0}
                     />
                   ))}
                 </div>
@@ -174,6 +188,15 @@ export default function InventoryPage() {
           workplaceId={currentWorkplaceId}
           onClose={() => setEditing(null)}
           onSaved={() => { setEditing(null); load(); }}
+        />
+      )}
+
+      {usageItem && (
+        <UsageEditor
+          item={usageItem}
+          workplaceId={currentWorkplaceId}
+          onClose={() => setUsageItem(null)}
+          onSaved={() => { setUsageItem(null); loadUsageCounts(); }}
         />
       )}
 
@@ -340,7 +363,7 @@ function InventoryClosingDialog({ items, supabase, userId, workplaceId, onClose 
   );
 }
 
-function InventoryRow({ item, onAdjust, onEdit }) {
+function InventoryRow({ item, onAdjust, onEdit, onUsage, usageCount = 0 }) {
   const low = Number(item.current_qty) < Number(item.min_qty);
   return (
     <div
@@ -362,11 +385,15 @@ function InventoryRow({ item, onAdjust, onEdit }) {
           <span style={{ fontSize: 12, color: 'var(--text-muted)', marginLeft: 2 }}>{item.unit}</span>
         </div>
         {low && <span className="tag tag-danger" style={{ fontSize: 10, marginTop: 2 }}>발주</span>}
+        {usageCount > 0 && <span className="tag tag-mint" style={{ fontSize: 10, marginTop: 2 }}>연결 {usageCount}</span>}
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
         <button onClick={onAdjust} className="btn btn-soft btn-xs">±</button>
-        <button onClick={onEdit} className="btn btn-ghost btn-icon" style={{ minHeight: 28, padding: 4 }}>
+        <button onClick={onEdit} className="btn btn-ghost btn-icon" style={{ minHeight: 28, padding: 4 }} aria-label="편집">
           <Edit3 size={12} />
+        </button>
+        <button onClick={onUsage} className="btn btn-ghost btn-icon" style={{ minHeight: 28, padding: 4 }} aria-label="소요량 연결">
+          <Link2 size={12} />
         </button>
       </div>
     </div>
@@ -381,6 +408,7 @@ function InventoryEditor({ item, supabase, workplaceId, onClose, onSaved }) {
   const [unit, setUnit] = useState(item?.unit ?? '개');
   const [currentQty, setCurrentQty] = useState(item?.current_qty ?? 0);
   const [minQty, setMinQty] = useState(item?.min_qty ?? 0);
+  const [leadTime, setLeadTime] = useState(item?.lead_time_days ?? 2);
   const [vendor, setVendor] = useState(item?.vendor ?? '');
   const [notes, setNotes] = useState(item?.notes ?? '');
   const [saving, setSaving] = useState(false);
@@ -396,6 +424,7 @@ function InventoryEditor({ item, supabase, workplaceId, onClose, onSaved }) {
       unit: unit.trim() || '개',
       current_qty: Number(currentQty) || 0,
       min_qty: Number(minQty) || 0,
+      lead_time_days: Number(leadTime) || 0,
       vendor: vendor.trim() || null,
       notes: notes.trim() || null,
     };
@@ -456,6 +485,12 @@ function InventoryEditor({ item, supabase, workplaceId, onClose, onSaved }) {
           <label className="label">최소 (발주 알림)</label>
           <input className="input" type="number" inputMode="decimal" value={minQty} onChange={(e) => setMinQty(e.target.value)} />
         </div>
+      </div>
+
+      <div style={{ marginTop: 12 }}>
+        <label className="label">발주 리드타임 (일)</label>
+        <input className="input" type="number" inputMode="numeric" min="0" value={leadTime} onChange={(e) => setLeadTime(e.target.value)} />
+        <div className="text-muted" style={{ fontSize: 11, marginTop: 4 }}>발주 후 입고까지 걸리는 일수. 발주 추천 계산에 씁니다.</div>
       </div>
 
       <label className="label" style={{ marginTop: 12 }}>거래처 (선택)</label>
