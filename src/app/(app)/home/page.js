@@ -3,10 +3,9 @@ import { createClient } from '@/lib/supabase/server';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import HomeClient from './HomeClient';
-import { kstDateKey } from '@/lib/date';
+import { kstDateKey, addDaysKey } from '@/lib/date';
 
 // 서버(UTC 런타임)에서 한국시간 기준 '오늘'
-function todayKey() { return kstDateKey(); }
 
 export default async function HomePage() {
   const supabase = await createClient();
@@ -44,8 +43,9 @@ export default async function HomePage() {
   }
 
   // ── 모든 stats 서버에서 병렬 패치 ────────────────────────────────────────
-  const todayStr   = todayKey();
+  const todayStr   = kstDateKey();
   const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
+  const yesterdayStr = addDaysKey(todayStr, -1); // KST 키 기준 어제 (서버는 UTC)
   const tomorrow   = new Date(todayStart); tomorrow.setDate(tomorrow.getDate() + 1);
 
   const [
@@ -85,10 +85,9 @@ export default async function HomePage() {
       .eq('workplace_id', wpId),
     supabase
       .from('sales_daily')
-      .select('total_amount, transaction_count')
+      .select('sales_date, total_amount, transaction_count')
       .eq('workplace_id', wpId)
-      .eq('sales_date', todayStr)
-      .maybeSingle(),
+      .in('sales_date', [todayStr, yesterdayStr]),
     supabase
       .from('inventory_items')
       .select('id, current_qty, min_qty')
@@ -127,7 +126,9 @@ export default async function HomePage() {
     inbox:              inboxValid.length,
     unread:             Math.max(0, (annTotal.count ?? 0) - readIds.size),
     todayCheckins:      new Set((todayLogs.data ?? []).map((l) => l.user_id)).size,
-    todaySales:         Number(salesToday.data?.total_amount ?? 0),
+    todaySales:         Number((salesToday.data ?? []).find((r) => r.sales_date === todayStr)?.total_amount ?? 0),
+    todayCount:         Number((salesToday.data ?? []).find((r) => r.sales_date === todayStr)?.transaction_count ?? 0),
+    yesterdaySales:     Number((salesToday.data ?? []).find((r) => r.sales_date === yesterdayStr)?.total_amount ?? 0),
     lowStock,
     todayShifts:        todayShifts.count ?? 0,
     handoverUnresolved: handover.count ?? 0,

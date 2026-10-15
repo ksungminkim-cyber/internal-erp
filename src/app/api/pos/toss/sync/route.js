@@ -22,6 +22,11 @@ function getServiceClient() {
   );
 }
 
+// 한국시간 기준 'YYYY-MM-DD'
+function kstDate(d) {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul' }).format(d);
+}
+
 function resolveWindow({ from, to, hours }) {
   const toD = to ? new Date(to) : new Date();
   const fromD = from ? new Date(from) : new Date(toD.getTime() - (Number(hours) || DEFAULT_HOURS) * 3600_000);
@@ -51,7 +56,7 @@ async function syncWorkplace(svc, wp, window) {
     return { merchantId: wp.pos_store_code, workplaceId: wp.id, fetched: 0, upserted: 0, error: message };
   }
 
-  let fetched = 0, upserted = 0;
+  let fetched = 0, upserted = 0, filledDays = 0;
   try {
     const orders = dedupe(await fetchOrders({ merchantId: wp.pos_store_code, from: window.from, to: window.to }));
     fetched = orders.length;
@@ -81,13 +86,22 @@ async function syncWorkplace(svc, wp, window) {
       upserted += rows.length;
     }
 
+    // 창에 걸친 날짜의 일 매출(sales_daily)을 다시 채움 — 수기 입력·마감 월은 함수가 건너뜀
+    const { data: filled, error: e4 } = await svc.rpc('pos_fill_sales_daily', {
+      p_workplace_id: wp.id,
+      p_from: kstDate(new Date(window.from.getTime() - 86400_000)),
+      p_to: kstDate(window.to),
+    });
+    if (e4) throw new Error(`pos_fill_sales_daily: ${e4.message}`);
+    filledDays = Number(filled) || 0;
+
     await svc.from('pos_sync_log').update({ finished_at: new Date().toISOString(), fetched_count: fetched, upserted_count: upserted }).eq('id', log.id);
-    return { merchantId: wp.pos_store_code, workplaceId: wp.id, fetched, upserted, error: null };
+    return { merchantId: wp.pos_store_code, workplaceId: wp.id, fetched, upserted, filledDays, error: null };
   } catch (err) {
     const message = String(err?.message ?? err).slice(0, 500);
     console.error('toss sync error', wp.pos_store_code, message);
     await svc.from('pos_sync_log').update({ finished_at: new Date().toISOString(), fetched_count: fetched, upserted_count: upserted, error: message }).eq('id', log.id);
-    return { merchantId: wp.pos_store_code, workplaceId: wp.id, fetched, upserted, error: message };
+    return { merchantId: wp.pos_store_code, workplaceId: wp.id, fetched, upserted, filledDays, error: message };
   }
 }
 

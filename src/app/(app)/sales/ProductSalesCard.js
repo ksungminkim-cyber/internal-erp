@@ -5,26 +5,9 @@ import { useEffect, useState } from 'react';
 import { Package, RefreshCw } from 'lucide-react';
 import { formatCurrency, formatTime } from '@/lib/format';
 import { ymd } from '@/lib/date';
+import { RANGES, rangeDates } from '@/lib/salesRanges';
 import { getPageCache, setPageCache } from '@/lib/pageCache';
 import { getProductSales } from './actions';
-
-const RANGES = [
-  { key: 'today', label: '오늘' },
-  { key: 'week', label: '이번 주' },
-  { key: 'month', label: '이번 달' },
-  { key: 'custom', label: '직접 선택' },
-];
-
-function rangeDates(key, custom) {
-  const today = new Date(); today.setHours(0, 0, 0, 0);
-  if (key === 'today') return { from: ymd(today), to: ymd(today) };
-  if (key === 'week') {
-    const d = new Date(today); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); // 월요일
-    return { from: ymd(d), to: ymd(today) };
-  }
-  if (key === 'month') return { from: `${ymd(today).slice(0, 7)}-01`, to: ymd(today) };
-  return custom;
-}
 
 export default function ProductSalesCard({ workplaceId }) {
   const [range, setRange] = useState('today');
