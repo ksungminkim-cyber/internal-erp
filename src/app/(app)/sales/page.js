@@ -11,6 +11,7 @@ import { ymd } from '@/lib/date';
 import { getPageCache, setPageCache } from '@/lib/pageCache';
 import { saveSales, getSalesSummary, getSalesTips, saveSalesTip, deleteSalesTip } from './actions';
 import ProductSalesCard from './ProductSalesCard';
+import DaySalesSheet from './DaySalesSheet';
 import { ChevronLeft, ChevronRight, TrendingUp, Plus, X, Info, Calendar, CreditCard, Banknote, Download, Lightbulb, Sparkles, Pencil, Trash2 } from 'lucide-react';
 
 function addDays(d, n) { const x = new Date(d); x.setDate(x.getDate() + n); return x; }
@@ -40,6 +41,7 @@ export default function SalesPage() {
   const [showTips, setShowTips] = useState(false);
   const [tipsData, setTipsData] = useState({ tips: [], enabled: false });
   const [editTips, setEditTips] = useState(false);
+  const [detailDate, setDetailDate] = useState(null); // 날짜 세부 시트
 
   const today = useMemo(() => { const d = new Date(); d.setHours(0,0,0,0); return d; }, []);
   const start = useMemo(() => addDays(today, -29), [today]);
@@ -284,9 +286,15 @@ export default function SalesPage() {
               return (
                 <div
                   key={i}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`${ymd(d.date)} ${formatCurrency(d.amount)}원 세부 보기`}
                   title={`${ymd(d.date)} · ${formatCurrency(d.amount)}원`}
+                  onClick={() => setDetailDate(ymd(d.date))}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setDetailDate(ymd(d.date)); }}
                   style={{
                     flex: 1,
+                    cursor: 'pointer',
                     height: `${Math.max(h, 2)}%`,
                     background: d.amount === 0
                       ? 'var(--surface-soft)'
@@ -328,7 +336,13 @@ export default function SalesPage() {
             <div className="stack stack-2">
               {rows.map((r) => (
                 <div key={r.id} className="card compact" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <div style={{ flex: 1 }}>
+                  <div
+                    style={{ flex: 1, cursor: 'pointer' }}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => setDetailDate(r.sales_date)}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setDetailDate(r.sales_date); }}
+                  >
                     <div className="h4">
                       {new Date(r.sales_date).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric', weekday: 'short' })}
                     </div>
@@ -373,6 +387,10 @@ export default function SalesPage() {
       )}
 
       {showGuide && <PosGuide onClose={() => setShowGuide(false)} />}
+
+      {detailDate && (
+        <DaySalesSheet workplaceId={currentWorkplaceId} date={detailDate} onClose={() => setDetailDate(null)} />
+      )}
 
       {editTips && (
         <TipsEditor

@@ -270,3 +270,51 @@ export async function getProductSales({ workplaceId, from, to }) {
   }));
   return { items, lastSyncedAt: lastLog?.finished_at ?? null };
 }
+
+/**
+ * 날짜 하나의 세부 — 합계(sales_daily 행, 없으면 POS 합산)와 상품별 판매. 권한은 getProductSales 와 동일.
+ * @returns {{ summary: { total, count, card, cash, other, source } | null, items: [] } | null}
+ */
+export async function getDaySalesDetail({ workplaceId, date }) {
+  const authClient = await createServerClient();
+  const { data: { user } } = await authClient.auth.getUser();
+  if (!user || !workplaceId || !/^\d{4}-\d{2}-\d{2}$/.test(String(date))) return null;
+
+  const svc = getServiceClient();
+  const [{ data: prof }, { data: mems }] = await Promise.all([
+    svc.from('profiles').select('is_super_admin, is_executive').eq('user_id', user.id).maybeSingle(),
+    svc.from('memberships').select('workplace_id, workplaces(name)').eq('user_id', user.id).eq('active', true),
+  ]);
+  const isHQ = (mems ?? []).some((m) => m.workplaces?.name === '본사');
+  const allowed = (mems ?? []).some((m) => m.workplace_id === workplaceId) || isHQ || prof?.is_super_admin === true || prof?.is_executive === true;
+  if (!allowed) return null;
+
+  const [{ data: row }, { data: pos }, { data: products, error: rpcError }] = await Promise.all([
+    svc.from('sales_daily')
+      .select('total_amount, transaction_count, card_amount, cash_amount, other_amount, source')
+      .eq('workplace_id', workplaceId).eq('sales_date', date).maybeSingle(),
+    svc.rpc('pos_daily_summary', { p_workplace_id: workplaceId, p_from: date, p_to: date }),
+    svc.rpc('pos_product_sales', { p_workplace_id: workplaceId, p_from: date, p_to: date }),
+  ]);
+  if (rpcError) throw new Error(`pos_product_sales: ${rpcError.message}`);
+
+  let summary = null;
+  if (row) {
+    summary = {
+      total: Number(row.total_amount) || 0, count: Number(row.transaction_count) || 0,
+      card: Number(row.card_amount) || 0, cash: Number(row.cash_amount) || 0, other: Number(row.other_amount) || 0,
+      source: row.source,
+    };
+  } else if (pos?.[0]) {
+    const p = pos[0];
+    summary = {
+      total: Number(p.total_amount) || 0, count: Number(p.transaction_count) || 0,
+      card: Number(p.card_amount) || 0, cash: Number(p.cash_amount) || 0, other: Number(p.other_amount) || 0,
+      source: 'pos_toss',
+    };
+  }
+  const items = (products ?? []).map((r) => ({
+    item_title: r.item_title, item_code: r.item_code ?? null, qty: Number(r.qty) || 0, amount: Number(r.amount) || 0,
+  }));
+  return { summary, items };
+}
