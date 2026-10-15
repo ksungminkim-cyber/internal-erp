@@ -29,6 +29,7 @@ export default function UsageEditor({ item, workplaceId, onClose, onSaved }) {
         // 저장값(세는 단위) → 입력값(소진 단위)
         const per = d.usageUnit && Number(d.usagePerUnit) > 0 ? Number(d.usagePerUnit) : 1;
         setQtyByTitle(Object.fromEntries(d.links.map((l) => [l.item_title, String(Math.round(l.qty_per_unit * per * 1000) / 1000)])));
+        // (저장은 소수 6자리, 입력 표시는 3자리)
       })
       .catch((e) => { if (alive) setLoadError(String(e?.message ?? e)); });
     return () => { alive = false; };
@@ -44,8 +45,11 @@ export default function UsageEditor({ item, workplaceId, onClose, onSaved }) {
     for (const p of products) {
       const s = suggestQty(p.item_title, item.name, loaded.recipes);
       // g 와 ml 는 음료 재료(우유·시럽 등)에서 사실상 같은 양으로 취급
-      const same = (x, y) => { const n = (u) => String(u ?? '').toLowerCase().replace(/^g$|^ml$/, 'g'); return !!x && n(x) === n(y); };
-      if (s) out[p.item_title] = { ...s, sameUnit: same(s.unit, inputUnit) };
+      const norm = (u) => String(u ?? '').toLowerCase();
+      const exact = !!s?.unit && norm(s.unit) === norm(inputUnit);
+      const equiv = !!s?.unit && ['g', 'ml'].includes(norm(s.unit)) && ['g', 'ml'].includes(norm(inputUnit));
+      // sameUnit: 칩을 경고 없이 보여줄지 (g≈ml 허용). autoFill: 체크만 해도 넣을지 (정확히 같은 단위만)
+      if (s) out[p.item_title] = { ...s, sameUnit: exact || equiv, autoFill: exact };
     }
     return out;
   }, [loaded, products, item.name, inputUnit]);
@@ -73,7 +77,7 @@ export default function UsageEditor({ item, workplaceId, onClose, onSaved }) {
       if (title in m) { const n = { ...m }; delete n[title]; return n; }
       // 체크 시 기본값: 레시피 추천이 품목과 같은 단위일 때만 자동 입력, 아니면 일괄 값 또는 빈칸
       const s = suggestions[title];
-      return { ...m, [title]: s?.sameUnit ? String(s.qty) : (Number(bulk) > 0 ? bulk : '') };
+      return { ...m, [title]: s?.autoFill ? String(s.qty) : (Number(bulk) > 0 ? bulk : '') };
     });
   }
   function applyBulk() {

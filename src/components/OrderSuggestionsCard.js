@@ -89,7 +89,7 @@ export default function OrderSuggestionsCard({ workplaceId, workplaceName, canDr
             </span>
           </div>
         ))}
-        {limit && suggestions.length > limit && (
+        {limit && purchase.length > limit && (
           <div className="text-muted" style={{ fontSize: 11, paddingTop: 4 }}>외 {purchase.length - limit}품목 · 재고 페이지에서 전체 보기</div>
         )}
 

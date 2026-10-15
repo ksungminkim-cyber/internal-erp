@@ -112,7 +112,7 @@ export async function saveInventoryItem({ id, workplaceId, payload }) {
       if (prev?.usage_unit && oldPer > 0 && newPer > 0 && oldPer !== newPer) {
         const { data: links } = await svc.from('pos_product_usage').select('id, qty_per_unit').eq('inventory_item_id', id);
         for (const l of links ?? []) {
-          const q = Math.round((Number(l.qty_per_unit) * oldPer / newPer) * 1000) / 1000;
+          const q = Math.round((Number(l.qty_per_unit) * oldPer / newPer) * 1e6) / 1e6;
           if (q > 0) await svc.from('pos_product_usage').update({ qty_per_unit: q, updated_at: new Date().toISOString() }).eq('id', l.id);
         }
       }
@@ -232,8 +232,12 @@ export async function saveProductUsage({ workplaceId, inventoryItemId, rows }) {
   const seen = new Set();
   for (const r of rows ?? []) {
     const title = String(r.item_title ?? '');            // 토스 상품명 그대로 (조인은 정확 일치)
-    const qty = Math.round(Number(r.qty_per_unit) * 1000) / 1000;
-    if (!title.trim() || !Number.isFinite(qty) || !(qty > 0) || qty >= 1e9 || seen.has(title)) continue;
+    const raw = Number(r.qty_per_unit);
+    const qty = Math.round(raw * 1e6) / 1e6;
+    if (!title.trim() || seen.has(title)) continue;
+    if (!Number.isFinite(raw) || raw <= 0 || raw >= 1e9) continue;
+    // 환산 후 저장 정밀도(소수 6자리) 아래로 떨어지면 조용히 버리지 않고 알린다
+    if (!(qty > 0)) return { ok: false, error: `"${title}" 소요량이 너무 작아 저장할 수 없어요. 품목의 1단위당 수량을 줄이거나 값을 키워 주세요.` };
     seen.add(title);
     clean.push({ workplace_id: workplaceId, inventory_item_id: inventoryItemId, item_title: title, qty_per_unit: qty });
   }

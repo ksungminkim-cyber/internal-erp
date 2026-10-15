@@ -49,6 +49,8 @@ function pickNumber(qtyText, temp) {
  * @returns {{ qty: number, unit: string }|null}
  */
 export function suggestQty(productTitle, itemName, recipes) {
+  // 크림·베이스·파우더 같은 가공/제조 품목은 "우유"·"시럽" 키워드가 들어 있어도 원재료 추천을 하지 않는다
+  if (/크림|베이스|파우더/.test(String(itemName))) return null;
   const kw = KEYWORDS.find((k) => k.item.some((w) => String(itemName).includes(w)));
   if (!kw) return null;
   const p = normalizeTitle(productTitle);

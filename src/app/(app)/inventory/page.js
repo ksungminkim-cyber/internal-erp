@@ -397,7 +397,7 @@ function InventoryRow({ item, onAdjust, onEdit, onUsage, usageCount = 0, daysLef
           </div>
         )}
         {item.supply_type === 'made' && <span className="tag" style={{ fontSize: 10, marginTop: 2 }}>직접 제조</span>}
-        {low && <span className="tag tag-danger" style={{ fontSize: 10, marginTop: 2 }}>발주</span>}
+        {low && <span className="tag tag-danger" style={{ fontSize: 10, marginTop: 2 }}>{item.supply_type === 'made' ? '제조' : '발주'}</span>}
         {usageCount > 0 && <span className="tag tag-mint" style={{ fontSize: 10, marginTop: 2 }}>연결 {usageCount}</span>}
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -435,6 +435,9 @@ function InventoryEditor({ item, supabase, workplaceId, onClose, onSaved }) {
   async function save() {
     setError(null);
     if (!name.trim()) return setError('품목명을 입력해주세요.');
+    if ((usageUnit.trim() && !(Number(usagePerUnit) > 0)) || (!usageUnit.trim() && usagePerUnit !== '' && usagePerUnit != null)) {
+      return setError('소진 단위와 1단위당 수량은 함께 입력해주세요. (예: ml, 1000)');
+    }
     setSaving(true);
     const payload = {
       name: name.trim(),
@@ -524,9 +527,9 @@ function InventoryEditor({ item, supabase, workplaceId, onClose, onSaved }) {
 
       <div style={{ marginTop: 12 }}>
         <label className="label">공급 방식</label>
-        <div className="segment" role="radiogroup" aria-label="공급 방식">
-          <button type="button" role="radio" aria-checked={supplyType === 'purchase'} className={`segment-item ${supplyType === 'purchase' ? 'is-active' : ''}`} onClick={() => setSupplyType('purchase')}>구매 발주</button>
-          <button type="button" role="radio" aria-checked={supplyType === 'made'} className={`segment-item ${supplyType === 'made' ? 'is-active' : ''}`} onClick={() => setSupplyType('made')}>직접 제조</button>
+        <div className="segment" role="group" aria-label="공급 방식">
+          <button type="button" aria-pressed={supplyType === 'purchase'} className={`segment-item ${supplyType === 'purchase' ? 'is-active' : ''}`} onClick={() => setSupplyType('purchase')}>구매 발주</button>
+          <button type="button" aria-pressed={supplyType === 'made'} className={`segment-item ${supplyType === 'made' ? 'is-active' : ''}`} onClick={() => setSupplyType('made')}>직접 제조</button>
         </div>
         <div className="text-muted" style={{ fontSize: 11, marginTop: 4 }}>직접 제조 품목은 발주 대신 &ldquo;추가 제조&rdquo;로 안내되고, 만든 양은 입고로 기록합니다.</div>
       </div>
