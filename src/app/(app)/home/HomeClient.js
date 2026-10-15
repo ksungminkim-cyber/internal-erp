@@ -329,7 +329,7 @@ export default function HomeClient({
             <AlertTriangle size={18} color="#c2410c" />
             <div style={{ flex: 1, fontSize: 13, display: 'flex', flexWrap: 'wrap', gap: 12 }}>
               {s.inbox > 0 && <Link href="/approvals" style={{ color: '#c2410c', fontWeight: 700, textDecoration: 'none' }}>결재 {s.inbox}건</Link>}
-              {orderCount > 0 && <Link href="/inventory" style={{ color: '#c2410c', fontWeight: 700, textDecoration: 'none' }}>발주 권장 {orderCount}품목</Link>}
+              {orderCount > 0 && <Link href="/inventory" style={{ color: '#c2410c', fontWeight: 700, textDecoration: 'none' }}>발주·제조 필요 {orderCount}품목</Link>}
               {s.handoverUnresolved > 0 && <Link href="/handover" style={{ color: '#c2410c', fontWeight: 700, textDecoration: 'none' }}>인수인계 {s.handoverUnresolved}건</Link>}
             </div>
           </section>
@@ -439,7 +439,7 @@ export default function HomeClient({
             <QuickAction href="/approvals/new" icon={Plus}           label="지출결의서"  desc="새 기안"                                                              tone="mint"    />
             <QuickAction href="/schedule"      icon={Calendar}        label="시프트"     desc={`오늘 ${s.todayShifts}건`}                                             tone="violet"  />
             <QuickAction href="/checklists"    icon={ClipboardCheck}  label="체크리스트"  desc="오픈/마감"                                                            tone="warm"    />
-            <QuickAction href="/inventory"     icon={Package}         label="재고"       desc={orderCount > 0 ? `발주 권장 ${orderCount}` : '재고 점검'}  tone={orderCount > 0 ? 'danger' : 'neutral'} />
+            <QuickAction href="/inventory"     icon={Package}         label="재고"       desc={orderCount > 0 ? `발주·제조 ${orderCount}` : '재고 점검'}  tone={orderCount > 0 ? 'danger' : 'neutral'} />
             <QuickAction href="/handover"      icon={ClipboardCheck}  label="인수인계"    desc={s.handoverUnresolved > 0 ? `미확인 ${s.handoverUnresolved}` : '교대 메모'} tone="neutral" />
           </div>
         </section>

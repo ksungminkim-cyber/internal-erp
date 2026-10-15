@@ -391,6 +391,12 @@ function InventoryRow({ item, onAdjust, onEdit, onUsage, usageCount = 0, daysLef
           {Number(item.current_qty)}
           <span style={{ fontSize: 12, color: 'var(--text-muted)', marginLeft: 2 }}>{item.unit}</span>
         </div>
+        {item.usage_unit && Number(item.usage_per_unit) > 0 && (
+          <div className="num text-muted" style={{ fontSize: 11 }}>
+            {new Intl.NumberFormat('ko-KR').format(Math.round(Number(item.current_qty) * Number(item.usage_per_unit)))}{item.usage_unit}
+          </div>
+        )}
+        {item.supply_type === 'made' && <span className="tag" style={{ fontSize: 10, marginTop: 2 }}>직접 제조</span>}
         {low && <span className="tag tag-danger" style={{ fontSize: 10, marginTop: 2 }}>발주</span>}
         {usageCount > 0 && <span className="tag tag-mint" style={{ fontSize: 10, marginTop: 2 }}>연결 {usageCount}</span>}
       </div>
@@ -418,6 +424,9 @@ function InventoryEditor({ item, supabase, workplaceId, onClose, onSaved }) {
   const [leadTime, setLeadTime] = useState(item?.lead_time_days ?? 2);
   const [unitCost, setUnitCost] = useState(item?.unit_cost ?? '');
   const [orderUnit, setOrderUnit] = useState(item?.order_unit ?? '');
+  const [usageUnit, setUsageUnit] = useState(item?.usage_unit ?? '');
+  const [usagePerUnit, setUsagePerUnit] = useState(item?.usage_per_unit ?? '');
+  const [supplyType, setSupplyType] = useState(item?.supply_type ?? 'purchase');
   const [vendor, setVendor] = useState(item?.vendor ?? '');
   const [notes, setNotes] = useState(item?.notes ?? '');
   const [saving, setSaving] = useState(false);
@@ -437,6 +446,9 @@ function InventoryEditor({ item, supabase, workplaceId, onClose, onSaved }) {
       lead_time_days: leadTime === '' ? 2 : Number(leadTime),
       unit_cost: unitCost === '' ? '' : Number(unitCost),
       order_unit: orderUnit === '' ? '' : Number(orderUnit),
+      usage_unit: usageUnit.trim(),
+      usage_per_unit: usagePerUnit === '' ? '' : Number(usagePerUnit),
+      supply_type: supplyType,
       vendor: vendor.trim() || null,
       notes: notes.trim() || null,
     };
@@ -497,6 +509,26 @@ function InventoryEditor({ item, supabase, workplaceId, onClose, onSaved }) {
           <label className="label">최소 (발주 알림)</label>
           <input className="input" type="number" inputMode="decimal" value={minQty} onChange={(e) => setMinQty(e.target.value)} />
         </div>
+      </div>
+
+      <div style={{ marginTop: 12 }}>
+        <label className="label">소진 단위 (선택)</label>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+          <input className="input" value={usageUnit} onChange={(e) => setUsageUnit(e.target.value)} placeholder="ml, g" aria-label="소진 단위" />
+          <input className="input" type="number" inputMode="decimal" min="0" step="any" value={usagePerUnit} onChange={(e) => setUsagePerUnit(e.target.value)} placeholder={`1${unit || '개'}당 수량`} aria-label="1단위당 소진량" />
+        </div>
+        <div className="text-muted" style={{ fontSize: 11, marginTop: 4 }}>
+          재고는 {unit || '개'}로 세고 소진은 ml·g로 빠질 때 씁니다. 예) 우유 1L: ml, 1000 → 소요량을 ml로 입력하면 자동 환산.
+        </div>
+      </div>
+
+      <div style={{ marginTop: 12 }}>
+        <label className="label">공급 방식</label>
+        <div className="segment" role="radiogroup" aria-label="공급 방식">
+          <button type="button" role="radio" aria-checked={supplyType === 'purchase'} className={`segment-item ${supplyType === 'purchase' ? 'is-active' : ''}`} onClick={() => setSupplyType('purchase')}>구매 발주</button>
+          <button type="button" role="radio" aria-checked={supplyType === 'made'} className={`segment-item ${supplyType === 'made' ? 'is-active' : ''}`} onClick={() => setSupplyType('made')}>직접 제조</button>
+        </div>
+        <div className="text-muted" style={{ fontSize: 11, marginTop: 4 }}>직접 제조 품목은 발주 대신 &ldquo;추가 제조&rdquo;로 안내되고, 만든 양은 입고로 기록합니다.</div>
       </div>
 
       <div style={{ marginTop: 12 }}>

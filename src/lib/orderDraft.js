@@ -25,7 +25,8 @@ export function formatDaysLeft(days) {
  * @returns {{ title: string, body: string, items: { description, category, amount, vendor, product_url }[] }}
  */
 export function buildOrderDraft(suggestions, { workplaceName, dateKey }) {
-  const rows = (suggestions ?? []).filter((s) => Number(s.suggested_qty) > 0);
+  // 직접 제조 품목은 발주 대상이 아님
+  const rows = (suggestions ?? []).filter((s) => Number(s.suggested_qty) > 0 && s.supply_type !== 'made');
   const md = `${dateKey.slice(5, 7)}/${dateKey.slice(8, 10)}`;
   const items = rows.map((s) => {
     const qty = Number(s.suggested_qty);
@@ -49,4 +50,18 @@ export function buildOrderDraft(suggestions, { workplaceName, dateKey }) {
     body: `POS 판매 기반 발주 추천 (${dateKey})\n${lines.join('\n')}`,
     items,
   };
+}
+
+/**
+ * 수량 표시 — 세는 단위에 소진 단위를 병기. 예) 7개 (3,500ml)
+ * @param {number} qty 세는 단위 수량
+ * @param {{ unit?: string, usage_unit?: string|null, usage_per_unit?: number|null }} item
+ */
+export function formatUsageQty(qty, item) {
+  const v = Number(qty) || 0;
+  const base = `${fmtQty(v)}${item?.unit ?? ''}`;
+  const per = Number(item?.usage_per_unit);
+  if (!item?.usage_unit || !(per > 0)) return base;
+  const usage = Math.round(v * per * 100) / 100;
+  return `${base} (${new Intl.NumberFormat('ko-KR').format(usage)}${item.usage_unit})`;
 }

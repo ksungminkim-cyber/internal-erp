@@ -1,7 +1,7 @@
 // src/lib/orderDraft.test.js
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildOrderDraft, formatDaysLeft } from './orderDraft.js';
+import { buildOrderDraft, formatDaysLeft, formatUsageQty } from './orderDraft.js';
 
 const suggestions = [
   { inventory_item_id: 'a', name: '아이스 컵', unit: '개', category: '비품', vendor: null, suggested_qty: 150, unit_cost: 80, days_left: 1.5, basis: 'forecast' },
@@ -40,4 +40,20 @@ test('formatDaysLeft', () => {
 test('buildOrderDraft: 매장명이 없으면 제목 끝에 공백이 없다', () => {
   const d = buildOrderDraft(suggestions, { workplaceName: '', dateKey: '2026-10-16' });
   assert.equal(d.title, '발주 — 10/16');
+});
+
+test('buildOrderDraft: 직접 제조 품목은 기안 항목에서 제외', () => {
+  const d = buildOrderDraft([
+    ...suggestions,
+    { inventory_item_id: 'e', name: '스카치 크림', unit: 'g', category: '식자재', vendor: null, suggested_qty: 300, unit_cost: null, days_left: 0.5, basis: 'forecast', supply_type: 'made' },
+  ], { workplaceName: '녹턴', dateKey: '2026-10-16' });
+  assert.equal(d.items.length, 3);
+  assert.ok(!d.items.some((it) => it.description.startsWith('스카치 크림')));
+  assert.ok(!d.body.includes('스카치 크림'));
+});
+
+test('formatUsageQty: 소진 단위가 있으면 함께 표시', () => {
+  assert.equal(formatUsageQty(7, { unit: '개', usage_unit: 'ml', usage_per_unit: 500 }), '7개 (3,500ml)');
+  assert.equal(formatUsageQty(0.5, { unit: '봉', usage_unit: 'g', usage_per_unit: 1000 }), '0.5봉 (500g)');
+  assert.equal(formatUsageQty(3, { unit: '개' }), '3개');
 });

@@ -92,6 +92,13 @@ export async function saveInventoryItem({ id, workplaceId, payload }) {
     ...(payload.lead_time_days != null ? { lead_time_days: Math.max(0, Math.round(Number.isFinite(Number(payload.lead_time_days)) && payload.lead_time_days !== '' ? Number(payload.lead_time_days) : 2)) } : {}),
     ...('unit_cost' in payload ? { unit_cost: payload.unit_cost === '' || payload.unit_cost == null ? null : Math.max(0, Number(payload.unit_cost) || 0) } : {}),
     ...('order_unit' in payload ? { order_unit: payload.order_unit === '' || payload.order_unit == null || !(Number(payload.order_unit) > 0) ? null : Number(payload.order_unit) } : {}),
+    // 소진 단위(ml/g)와 1(세는 단위)당 소진량 — 둘 다 있어야 유효, 아니면 둘 다 비움
+    ...('usage_unit' in payload || 'usage_per_unit' in payload ? (() => {
+      const uu = String(payload.usage_unit ?? '').trim();
+      const per = Number(payload.usage_per_unit);
+      return uu && per > 0 ? { usage_unit: uu, usage_per_unit: per } : { usage_unit: null, usage_per_unit: null };
+    })() : {}),
+    ...('supply_type' in payload ? { supply_type: payload.supply_type === 'made' ? 'made' : 'purchase' } : {}),
   };
 
   let error;
@@ -159,7 +166,7 @@ export async function getProductUsage({ workplaceId, inventoryItemId }) {
   const perms = await loadActorPerms(svc, user.id);
   if (!perms.isMemberOf(workplaceId)) return null;
 
-  const { data: item } = await svc.from('inventory_items').select('id, workplace_id').eq('id', inventoryItemId).maybeSingle();
+  const { data: item } = await svc.from('inventory_items').select('id, workplace_id, unit, usage_unit, usage_per_unit').eq('id', inventoryItemId).maybeSingle();
   if (!item || item.workplace_id !== workplaceId) return null;
 
   const kst = (d) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul' }).format(d);
@@ -188,6 +195,9 @@ export async function getProductUsage({ workplaceId, inventoryItemId }) {
     // 매장 전용 레시피를 앞에 — 같은 이름이면 전용이 우선 매칭되도록
     recipes: [...(recipes ?? [])].sort((a, b) => (b.workplace_id ? 1 : 0) - (a.workplace_id ? 1 : 0)).map((r) => ({ name: r.name, ingredients: r.ingredients })),
     avgDailyUsage,
+    // 소진 단위 정보 — 화면은 이 단위로 입력받고 저장 시 세는 단위로 환산
+    usageUnit: item.usage_unit ?? null,
+    usagePerUnit: item.usage_per_unit == null ? null : Number(item.usage_per_unit),
   };
 }
 
@@ -255,6 +265,7 @@ export async function getOrderSuggestions({ workplaceId }) {
     forecast_usage: r.forecast_usage == null ? null : Number(r.forecast_usage),
     unit_cost: r.unit_cost == null ? null : Number(r.unit_cost),
     order_unit: r.order_unit == null ? null : Number(r.order_unit),
+    usage_per_unit: r.usage_per_unit == null ? null : Number(r.usage_per_unit),
   }));
   return {
     suggestions: rows.filter((r) => r.suggested_qty > 0),
