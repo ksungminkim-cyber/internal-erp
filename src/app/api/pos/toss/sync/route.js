@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { fetchOrders } from '@/lib/server/tossPlace';
 import { mapOrder } from '@/lib/posOrderMap';
+import { groupByItemCount } from '@/lib/posSyncHelpers';
 
 // ─────────────────────────────────────────────────────────────────────────
 // 토스 POS 주문 폴링 — Supabase pg_cron 이 10분마다(최근 90분) / 매일 04:00 KST(최근 48h) 호출.
@@ -11,7 +12,7 @@ import { mapOrder } from '@/lib/posOrderMap';
 // ─────────────────────────────────────────────────────────────────────────
 
 const DEFAULT_HOURS = 1.5;
-const CHUNK = 200;
+const CHUNK = 100; // .in(ids) URL 길이(~4KB) 여유
 
 function getServiceClient() {
   return createClient(
@@ -41,9 +42,14 @@ function dedupe(orders) {
 }
 
 async function syncWorkplace(svc, wp, window) {
-  const { data: log } = await svc.from('pos_sync_log')
+  const { data: log, error: logErr } = await svc.from('pos_sync_log')
     .insert({ workplace_id: wp.id, window_from: window.from.toISOString(), window_to: window.to.toISOString() })
     .select('id').single();
+  if (logErr || !log) {
+    const message = `pos_sync_log insert: ${logErr?.message ?? 'no row'}`;
+    console.error('toss sync error', wp.pos_store_code, message);
+    return { merchantId: wp.pos_store_code, workplaceId: wp.id, fetched: 0, upserted: 0, error: message };
+  }
 
   let fetched = 0, upserted = 0;
   try {
@@ -59,15 +65,18 @@ async function syncWorkplace(svc, wp, window) {
         .select('id, external_id');
       if (e1) throw new Error(`pos_orders upsert: ${e1.message}`);
       const idByExt = new Map(rows.map((r) => [r.external_id, r.id]));
-      const ids = rows.map((r) => r.id);
 
-      const { error: e2 } = await svc.from('pos_order_items').delete().in('order_id', ids);
-      if (e2) throw new Error(`pos_order_items delete: ${e2.message}`);
-
+      // 라인아이템 교체: (order_id, line_no) upsert 후 줄어든 꼬리만 삭제.
+      // delete→insert 와 달리 겹치는 실행·중단 시에도 아이템이 비는 구간이 없다.
       const items = chunk.flatMap((m) => m.items.map((it) => ({ ...it, order_id: idByExt.get(m.order.external_id) })));
       if (items.length) {
-        const { error: e3 } = await svc.from('pos_order_items').insert(items);
-        if (e3) throw new Error(`pos_order_items insert: ${e3.message}`);
+        const { error: e2 } = await svc.from('pos_order_items').upsert(items, { onConflict: 'order_id,line_no' });
+        if (e2) throw new Error(`pos_order_items upsert: ${e2.message}`);
+      }
+      const groups = groupByItemCount(chunk.map((m) => ({ orderId: idByExt.get(m.order.external_id), count: m.items.length })));
+      for (const g of groups) {
+        const { error: e3 } = await svc.from('pos_order_items').delete().in('order_id', g.orderIds).gte('line_no', g.count);
+        if (e3) throw new Error(`pos_order_items tail delete: ${e3.message}`);
       }
       upserted += rows.length;
     }
@@ -98,7 +107,7 @@ export async function POST(request) {
   try { window = resolveWindow(body); } catch { return NextResponse.json({ error: 'invalid_window' }, { status: 400 }); }
 
   const svc = getServiceClient();
-  let q = svc.from('workplaces').select('id, name, pos_store_code').eq('pos_provider', 'toss').not('pos_store_code', 'is', null);
+  let q = svc.from('workplaces').select('id, pos_store_code').eq('pos_provider', 'toss').not('pos_store_code', 'is', null);
   if (body.merchantId) q = q.eq('pos_store_code', String(body.merchantId));
   const { data: wps, error } = await q;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
