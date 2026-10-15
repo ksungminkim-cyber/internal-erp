@@ -1,7 +1,7 @@
 // src/lib/salesKpi.test.js
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { isBarCategory, computeKpi, unitsToTarget } from './salesKpi.js';
+import { isBarCategory, computeKpi, unitsToTarget, perDayUnits } from './salesKpi.js';
 
 test('isBarCategory: 칵테일·위스키·스피리츠·맥주·와인·하이볼은 바', () => {
   for (const c of ['칵테일', '위스키 (버번)', '위스키 (싱글몰트)', '스피리츠', '맥주', '와인', '하이볼']) assert.equal(isBarCategory(c), true, c);
@@ -29,4 +29,11 @@ test('unitsToTarget: 남은 금액을 상품 평균 단가로 나눠 올림', ()
   assert.equal(unitsToTarget(9_597_312, { qty: 387, amount: 1_935_000 }), Math.ceil(9_597_312 / 5000));
   assert.equal(unitsToTarget(0, { qty: 10, amount: 50_000 }), 0);
   assert.equal(unitsToTarget(100, { qty: 0, amount: 0 }), null);
+});
+
+test('perDayUnits: 총 필요 개수를 남은 날로 나눠 올림', () => {
+  assert.equal(perDayUnits(1906, 17), 113);
+  assert.equal(perDayUnits(0, 17), 0);
+  assert.equal(perDayUnits(null, 17), null);
+  assert.equal(perDayUnits(10, 0), 10);
 });

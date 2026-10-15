@@ -38,3 +38,11 @@ export function unitsToTarget(remaining, product) {
   const r = Math.max(0, Number(remaining) || 0);
   return r === 0 ? 0 : Math.ceil(r / unitPrice);
 }
+
+/** 총 필요 개수를 남은 날로 나눈 하루 몫 (올림). null 은 그대로 */
+export function perDayUnits(units, daysLeft) {
+  if (units == null) return null;
+  const u = Math.max(0, Number(units) || 0);
+  const d = Math.max(1, Number(daysLeft) || 1);
+  return u === 0 ? 0 : Math.ceil(u / d);
+}

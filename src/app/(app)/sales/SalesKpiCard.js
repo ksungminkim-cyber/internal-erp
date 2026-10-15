@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 import { Target, Pencil, Coffee, Wine, X } from 'lucide-react';
 import BottomSheet from '@/components/BottomSheet';
 import { formatCurrency } from '@/lib/format';
-import { computeKpi, isBarCategory, unitsToTarget } from '@/lib/salesKpi';
+import { computeKpi, isBarCategory, unitsToTarget, perDayUnits } from '@/lib/salesKpi';
 import { getSalesKpi, updateSalesTarget } from './actions';
 
 function fmtMan(n) {
@@ -16,7 +16,7 @@ function fmtMan(n) {
   return `${new Intl.NumberFormat('ko-KR').format(v)}원`;
 }
 
-function TopList({ title, icon: Icon, products, remaining }) {
+function TopList({ title, icon: Icon, products, remaining, daysLeft }) {
   return (
     <div style={{ flex: 1, minWidth: 0 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 4 }}>
@@ -27,7 +27,7 @@ function TopList({ title, icon: Icon, products, remaining }) {
       ) : (
         <ol style={{ listStyle: 'none', margin: 0, padding: 0 }}>
           {products.map((p, i) => {
-            const need = unitsToTarget(remaining, p);
+            const need = perDayUnits(unitsToTarget(remaining, p), daysLeft);
             return (
               <li key={p.item_title} style={{ padding: '7px 0', borderTop: '1px solid var(--border)' }}>
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
@@ -37,7 +37,7 @@ function TopList({ title, icon: Icon, products, remaining }) {
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, paddingLeft: 20, marginTop: 2 }}>
                   <span className="text-muted num" style={{ fontSize: 11, flex: 1 }}>이달 {formatCurrency(p.qty)}개 · {formatCurrency(p.amount)}원</span>
                   <span className="num" style={{ fontSize: 13, fontWeight: 800, color: need === 0 ? 'var(--success)' : 'var(--accent-strong)', whiteSpace: 'nowrap' }}>
-                    {need == null ? '-' : need === 0 ? '달성' : `+${formatCurrency(need)}개`}
+                    {need == null ? '-' : need === 0 ? '달성' : `하루 ${formatCurrency(need)}개 더`}
                   </span>
                 </div>
               </li>
@@ -122,11 +122,11 @@ export default function SalesKpiCard({ workplaceId }) {
       {!loading && kpi && (
         <div style={{ padding: '10px 16px 14px' }}>
           <div className="text-muted" style={{ fontSize: 11, marginBottom: 6 }}>
-            이달 매출 상위 상품 기준, 그 상품만으로 남은 금액을 채운다면
+            이달 매출 상위 상품 기준, 그 상품만으로 채운다면 남은 {kpi.daysLeft}일 동안 하루에
           </div>
           <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-            <TopList title="카페" icon={Coffee} products={cafe} remaining={kpi.remaining} />
-            {bar.length > 0 && <TopList title="바" icon={Wine} products={bar} remaining={kpi.remaining} />}
+            <TopList title="카페" icon={Coffee} products={cafe} remaining={kpi.remaining} daysLeft={kpi.daysLeft} />
+            {bar.length > 0 && <TopList title="바" icon={Wine} products={bar} remaining={kpi.remaining} daysLeft={kpi.daysLeft} />}
           </div>
         </div>
       )}
