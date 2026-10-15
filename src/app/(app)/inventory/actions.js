@@ -220,10 +220,15 @@ export async function saveProductUsage({ workplaceId, inventoryItemId, rows }) {
       .upsert(clean.map((r) => ({ ...r, updated_at: new Date().toISOString() })), { onConflict: 'inventory_item_id,item_title' });
     if (e1) return { ok: false, error: friendlyDbError(e1) };
   }
-  let del = svc.from('pos_product_usage').delete().eq('inventory_item_id', inventoryItemId);
-  if (clean.length) del = del.not('item_title', 'in', `(${clean.map((r) => `"${r.item_title.replace(/"/g, '\\"')}"`).join(',')})`);
-  const { error: e2 } = await del;
+  // 새 목록에 없는 기존 행만 id 로 삭제 (상품명을 쿼리스트링에 넣지 않음)
+  const { data: existing, error: e2 } = await svc.from('pos_product_usage').select('id, item_title').eq('inventory_item_id', inventoryItemId);
   if (e2) return { ok: false, error: friendlyDbError(e2) };
+  const keep = new Set(clean.map((r) => r.item_title));
+  const staleIds = (existing ?? []).filter((r) => !keep.has(r.item_title)).map((r) => r.id);
+  if (staleIds.length) {
+    const { error: e3 } = await svc.from('pos_product_usage').delete().in('id', staleIds);
+    if (e3) return { ok: false, error: friendlyDbError(e3) };
+  }
   return { ok: true, count: clean.length };
 }
 

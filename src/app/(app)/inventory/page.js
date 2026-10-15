@@ -24,7 +24,9 @@ export default function InventoryPage() {
     try { return localStorage.getItem('inventory:suggestionsOpen') !== '0'; } catch { return true; }
   });
   function toggleSuggestions() {
-    setSuggestionsOpen((v) => { try { localStorage.setItem('inventory:suggestionsOpen', v ? '0' : '1'); } catch { /* 무시 */ } return !v; });
+    const next = !suggestionsOpen;
+    setSuggestionsOpen(next);
+    try { localStorage.setItem('inventory:suggestionsOpen', next ? '1' : '0'); } catch { /* 무시 */ }
   }
   const [items, setItems] = useState(() => getPageCache(`inventory:${currentWorkplaceId}`) ?? []);
   const [loading, setLoading] = useState(false);
@@ -173,7 +175,6 @@ export default function InventoryPage() {
                       onUsage={() => setUsageItem(it)}
                       usageCount={usageCounts[it.id] ?? 0}
                       daysLeft={daysLeftById[it.id]}
-                      linked={(usageCounts[it.id] ?? 0) > 0}
                     />
                   ))}
                 </div>

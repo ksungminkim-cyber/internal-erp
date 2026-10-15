@@ -31,6 +31,7 @@ async function getPage(url, headers, { fetch, sleep }) {
   const body = await res.json().catch(() => null);
   if (res.status !== 200 || body?.resultType !== 'SUCCESS') throw apiError(res.status, body);
   const s = body.success;
+  if (s == null) return [];            // 0건 구간을 null 로 주는 경우 대비
   if (Array.isArray(s)) return s;
   if (Array.isArray(s?.orders)) return s.orders;
   const err = new Error('toss api 응답 형식이 예상과 다릅니다 (success 가 배열이 아님)');

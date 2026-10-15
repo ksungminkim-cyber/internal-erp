@@ -26,10 +26,14 @@ export default function ProductSalesCard({ workplaceId }) {
       .then((res) => {
         if (!alive) return;
         // null = 권한 없음/잘못된 요청 → 오류로 표시 (빈 데이터와 구분)
-        setResult({ key: cacheKey, data: res, error: res ? null : '불러올 권한이 없어요', tick });
+        setResult({ key: cacheKey, data: res, error: res ? null : '권한이 없거나 잘못된 요청이에요.', tick });
         if (res) setPageCache(cacheKey, res);
       })
-      .catch((e) => { if (alive) setResult({ key: cacheKey, data: null, error: String(e?.message ?? '불러오지 못했어요'), tick }); });
+      .catch((e) => {
+        if (!alive) return;
+        console.error('getProductSales', e);
+        setResult({ key: cacheKey, data: null, error: '잠시 후 다시 시도해 주세요.', tick });
+      });
     return () => { alive = false; };
   }, [workplaceId, from, to, cacheKey, tick, invalidRange]);
 
@@ -102,9 +106,11 @@ export default function ProductSalesCard({ workplaceId }) {
       )}
 
       <div className="text-muted" style={{ fontSize: 11, marginTop: 10 }}>
-        {data?.lastSyncedAt
-          ? `마지막 동기화 ${syncedToday ? formatTime(data.lastSyncedAt) : formatDateTime(data.lastSyncedAt)}`
-          : '동기화 전'}
+        {error
+          ? ''
+          : data?.lastSyncedAt
+            ? `마지막 동기화 ${syncedToday ? formatTime(data.lastSyncedAt) : formatDateTime(data.lastSyncedAt)}`
+            : '동기화 전'}
       </div>
     </section>
   );

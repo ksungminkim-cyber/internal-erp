@@ -535,7 +535,7 @@ function SalesEditor({ row, supabase, userId, workplaceId, onClose, onSaved }) {
   const [error, setError] = useState(null);
 
   const autoTotal = (Number(card) || 0) + (Number(cash) || 0) + (Number(other) || 0);
-  const isPosRow = isEdit && row?.source && row.source !== 'manual'; // 자동 집계된 날 — 수정하면 이후 자동 갱신 제외
+  const isPosRow = isEdit && row?.source === 'pos_toss'; // 토스 자동 집계된 날 — 수정하면 이후 자동 갱신 제외
   const totalFinal = Number(total) || autoTotal;
 
   async function save() {

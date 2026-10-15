@@ -83,7 +83,7 @@ export default function UsageEditor({ item, workplaceId, onClose, onSaved }) {
       const rows = Object.entries(qtyByTitle).map(([item_title, v]) => ({ item_title, qty_per_unit: Number(v) }));
       const res = await saveProductUsage({ workplaceId, inventoryItemId: item.id, rows });
       if (res?.error) { setError(res.error); return; }
-      toast?.(`소요량 ${res?.count ?? 0}개 연결 저장`);
+      toast?.(`소요량 ${res?.count ?? 0}개 연결 저장`, 'success');
       onSaved?.();
     } catch (e) {
       setError(String(e?.message ?? e));
@@ -173,7 +173,7 @@ export default function UsageEditor({ item, workplaceId, onClose, onSaved }) {
 
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 10 }}>
             <input aria-label="일괄 적용 값" className="input" type="number" inputMode="decimal" min="0" step="any" placeholder="보이는 체크 상품에 같은 값" value={bulk} onChange={(e) => setBulk(e.target.value)} style={{ flex: 1 }} />
-            <button type="button" className="btn btn-soft btn-sm" onClick={applyBulk} disabled={!(Number(bulk) > 0) || checkedTitles.length === 0}>일괄 적용</button>
+            <button type="button" className="btn btn-soft btn-sm" onClick={applyBulk} disabled={!(Number(bulk) > 0) || !filtered.some((p) => p.item_title in qtyByTitle)}>일괄 적용</button>
           </div>
 
           {error && <p style={{ color: 'var(--danger)', fontSize: 12, marginTop: 8 }}>{error}</p>}
