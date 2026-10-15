@@ -89,6 +89,7 @@ export async function saveInventoryItem({ id, workplaceId, payload }) {
     min_qty: payload.min_qty,
     vendor: payload.vendor,
     notes: payload.notes,
+    ...(payload.lead_time_days != null ? { lead_time_days: Math.max(0, Math.round(Number(payload.lead_time_days) || 0)) } : {}),
   };
 
   let error;
@@ -144,4 +145,71 @@ export async function recordInventoryTransaction({ workplaceId, itemId, type, qt
   });
   if (error) return { ok: false, error: friendlyDbError(error) };
   return { ok: true };
+}
+
+/**
+ * 소요량 연결 편집용 데이터 — 최근 90일 토스 상품(판매량 순), 기존 연결, 레시피(추천용), 최근 30일 하루 평균 소진.
+ */
+export async function getProductUsage({ workplaceId, inventoryItemId }) {
+  const user = await getActor();
+  if (!user || !workplaceId || !inventoryItemId) return null;
+  const svc = getServiceClient();
+  const perms = await loadActorPerms(svc, user.id);
+  if (!perms.isMemberOf(workplaceId)) return null;
+
+  const kst = (d) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul' }).format(d);
+  const today = kst(new Date());
+  const d90 = kst(new Date(Date.now() - 90 * 86400_000));
+  const d30 = kst(new Date(Date.now() - 30 * 86400_000));
+
+  const [{ data: products, error: e1 }, { data: links }, { data: recipes }, { data: usage, error: e2 }] = await Promise.all([
+    svc.rpc('pos_product_sales', { p_workplace_id: workplaceId, p_from: d90, p_to: today }),
+    svc.from('pos_product_usage').select('item_title, qty_per_unit').eq('inventory_item_id', inventoryItemId),
+    svc.from('recipes').select('name, ingredients').eq('active', true),
+    svc.rpc('inventory_daily_usage', { p_workplace_id: workplaceId, p_from: d30, p_to: today }),
+  ]);
+  if (e1) throw new Error(`pos_product_sales: ${e1.message}`);
+  if (e2) throw new Error(`inventory_daily_usage: ${e2.message}`);
+
+  const mine = (usage ?? []).filter((u) => u.inventory_item_id === inventoryItemId);
+  const avgDailyUsage = mine.length ? mine.reduce((s, u) => s + Number(u.usage || 0), 0) / 30 : null;
+
+  return {
+    products: (products ?? []).map((p) => ({ item_title: p.item_title, qty90: Number(p.qty) || 0 })),
+    links: (links ?? []).map((l) => ({ item_title: l.item_title, qty_per_unit: Number(l.qty_per_unit) })),
+    recipes: recipes ?? [],
+    avgDailyUsage,
+  };
+}
+
+/**
+ * 품목의 소요량 연결을 통째로 교체. rows: [{ item_title, qty_per_unit }] (qty_per_unit > 0 만 저장).
+ */
+export async function saveProductUsage({ workplaceId, inventoryItemId, rows }) {
+  const user = await getActor();
+  if (!user) return { ok: false, error: '로그인이 필요합니다.' };
+  const svc = getServiceClient();
+  const perms = await loadActorPerms(svc, user.id);
+  if (!perms.isMemberOf(workplaceId)) return { ok: false, error: '권한이 없습니다.' };
+
+  const { data: item } = await svc.from('inventory_items').select('id, workplace_id').eq('id', inventoryItemId).maybeSingle();
+  if (!item || item.workplace_id !== workplaceId) return { ok: false, error: '품목을 찾을 수 없습니다.' };
+
+  const clean = [];
+  const seen = new Set();
+  for (const r of rows ?? []) {
+    const title = String(r.item_title ?? '').trim();
+    const qty = Number(r.qty_per_unit);
+    if (!title || !(qty > 0) || seen.has(title)) continue;
+    seen.add(title);
+    clean.push({ workplace_id: workplaceId, inventory_item_id: inventoryItemId, item_title: title, qty_per_unit: qty });
+  }
+
+  const { error: e1 } = await svc.from('pos_product_usage').delete().eq('inventory_item_id', inventoryItemId);
+  if (e1) return { ok: false, error: friendlyDbError(e1) };
+  if (clean.length) {
+    const { error: e2 } = await svc.from('pos_product_usage').insert(clean);
+    if (e2) return { ok: false, error: friendlyDbError(e2) };
+  }
+  return { ok: true, count: clean.length };
 }
