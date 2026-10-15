@@ -11,6 +11,7 @@ import { ymd } from '@/lib/date';
 import { getPageCache, setPageCache } from '@/lib/pageCache';
 import { saveSales, getSalesSummary, getSalesTips, saveSalesTip, deleteSalesTip } from './actions';
 import ProductSalesCard from './ProductSalesCard';
+import SalesKpiCard from './SalesKpiCard';
 import DaySalesSheet from './DaySalesSheet';
 import { ChevronLeft, ChevronRight, TrendingUp, Plus, X, Info, Calendar, CreditCard, Banknote, Download, Lightbulb, Sparkles, Pencil, Trash2 } from 'lucide-react';
 
@@ -201,6 +202,9 @@ export default function SalesPage() {
             </div>
           </section>
         )}
+
+        {/* 월 목표 KPI — 진행률·남은 금액·상위 상품별 추가 판매량 */}
+        {currentWorkplaceId && <SalesKpiCard workplaceId={currentWorkplaceId} />}
 
         {/* 상품별 판매 — 토스 POS 동기화 데이터 */}
         {currentWorkplaceId && <ProductSalesCard workplaceId={currentWorkplaceId} />}
