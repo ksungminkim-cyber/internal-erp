@@ -202,7 +202,7 @@ export default function NewApprovalPage() {
         }
       />
 
-      <form onSubmit={submit} className="fade-in" style={{ padding: '20px 16px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <form onSubmit={submit} className="fade-in page-main" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
         <section className="card">
           <label className="label">제목</label>
           <input className="input" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="예) 5월 4주차 식자재 발주" required />
