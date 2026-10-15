@@ -7,16 +7,19 @@ import { useFeedback } from '@/context/FeedbackContext';
 import PageHeader from '@/components/PageHeader';
 import BottomSheet from '@/components/BottomSheet';
 import UsageEditor from './UsageEditor';
+import OrderSuggestionsCard from '@/components/OrderSuggestionsCard';
+import { formatDaysLeft } from '@/lib/orderDraft';
 import { formatRelative } from '@/lib/format';
 import { getPageCache, setPageCache } from '@/lib/pageCache';
 import { closeInventoryMonth, deleteInventoryClosing, saveInventoryItem, archiveInventoryItem, recordInventoryTransaction, getInventoryItemHistory } from './actions';
-import { ChevronLeft, Plus, X, Package, AlertTriangle, TrendingUp, TrendingDown, Edit3, Trash2, Search, Lock, ClipboardList, Link2 } from 'lucide-react';
+import { ChevronLeft, Plus, X, Package, TrendingUp, TrendingDown, Edit3, Trash2, Search, Lock, ClipboardList, Link2 } from 'lucide-react';
 
 const CATEGORY_OPTIONS = ['식자재', '음료/시럽', '주류', '컵·뚜껑', '비품', '청소·세제', '포장', '기타'];
 
 export default function InventoryPage() {
   const router = useRouter();
-  const { user, currentWorkplaceId, supabase } = useApp();
+  const { user, currentWorkplaceId, currentWorkplace, supabase, isManager } = useApp();
+  const [daysLeftById, setDaysLeftById] = useState({}); // 연결 품목의 남은 일수 (추천 카드가 채움)
   const [items, setItems] = useState(() => getPageCache(`inventory:${currentWorkplaceId}`) ?? []);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState('');
@@ -102,22 +105,15 @@ export default function InventoryPage() {
       />
 
       <main className="fade-in page-main" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-        {lowCount > 0 && (
-          <div className="bento warm" style={{ padding: 16 }}>
-            <div className="bento-decor" />
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <AlertTriangle size={24} />
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 13, fontWeight: 700 }}>발주 필요 품목</div>
-                <div className="num" style={{ fontSize: 20, fontWeight: 800, marginTop: 2 }}>
-                  {lowCount}개 품목
-                </div>
-              </div>
-              <button className="btn btn-sm" style={{ background: 'rgba(255,255,255,0.25)', color: '#fff', border: 'none' }} onClick={() => setFilter('low')}>
-                보기
-              </button>
-            </div>
-          </div>
+        {/* 발주 권장 — POS 판매 예측 + 최소 수량. 저장·조정 후 items 가 바뀌면 다시 계산 */}
+        {currentWorkplaceId && (
+          <OrderSuggestionsCard
+            refreshKey={items.map((i) => `${i.id}:${i.current_qty}:${i.updated_at}`).join('|')}
+            workplaceId={currentWorkplaceId}
+            workplaceName={currentWorkplace?.name}
+            canDraft={!!isManager}
+            onLoaded={({ daysLeftById: m }) => setDaysLeftById(m)}
+          />
         )}
 
         <div style={{ display: 'flex', gap: 8 }}>
@@ -138,7 +134,7 @@ export default function InventoryPage() {
             전체 ({items.length})
           </button>
           <button className={`segment-item ${filter === 'low' ? 'is-active' : ''}`} onClick={() => setFilter('low')}>
-            발주 필요 ({lowCount})
+            최소 수량 미달 ({lowCount})
           </button>
         </div>
 
@@ -168,6 +164,7 @@ export default function InventoryPage() {
                       onEdit={() => setEditing(it)}
                       onUsage={() => setUsageItem(it)}
                       usageCount={usageCounts[it.id] ?? 0}
+                      daysLeft={daysLeftById[it.id]}
                     />
                   ))}
                 </div>
@@ -363,7 +360,7 @@ function InventoryClosingDialog({ items, supabase, userId, workplaceId, onClose 
   );
 }
 
-function InventoryRow({ item, onAdjust, onEdit, onUsage, usageCount = 0 }) {
+function InventoryRow({ item, onAdjust, onEdit, onUsage, usageCount = 0, daysLeft = null }) {
   const low = Number(item.current_qty) < Number(item.min_qty);
   return (
     <div
@@ -376,7 +373,7 @@ function InventoryRow({ item, onAdjust, onEdit, onUsage, usageCount = 0 }) {
       <div style={{ flex: 1, minWidth: 0 }}>
         <div className="h4">{item.name}</div>
         <div className="text-muted" style={{ fontSize: 11, marginTop: 2 }}>
-          {item.vendor ? `${item.vendor} · ` : ''}최소 {item.min_qty}{item.unit}
+          {item.vendor ? `${item.vendor} · ` : ''}최소 {item.min_qty}{item.unit}{daysLeft != null ? ` · ${formatDaysLeft(daysLeft)}` : ''}
         </div>
       </div>
       <div style={{ textAlign: 'right' }}>
@@ -409,6 +406,8 @@ function InventoryEditor({ item, supabase, workplaceId, onClose, onSaved }) {
   const [currentQty, setCurrentQty] = useState(item?.current_qty ?? 0);
   const [minQty, setMinQty] = useState(item?.min_qty ?? 0);
   const [leadTime, setLeadTime] = useState(item?.lead_time_days ?? 2);
+  const [unitCost, setUnitCost] = useState(item?.unit_cost ?? '');
+  const [orderUnit, setOrderUnit] = useState(item?.order_unit ?? '');
   const [vendor, setVendor] = useState(item?.vendor ?? '');
   const [notes, setNotes] = useState(item?.notes ?? '');
   const [saving, setSaving] = useState(false);
@@ -422,9 +421,12 @@ function InventoryEditor({ item, supabase, workplaceId, onClose, onSaved }) {
       name: name.trim(),
       category,
       unit: unit.trim() || '개',
-      current_qty: Number(currentQty) || 0,
+      // 수량은 새 품목이거나 사용자가 실제로 바꿨을 때만 보낸다 — 편집기가 열린 사이 POS 자동 차감이 돌아도 덮어쓰지 않도록
+      ...(!isEdit || Number(currentQty) !== Number(item?.current_qty) ? { current_qty: Number(currentQty) || 0 } : {}),
       min_qty: Number(minQty) || 0,
-      lead_time_days: Number(leadTime) || 0,
+      lead_time_days: leadTime === '' ? 2 : Number(leadTime),
+      unit_cost: unitCost === '' ? '' : Number(unitCost),
+      order_unit: orderUnit === '' ? '' : Number(orderUnit),
       vendor: vendor.trim() || null,
       notes: notes.trim() || null,
     };
@@ -491,6 +493,17 @@ function InventoryEditor({ item, supabase, workplaceId, onClose, onSaved }) {
         <label className="label">발주 리드타임 (일)</label>
         <input className="input" type="number" inputMode="numeric" min="0" value={leadTime} onChange={(e) => setLeadTime(e.target.value)} />
         <div className="text-muted" style={{ fontSize: 11, marginTop: 4 }}>발주 후 입고까지 걸리는 일수. 발주 추천 계산에 씁니다.</div>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 12 }}>
+        <div>
+          <label className="label">단가 (1{unit || '개'}당 원, 선택)</label>
+          <input className="input" type="number" inputMode="decimal" min="0" value={unitCost} onChange={(e) => setUnitCost(e.target.value)} placeholder="기안 금액 계산" />
+        </div>
+        <div>
+          <label className="label">발주 단위 (선택)</label>
+          <input className="input" type="number" inputMode="decimal" min="0" step="any" value={orderUnit} onChange={(e) => setOrderUnit(e.target.value)} placeholder="예) 12" />
+        </div>
       </div>
 
       <label className="label" style={{ marginTop: 12 }}>거래처 (선택)</label>
