@@ -229,3 +229,49 @@ export async function deleteSalesTip({ id }) {
   }
   return { ok: true };
 }
+
+/**
+ * 상품별 판매 집계 (토스 POS 동기화 데이터). from/to 는 'YYYY-MM-DD' 양 끝 포함.
+ * 권한은 getSalesSummary 와 동일 — 해당 매장 멤버 / 본사 / super_admin / 임원.
+ */
+export async function getProductSales({ workplaceId, from, to }) {
+  const authClient = await createServerClient();
+  const { data: { user } } = await authClient.auth.getUser();
+  if (!user || !workplaceId || !from || !to) return null;
+
+  const svc = getServiceClient();
+  const [{ data: prof }, { data: mems }] = await Promise.all([
+    svc.from('profiles').select('is_super_admin, is_executive').eq('user_id', user.id).maybeSingle(),
+    svc.from('memberships').select('workplace_id, workplaces(name)').eq('user_id', user.id).eq('active', true),
+  ]);
+  const isHQ = (mems ?? []).some((m) => m.workplaces?.name === '본사');
+  const allowed = (mems ?? []).some((m) => m.workplace_id === workplaceId) || isHQ || prof?.is_super_admin === true || prof?.is_executive === true;
+  if (!allowed) return null;
+
+  const [{ data: rows }, { data: lastLog }] = await Promise.all([
+    svc.from('pos_product_daily')
+      .select('item_title, item_code, qty, amount')
+      .eq('workplace_id', workplaceId)
+      .gte('sales_date', from)
+      .lte('sales_date', to),
+    svc.from('pos_sync_log')
+      .select('finished_at')
+      .eq('workplace_id', workplaceId)
+      .is('error', null)
+      .not('finished_at', 'is', null)
+      .order('finished_at', { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  ]);
+
+  const agg = new Map();
+  for (const r of rows ?? []) {
+    const key = `${r.item_title}\u0000${r.item_code ?? ''}`;
+    const cur = agg.get(key) ?? { item_title: r.item_title, item_code: r.item_code ?? null, qty: 0, amount: 0 };
+    cur.qty += Number(r.qty) || 0;
+    cur.amount += Number(r.amount) || 0;
+    agg.set(key, cur);
+  }
+  const items = [...agg.values()].sort((a, b) => b.qty - a.qty);
+  return { items, lastSyncedAt: lastLog?.finished_at ?? null };
+}
