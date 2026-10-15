@@ -4,6 +4,7 @@
 
 const BASE = 'https://open-api.tossplace.com/api-public/openapi/v1';
 const PAGE_SIZE = 100;
+const MAX_PAGES = 200;   // 20,000건. API 가 page 를 무시하는 등의 이상 상황에서 무한 루프 방지
 
 const defaultSleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -30,7 +31,12 @@ async function getPage(url, headers, { fetch, sleep }) {
   const body = await res.json().catch(() => null);
   if (res.status !== 200 || body?.resultType !== 'SUCCESS') throw apiError(res.status, body);
   const s = body.success;
-  return Array.isArray(s) ? s : (s?.orders ?? []);
+  if (s == null) return [];            // 0건 구간을 null 로 주는 경우 대비
+  if (Array.isArray(s)) return s;
+  if (Array.isArray(s?.orders)) return s.orders;
+  const err = new Error('toss api 응답 형식이 예상과 다릅니다 (success 가 배열이 아님)');
+  err.status = res.status;
+  throw err;
 }
 
 /**
@@ -52,6 +58,7 @@ export async function fetchOrders({ merchantId, from, to }, deps = {}) {
   };
   const all = [];
   for (let page = 1; ; page++) {
+    if (page > MAX_PAGES) throw new Error(`toss api 페이지가 ${MAX_PAGES}을 넘었습니다 (merchant ${merchantId})`);
     const qs = new URLSearchParams({
       from: toQueryTs(from), to: toQueryTs(to),
       page: String(page), size: String(PAGE_SIZE), sortOrder: 'ASC',

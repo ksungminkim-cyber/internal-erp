@@ -11,16 +11,17 @@ import { getDaySalesDetail } from './actions';
 export default function DaySalesSheet({ workplaceId, date, onClose }) {
   // 결과와 그 결과의 날짜. 날짜가 다르면 로딩 중 (effect 안에서 동기 setState 하지 않기 위함)
   const [state, setState] = useState({ key: null, data: null, error: null });
+  const stateKey = `${workplaceId}|${date}`; // 매장을 바꿔도 이전 매장 데이터가 보이지 않도록
 
   useEffect(() => {
     let alive = true;
     getDaySalesDetail({ workplaceId, date })
-      .then((data) => { if (alive) setState({ key: date, data, error: null }); })
-      .catch((e) => { if (alive) setState({ key: date, data: null, error: String(e?.message ?? e) }); });
+      .then((data) => { if (alive) setState({ key: stateKey, data, error: null }); })
+      .catch((e) => { if (alive) setState({ key: stateKey, data: null, error: String(e?.message ?? e) }); });
     return () => { alive = false; };
-  }, [workplaceId, date]);
+  }, [workplaceId, date, stateKey]);
 
-  const loading = state.key !== date;
+  const loading = state.key !== stateKey;
   const data = loading ? null : state.data;
   const error = loading ? null : state.error;
   const summary = data?.summary ?? null;

@@ -36,3 +36,8 @@ test('formatDaysLeft', () => {
   assert.equal(formatDaysLeft(null), '');
   assert.equal(formatDaysLeft(12.3), '약 12일분');
 });
+
+test('buildOrderDraft: 매장명이 없으면 제목 끝에 공백이 없다', () => {
+  const d = buildOrderDraft(suggestions, { workplaceName: '', dateKey: '2026-10-16' });
+  assert.equal(d.title, '발주 — 10/16');
+});

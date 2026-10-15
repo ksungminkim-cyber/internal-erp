@@ -35,22 +35,18 @@ export async function getSalesSummary(workplaceId) {
   const allowed = (mems ?? []).some((m) => m.workplace_id === workplaceId) || isHQ || prof?.is_super_admin === true || prof?.is_executive === true;
   if (!allowed) return null;
 
-  const { data } = await svc
-    .from('sales_daily')
-    .select('total_amount, sales_date')
-    .eq('workplace_id', workplaceId);
-  const rows = data ?? [];
-
+  // 합계는 SQL 에서 (행을 전부 가져오면 PostgREST 1000행 제한에 걸려 누적이 조용히 적게 나옴)
+  const { data, error } = await svc.rpc('sales_summary', { p_workplace_id: workplaceId });
+  if (error) throw new Error(`sales_summary: ${error.message}`);
+  const r = data?.[0];
   const monthPrefix = kstDate().slice(0, 7); // 'YYYY-MM'
-  let allTotal = 0, allCount = 0, monthTotal = 0, monthCount = 0;
-  for (const r of rows) {
-    const amt = Number(r.total_amount) || 0;
-    allTotal += amt; allCount += 1;
-    if (typeof r.sales_date === 'string' && r.sales_date.slice(0, 7) === monthPrefix) {
-      monthTotal += amt; monthCount += 1;
-    }
-  }
-  return { allTotal, allCount, monthTotal, monthCount, monthLabel: monthPrefix };
+  return {
+    allTotal: Number(r?.all_total) || 0,
+    allCount: Number(r?.all_count) || 0,
+    monthTotal: Number(r?.month_total) || 0,
+    monthCount: Number(r?.month_count) || 0,
+    monthLabel: r?.month_label ?? monthPrefix,
+  };
 }
 
 /**
@@ -289,7 +285,7 @@ export async function getDaySalesDetail({ workplaceId, date }) {
   const allowed = (mems ?? []).some((m) => m.workplace_id === workplaceId) || isHQ || prof?.is_super_admin === true || prof?.is_executive === true;
   if (!allowed) return null;
 
-  const [{ data: row }, { data: pos }, { data: products, error: rpcError }] = await Promise.all([
+  const [{ data: row }, { data: pos, error: posError }, { data: products, error: rpcError }] = await Promise.all([
     svc.from('sales_daily')
       .select('total_amount, transaction_count, card_amount, cash_amount, other_amount, source')
       .eq('workplace_id', workplaceId).eq('sales_date', date).maybeSingle(),
@@ -297,6 +293,7 @@ export async function getDaySalesDetail({ workplaceId, date }) {
     svc.rpc('pos_product_sales', { p_workplace_id: workplaceId, p_from: date, p_to: date }),
   ]);
   if (rpcError) throw new Error(`pos_product_sales: ${rpcError.message}`);
+  if (posError) throw new Error(`pos_daily_summary: ${posError.message}`);
 
   let summary = null;
   if (row) {

@@ -174,12 +174,12 @@ export async function getProductUsage({ workplaceId, inventoryItemId }) {
     svc.from('pos_product_usage').select('item_title, qty_per_unit').eq('inventory_item_id', inventoryItemId),
     // 전사 공유(workplace_id null) + 이 매장 전용 레시피만 (다른 매장 전용 레시피는 내려보내지 않음)
     svc.from('recipes').select('name, ingredients, workplace_id').eq('active', true).or(`workplace_id.is.null,workplace_id.eq.${workplaceId}`),
-    svc.rpc('inventory_daily_usage', { p_workplace_id: workplaceId, p_from: d30, p_to: yesterday }),
+    svc.rpc('inventory_daily_usage', { p_workplace_id: workplaceId, p_from: d30, p_to: yesterday, p_item_id: inventoryItemId }),
   ]);
   if (e1) throw new Error(`pos_product_sales: ${e1.message}`);
   if (e2) throw new Error(`inventory_daily_usage: ${e2.message}`);
 
-  const mine = (usage ?? []).filter((u) => u.inventory_item_id === inventoryItemId);
+  const mine = usage ?? [];
   const avgDailyUsage = mine.length ? mine.reduce((s, u) => s + Number(u.usage || 0), 0) / 30 : null;
 
   return {
@@ -214,11 +214,20 @@ export async function saveProductUsage({ workplaceId, inventoryItemId, rows }) {
     clean.push({ workplace_id: workplaceId, inventory_item_id: inventoryItemId, item_title: title, qty_per_unit: qty });
   }
 
-  const { error: e1 } = await svc.from('pos_product_usage').delete().eq('inventory_item_id', inventoryItemId);
-  if (e1) return { ok: false, error: friendlyDbError(e1) };
+  // upsert 후 목록에 없는 행만 삭제 — delete→insert 와 달리 중간에 실패해도 기존 연결이 사라지지 않음
   if (clean.length) {
-    const { error: e2 } = await svc.from('pos_product_usage').insert(clean);
-    if (e2) return { ok: false, error: friendlyDbError(e2) };
+    const { error: e1 } = await svc.from('pos_product_usage')
+      .upsert(clean.map((r) => ({ ...r, updated_at: new Date().toISOString() })), { onConflict: 'inventory_item_id,item_title' });
+    if (e1) return { ok: false, error: friendlyDbError(e1) };
+  }
+  // 새 목록에 없는 기존 행만 id 로 삭제 (상품명을 쿼리스트링에 넣지 않음)
+  const { data: existing, error: e2 } = await svc.from('pos_product_usage').select('id, item_title').eq('inventory_item_id', inventoryItemId);
+  if (e2) return { ok: false, error: friendlyDbError(e2) };
+  const keep = new Set(clean.map((r) => r.item_title));
+  const staleIds = (existing ?? []).filter((r) => !keep.has(r.item_title)).map((r) => r.id);
+  if (staleIds.length) {
+    const { error: e3 } = await svc.from('pos_product_usage').delete().in('id', staleIds);
+    if (e3) return { ok: false, error: friendlyDbError(e3) };
   }
   return { ok: true, count: clean.length };
 }

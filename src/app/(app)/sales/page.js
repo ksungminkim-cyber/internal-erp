@@ -284,26 +284,29 @@ export default function SalesPage() {
               const h = maxBar > 0 ? (d.amount / maxBar) * 100 : 0;
               const isToday = ymd(d.date) === todayKey;
               return (
-                <div
+                // 열 전체 높이를 차지하는 투명 버튼 안에 막대 — 0원인 날도 누를 수 있는 터치 영역
+                <button
                   key={i}
-                  role="button"
-                  tabIndex={0}
+                  type="button"
                   aria-label={`${ymd(d.date)} ${formatCurrency(d.amount)}원 세부 보기`}
                   title={`${ymd(d.date)} · ${formatCurrency(d.amount)}원`}
                   onClick={() => setDetailDate(ymd(d.date))}
-                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setDetailDate(ymd(d.date)); }}
-                  style={{
-                    flex: 1,
-                    cursor: 'pointer',
-                    height: `${Math.max(h, 2)}%`,
-                    background: d.amount === 0
-                      ? 'var(--surface-soft)'
-                      : isToday ? 'var(--grad-warm)' : 'var(--grad-accent)',
-                    borderRadius: 3,
-                    minHeight: 3,
-                    transition: 'all var(--t-md) var(--ease)',
-                  }}
-                />
+                  style={{ flex: 1, height: '100%', display: 'flex', alignItems: 'flex-end', background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
+                >
+                  <span
+                    style={{
+                      display: 'block',
+                      width: '100%',
+                      height: `${Math.max(h, 2)}%`,
+                      background: d.amount === 0
+                        ? 'var(--surface-soft)'
+                        : isToday ? 'var(--grad-warm)' : 'var(--grad-accent)',
+                      borderRadius: 3,
+                      minHeight: 3,
+                      transition: 'all var(--t-md) var(--ease)',
+                    }}
+                  />
+                </button>
               );
             })}
           </div>
@@ -337,12 +340,14 @@ export default function SalesPage() {
               {rows.map((r) => (
                 <div key={r.id} className="card compact" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                   <div
-                    style={{ flex: 1, cursor: 'pointer' }}
+                    style={{ flex: 1, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 12 }}
                     role="button"
                     tabIndex={0}
+                    aria-label={`${r.sales_date} 세부 보기`}
                     onClick={() => setDetailDate(r.sales_date)}
-                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setDetailDate(r.sales_date); }}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setDetailDate(r.sales_date); } }}
                   >
+                  <div style={{ flex: 1 }}>
                     <div className="h4">
                       {new Date(r.sales_date).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric', weekday: 'short' })}
                     </div>
@@ -361,8 +366,9 @@ export default function SalesPage() {
                       <span className="tag tag-mint" style={{ fontSize: 9, marginTop: 2 }}>POS</span>
                     )}
                   </div>
-                  <button onClick={() => setEditing(r)} className="btn btn-ghost btn-icon">
-                    <ChevronRight size={16} />
+                  </div>
+                  <button onClick={() => setEditing(r)} className="btn btn-ghost btn-icon" aria-label="편집">
+                    <Pencil size={14} />
                   </button>
                 </div>
               ))}
@@ -529,6 +535,7 @@ function SalesEditor({ row, supabase, userId, workplaceId, onClose, onSaved }) {
   const [error, setError] = useState(null);
 
   const autoTotal = (Number(card) || 0) + (Number(cash) || 0) + (Number(other) || 0);
+  const isPosRow = isEdit && row?.source === 'pos_toss'; // 토스 자동 집계된 날 — 수정하면 이후 자동 갱신 제외
   const totalFinal = Number(total) || autoTotal;
 
   async function save() {
@@ -561,6 +568,13 @@ function SalesEditor({ row, supabase, userId, workplaceId, onClose, onSaved }) {
         <h2 className="h3">{isEdit ? '매출 수정' : '매출 입력'}</h2>
         <button onClick={onClose} className="btn btn-ghost btn-icon"><X size={18} /></button>
       </div>
+
+      {isPosRow && (
+        <div className="card" style={{ background: 'var(--warning-soft)', boxShadow: 'none', padding: '10px 12px', marginBottom: 12, fontSize: 12.5, lineHeight: 1.5 }}>
+          이 날은 토스 POS에서 자동 집계된 값이에요. 저장하면 <strong>수기 입력</strong>으로 바뀌고 이후 자동 갱신에서 제외됩니다.
+          POS를 거치지 않은 매출을 더하는 경우에만 수정해 주세요.
+        </div>
+      )}
 
       <label className="label">날짜</label>
       <input className="input" type="date" value={date} onChange={(e) => setDate(e.target.value)} disabled={isEdit} />

@@ -76,3 +76,36 @@ test('키 미설정이면 호출 전에 throw', async () => {
     /TOSS_PLACE_ACCESS_KEY/
   );
 });
+
+test('최대 페이지 가드: 200페이지를 넘기면 throw', async () => {
+  const full = Array.from({ length: 100 }, (_, i) => order(`p${i}`));
+  let n = 0;
+  const fetch = async () => { n++; return ok(full); };
+  await assert.rejects(
+    fetchOrders({ merchantId: '1', from: new Date(0), to: new Date(1) }, { fetch, env }),
+    /페이지/
+  );
+  assert.equal(n, 200);
+});
+
+test('success 가 null 이면 빈 배열', async () => {
+  const fetch = async () => ({
+    status: 200, ok: true, headers: { get: () => null },
+    json: async () => ({ resultType: 'SUCCESS', success: null }),
+    text: async () => '',
+  });
+  const list = await fetchOrders({ merchantId: '1', from: new Date(0), to: new Date(1) }, { fetch, env });
+  assert.deepEqual(list, []);
+});
+
+test('success 가 배열도 {orders} 도 아니면 throw', async () => {
+  const fetch = async () => ({
+    status: 200, ok: true, headers: { get: () => null },
+    json: async () => ({ resultType: 'SUCCESS', success: { totalCount: 3 } }),
+    text: async () => '',
+  });
+  await assert.rejects(
+    fetchOrders({ merchantId: '1', from: new Date(0), to: new Date(1) }, { fetch, env }),
+    /응답 형식/
+  );
+});
