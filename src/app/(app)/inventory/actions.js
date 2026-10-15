@@ -92,10 +92,31 @@ export async function saveInventoryItem({ id, workplaceId, payload }) {
     ...(payload.lead_time_days != null ? { lead_time_days: Math.max(0, Math.round(Number.isFinite(Number(payload.lead_time_days)) && payload.lead_time_days !== '' ? Number(payload.lead_time_days) : 2)) } : {}),
     ...('unit_cost' in payload ? { unit_cost: payload.unit_cost === '' || payload.unit_cost == null ? null : Math.max(0, Number(payload.unit_cost) || 0) } : {}),
     ...('order_unit' in payload ? { order_unit: payload.order_unit === '' || payload.order_unit == null || !(Number(payload.order_unit) > 0) ? null : Number(payload.order_unit) } : {}),
+    // 소진 단위(ml/g)와 1(세는 단위)당 소진량 — 둘 다 있어야 유효, 아니면 둘 다 비움
+    ...('usage_unit' in payload || 'usage_per_unit' in payload ? (() => {
+      const uu = String(payload.usage_unit ?? '').trim();
+      const per = Number(payload.usage_per_unit);
+      return uu && per > 0 ? { usage_unit: uu, usage_per_unit: per } : { usage_unit: null, usage_per_unit: null };
+    })() : {}),
+    ...('supply_type' in payload ? { supply_type: payload.supply_type === 'made' ? 'made' : 'purchase' } : {}),
   };
 
   let error;
   if (id) {
+    // 1단위당 소진량(usage_per_unit)이 바뀌면 기존 소요량 연결(세는 단위로 저장)을 다시 환산해
+    // "잔당 180ml" 같은 소진 단위 의미를 유지한다. 예) 1박스=1000개 → 500개 로 바꾸면 저장값 ×2
+    if ('usage_per_unit' in base && base.usage_per_unit != null) {
+      const { data: prev } = await svc.from('inventory_items').select('usage_per_unit, usage_unit').eq('id', id).maybeSingle();
+      const oldPer = Number(prev?.usage_per_unit);
+      const newPer = Number(base.usage_per_unit);
+      if (prev?.usage_unit && oldPer > 0 && newPer > 0 && oldPer !== newPer) {
+        const { data: links } = await svc.from('pos_product_usage').select('id, qty_per_unit').eq('inventory_item_id', id);
+        for (const l of links ?? []) {
+          const q = Math.round((Number(l.qty_per_unit) * oldPer / newPer) * 1e6) / 1e6;
+          if (q > 0) await svc.from('pos_product_usage').update({ qty_per_unit: q, updated_at: new Date().toISOString() }).eq('id', l.id);
+        }
+      }
+    }
     ({ error } = await svc
       .from('inventory_items')
       .update({ ...base, updated_at: new Date().toISOString() })
@@ -159,7 +180,7 @@ export async function getProductUsage({ workplaceId, inventoryItemId }) {
   const perms = await loadActorPerms(svc, user.id);
   if (!perms.isMemberOf(workplaceId)) return null;
 
-  const { data: item } = await svc.from('inventory_items').select('id, workplace_id').eq('id', inventoryItemId).maybeSingle();
+  const { data: item } = await svc.from('inventory_items').select('id, workplace_id, unit, usage_unit, usage_per_unit').eq('id', inventoryItemId).maybeSingle();
   if (!item || item.workplace_id !== workplaceId) return null;
 
   const kst = (d) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul' }).format(d);
@@ -188,6 +209,9 @@ export async function getProductUsage({ workplaceId, inventoryItemId }) {
     // 매장 전용 레시피를 앞에 — 같은 이름이면 전용이 우선 매칭되도록
     recipes: [...(recipes ?? [])].sort((a, b) => (b.workplace_id ? 1 : 0) - (a.workplace_id ? 1 : 0)).map((r) => ({ name: r.name, ingredients: r.ingredients })),
     avgDailyUsage,
+    // 소진 단위 정보 — 화면은 이 단위로 입력받고 저장 시 세는 단위로 환산
+    usageUnit: item.usage_unit ?? null,
+    usagePerUnit: item.usage_per_unit == null ? null : Number(item.usage_per_unit),
   };
 }
 
@@ -208,8 +232,12 @@ export async function saveProductUsage({ workplaceId, inventoryItemId, rows }) {
   const seen = new Set();
   for (const r of rows ?? []) {
     const title = String(r.item_title ?? '');            // 토스 상품명 그대로 (조인은 정확 일치)
-    const qty = Math.round(Number(r.qty_per_unit) * 1000) / 1000;
-    if (!title.trim() || !Number.isFinite(qty) || !(qty > 0) || qty >= 1e9 || seen.has(title)) continue;
+    const raw = Number(r.qty_per_unit);
+    const qty = Math.round(raw * 1e6) / 1e6;
+    if (!title.trim() || seen.has(title)) continue;
+    if (!Number.isFinite(raw) || raw <= 0 || raw >= 1e9) continue;
+    // 환산 후 저장 정밀도(소수 6자리) 아래로 떨어지면 조용히 버리지 않고 알린다
+    if (!(qty > 0)) return { ok: false, error: `"${title}" 소요량이 너무 작아 저장할 수 없어요. 품목의 1단위당 수량을 줄이거나 값을 키워 주세요.` };
     seen.add(title);
     clean.push({ workplace_id: workplaceId, inventory_item_id: inventoryItemId, item_title: title, qty_per_unit: qty });
   }
@@ -255,6 +283,7 @@ export async function getOrderSuggestions({ workplaceId }) {
     forecast_usage: r.forecast_usage == null ? null : Number(r.forecast_usage),
     unit_cost: r.unit_cost == null ? null : Number(r.unit_cost),
     order_unit: r.order_unit == null ? null : Number(r.order_unit),
+    usage_per_unit: r.usage_per_unit == null ? null : Number(r.usage_per_unit),
   }));
   return {
     suggestions: rows.filter((r) => r.suggested_qty > 0),

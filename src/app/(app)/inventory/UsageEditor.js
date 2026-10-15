@@ -26,22 +26,33 @@ export default function UsageEditor({ item, workplaceId, onClose, onSaved }) {
         if (!alive) return;
         if (!d) { setLoadError('권한이 없거나 데이터를 불러오지 못했어요.'); return; }
         setLoaded(d);
-        setQtyByTitle(Object.fromEntries(d.links.map((l) => [l.item_title, String(l.qty_per_unit)])));
+        // 저장값(세는 단위) → 입력값(소진 단위)
+        const per = d.usageUnit && Number(d.usagePerUnit) > 0 ? Number(d.usagePerUnit) : 1;
+        setQtyByTitle(Object.fromEntries(d.links.map((l) => [l.item_title, String(Math.round(l.qty_per_unit * per * 1000) / 1000)])));
+        // (저장은 소수 6자리, 입력 표시는 3자리)
       })
       .catch((e) => { if (alive) setLoadError(String(e?.message ?? e)); });
     return () => { alive = false; };
   }, [workplaceId, item.id]);
 
   const products = useMemo(() => loaded?.products ?? [], [loaded]);
+  // 입력 단위: 소진 단위가 있으면 그것(ml/g), 없으면 세는 단위
+  const inputUnit = loaded?.usageUnit || item.unit;
+  const perUnit = loaded?.usageUnit && Number(loaded?.usagePerUnit) > 0 ? Number(loaded.usagePerUnit) : 1;
   const suggestions = useMemo(() => {
     if (!loaded) return {};
     const out = {};
     for (const p of products) {
       const s = suggestQty(p.item_title, item.name, loaded.recipes);
-      if (s) out[p.item_title] = { ...s, sameUnit: !!s.unit && s.unit.toLowerCase() === String(item.unit ?? '').toLowerCase() };
+      // g 와 ml 는 음료 재료(우유·시럽 등)에서 사실상 같은 양으로 취급
+      const norm = (u) => String(u ?? '').toLowerCase();
+      const exact = !!s?.unit && norm(s.unit) === norm(inputUnit);
+      const equiv = !!s?.unit && ['g', 'ml'].includes(norm(s.unit)) && ['g', 'ml'].includes(norm(inputUnit));
+      // sameUnit: 칩을 경고 없이 보여줄지 (g≈ml 허용). autoFill: 체크만 해도 넣을지 (정확히 같은 단위만)
+      if (s) out[p.item_title] = { ...s, sameUnit: exact || equiv, autoFill: exact };
     }
     return out;
-  }, [loaded, products, item.name, item.unit]);
+  }, [loaded, products, item.name, inputUnit]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -66,7 +77,7 @@ export default function UsageEditor({ item, workplaceId, onClose, onSaved }) {
       if (title in m) { const n = { ...m }; delete n[title]; return n; }
       // 체크 시 기본값: 레시피 추천이 품목과 같은 단위일 때만 자동 입력, 아니면 일괄 값 또는 빈칸
       const s = suggestions[title];
-      return { ...m, [title]: s?.sameUnit ? String(s.qty) : (Number(bulk) > 0 ? bulk : '') };
+      return { ...m, [title]: s?.autoFill ? String(s.qty) : (Number(bulk) > 0 ? bulk : '') };
     });
   }
   function applyBulk() {
@@ -80,7 +91,8 @@ export default function UsageEditor({ item, workplaceId, onClose, onSaved }) {
     if (emptyCount > 0) { setError(`소요량이 비어 있는 상품이 ${emptyCount}개 있어요. 값을 넣거나 체크를 해제해 주세요.`); return; }
     setSaving(true);
     try {
-      const rows = Object.entries(qtyByTitle).map(([item_title, v]) => ({ item_title, qty_per_unit: Number(v) }));
+      // 입력값(소진 단위) → 저장값(세는 단위)
+      const rows = Object.entries(qtyByTitle).map(([item_title, v]) => ({ item_title, qty_per_unit: Number(v) / perUnit }));
       const res = await saveProductUsage({ workplaceId, inventoryItemId: item.id, rows });
       if (res?.error) { setError(res.error); return; }
       toast?.(`소요량 ${res?.count ?? 0}개 연결 저장`, 'success');
@@ -97,14 +109,17 @@ export default function UsageEditor({ item, workplaceId, onClose, onSaved }) {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
         <div>
           <h2 className="h3" style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Link2 size={16} /> 소요량 연결</h2>
-          <div className="text-muted" style={{ fontSize: 12, marginTop: 2 }}>{item.name} · 단위 {item.unit}</div>
+          <div className="text-muted" style={{ fontSize: 12, marginTop: 2 }}>
+            {item.name} · 입력 단위 {inputUnit}{loaded?.usageUnit ? ` (1${item.unit} = ${loaded.usagePerUnit}${loaded.usageUnit})` : ''}
+          </div>
         </div>
         <button onClick={onClose} className="btn btn-ghost btn-icon" aria-label="닫기"><X size={18} /></button>
       </div>
       <p className="text-secondary" style={{ fontSize: 12, marginBottom: 10, lineHeight: 1.5 }}>
         상품 1개를 팔 때 이 품목이 얼마나 쓰이는지 적어 주세요. 레시피에 같은 재료가 있으면 추천값을 눌러 넣을 수 있어요.
         {loaded?.avgDailyUsage != null && (
-          <> 최근 30일 판매 기준 하루 평균 소진 <strong>{Math.round(loaded.avgDailyUsage * 100) / 100}{item.unit}</strong>.</>
+          <> 최근 30일 판매 기준 하루 평균 소진 <strong>{Math.round(loaded.avgDailyUsage * 100) / 100}{item.unit}</strong>
+          {loaded?.usageUnit ? <> ({Math.round(loaded.avgDailyUsage * perUnit)}{loaded.usageUnit})</> : null}.</>
         )}
       </p>
 
@@ -136,10 +151,10 @@ export default function UsageEditor({ item, workplaceId, onClose, onSaved }) {
                           type="button"
                           className="btn btn-soft btn-xs"
                           style={{ marginLeft: 6, padding: '0 6px', minHeight: 18, fontSize: 10, color: sug.sameUnit ? undefined : 'var(--danger)' }}
-                          title={sug.sameUnit ? '레시피 값 넣기' : `레시피 단위(${sug.unit || '?'})가 품목 단위(${item.unit})와 달라요. 환산해서 넣어 주세요.`}
+                          title={sug.sameUnit ? '레시피 값 넣기' : `레시피 단위(${sug.unit || '?'})가 입력 단위(${inputUnit})와 달라요. 품목 편집에서 소진 단위를 맞추거나 환산해서 넣어 주세요.`}
                           onClick={() => setQty(p.item_title, String(sug.qty))}
                         >
-                          레시피 {sug.qty}{sug.unit}{sug.sameUnit ? '' : ' ≠' + item.unit}
+                          레시피 {sug.qty}{sug.unit}{sug.sameUnit ? '' : ' ≠' + inputUnit}
                         </button>
                       )}
                     </div>
@@ -152,7 +167,7 @@ export default function UsageEditor({ item, workplaceId, onClose, onSaved }) {
                     onChange={(e) => setQty(p.item_title, e.target.value)}
                     aria-label={`${p.item_title} 소요량`}
                   />
-                  <span className="text-muted" style={{ fontSize: 11, minWidth: 22 }}>{item.unit}</span>
+                  <span className="text-muted" style={{ fontSize: 11, minWidth: 22 }}>{inputUnit}</span>
                 </div>
               );
             })}
@@ -164,7 +179,7 @@ export default function UsageEditor({ item, workplaceId, onClose, onSaved }) {
               {staleLinks.map((t) => (
                 <div key={t} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, padding: '2px 0' }}>
                   <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t}</span>
-                  <span className="num">{qtyByTitle[t]}{item.unit}</span>
+                  <span className="num">{qtyByTitle[t]}{inputUnit}</span>
                   <button type="button" className="btn btn-ghost btn-xs" onClick={() => toggle(t)}>해제</button>
                 </div>
               ))}
