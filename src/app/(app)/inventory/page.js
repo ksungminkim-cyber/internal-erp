@@ -12,7 +12,7 @@ import { formatDaysLeft } from '@/lib/orderDraft';
 import { formatRelative } from '@/lib/format';
 import { getPageCache, setPageCache } from '@/lib/pageCache';
 import { closeInventoryMonth, deleteInventoryClosing, saveInventoryItem, archiveInventoryItem, recordInventoryTransaction, getInventoryItemHistory } from './actions';
-import { ChevronLeft, Plus, X, Package, AlertTriangle, TrendingUp, TrendingDown, Edit3, Trash2, Search, Lock, ClipboardList, Link2 } from 'lucide-react';
+import { ChevronLeft, Plus, X, Package, TrendingUp, TrendingDown, Edit3, Trash2, Search, Lock, ClipboardList, Link2 } from 'lucide-react';
 
 const CATEGORY_OPTIONS = ['식자재', '음료/시럽', '주류', '컵·뚜껑', '비품', '청소·세제', '포장', '기타'];
 
@@ -108,7 +108,7 @@ export default function InventoryPage() {
         {/* 발주 권장 — POS 판매 예측 + 최소 수량. 저장·조정 후 items 가 바뀌면 다시 계산 */}
         {currentWorkplaceId && (
           <OrderSuggestionsCard
-            key={`${currentWorkplaceId}:${items.length}:${items.reduce((a, i) => a + Number(i.current_qty || 0), 0)}`}
+            refreshKey={items.map((i) => `${i.id}:${i.current_qty}:${i.updated_at}`).join('|')}
             workplaceId={currentWorkplaceId}
             workplaceName={currentWorkplace?.name}
             canDraft={!!isManager}
@@ -134,7 +134,7 @@ export default function InventoryPage() {
             전체 ({items.length})
           </button>
           <button className={`segment-item ${filter === 'low' ? 'is-active' : ''}`} onClick={() => setFilter('low')}>
-            발주 필요 ({lowCount})
+            최소 수량 미달 ({lowCount})
           </button>
         </div>
 
@@ -421,7 +421,8 @@ function InventoryEditor({ item, supabase, workplaceId, onClose, onSaved }) {
       name: name.trim(),
       category,
       unit: unit.trim() || '개',
-      current_qty: Number(currentQty) || 0,
+      // 수량은 새 품목이거나 사용자가 실제로 바꿨을 때만 보낸다 — 편집기가 열린 사이 POS 자동 차감이 돌아도 덮어쓰지 않도록
+      ...(!isEdit || Number(currentQty) !== Number(item?.current_qty) ? { current_qty: Number(currentQty) || 0 } : {}),
       min_qty: Number(minQty) || 0,
       lead_time_days: leadTime === '' ? 2 : Number(leadTime),
       unit_cost: unitCost === '' ? '' : Number(unitCost),
@@ -496,7 +497,7 @@ function InventoryEditor({ item, supabase, workplaceId, onClose, onSaved }) {
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 12 }}>
         <div>
-          <label className="label">단가 (원, 선택)</label>
+          <label className="label">단가 (1{unit || '개'}당 원, 선택)</label>
           <input className="input" type="number" inputMode="decimal" min="0" value={unitCost} onChange={(e) => setUnitCost(e.target.value)} placeholder="기안 금액 계산" />
         </div>
         <div>

@@ -5,7 +5,6 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { AlertTriangle, ClipboardList, ChevronRight } from 'lucide-react';
-import { formatCurrency } from '@/lib/format';
 import { ymd } from '@/lib/date';
 import { buildOrderDraft, formatDaysLeft } from '@/lib/orderDraft';
 import { getOrderSuggestions } from '@/app/(app)/inventory/actions';
@@ -16,7 +15,12 @@ export const ORDER_DRAFT_KEY = 'approvalPrefill';
  * 발주 권장 카드 — POS 판매 기반 예측(연결 품목) + 최소 수량 기준(그 외).
  * props: workplaceId, workplaceName, canDraft(매니저 이상), limit(홈 5개), onLoaded({ count, daysLeftById })
  */
-export default function OrderSuggestionsCard({ workplaceId, workplaceName, canDraft = false, limit = null, onLoaded, showAllLink = false }) {
+function fmtQty(n) {
+  const v = Number(n) || 0;
+  return Number.isInteger(v) ? String(v) : String(Math.round(v * 100) / 100);
+}
+
+export default function OrderSuggestionsCard({ workplaceId, workplaceName, canDraft = false, limit = null, onLoaded, showAllLink = false, refreshKey = '' }) {
   const router = useRouter();
   const [result, setResult] = useState({ key: null, data: null, error: null });
 
@@ -29,11 +33,15 @@ export default function OrderSuggestionsCard({ workplaceId, workplaceName, canDr
         setResult({ key: workplaceId, data, error: null });
         onLoaded?.({ count: data?.suggestions?.length ?? 0, daysLeftById: data?.daysLeftById ?? {} });
       })
-      .catch((e) => { if (alive) setResult({ key: workplaceId, data: null, error: String(e?.message ?? e) }); });
+      .catch((e) => {
+        if (!alive) return;
+        setResult({ key: workplaceId, data: null, error: String(e?.message ?? e) });
+        onLoaded?.({ count: 0, daysLeftById: {} });
+      });
     return () => { alive = false; };
-    // onLoaded 는 부모 setState 래퍼 — 의존성에 넣으면 매 렌더 재조회됨
+    // onLoaded 는 부모 setState 래퍼 — 의존성에 넣으면 매 렌더 재조회됨. refreshKey 가 바뀌면 재조회(이전 데이터는 유지).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [workplaceId]);
+  }, [workplaceId, refreshKey]);
 
   const loading = result.key !== workplaceId;
   const suggestions = result.data?.suggestions ?? [];
@@ -69,7 +77,7 @@ export default function OrderSuggestionsCard({ workplaceId, workplaceName, canDr
               {s.basis === 'forecast' ? formatDaysLeft(s.days_left) : '최소 수량 미달'}
             </span>
             <span className="num" style={{ fontWeight: 700, whiteSpace: 'nowrap' }}>
-              {formatCurrency(s.suggested_qty)}{s.unit}
+              {fmtQty(s.suggested_qty)}{s.unit}
             </span>
           </div>
         ))}

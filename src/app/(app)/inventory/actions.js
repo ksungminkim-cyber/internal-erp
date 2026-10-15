@@ -85,7 +85,7 @@ export async function saveInventoryItem({ id, workplaceId, payload }) {
     name: payload.name,
     category: payload.category,
     unit: payload.unit,
-    current_qty: payload.current_qty,
+    ...('current_qty' in payload ? { current_qty: payload.current_qty } : {}),
     min_qty: payload.min_qty,
     vendor: payload.vendor,
     notes: payload.notes,
