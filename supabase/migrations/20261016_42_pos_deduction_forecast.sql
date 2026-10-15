@@ -128,7 +128,9 @@ set search_path = public as $$
   -- 최근 28일(어제까지) 소진량. 판매 0인 날도 요일 평균의 분모에 넣기 위해 날짜 격자를 만든다
   grid as (
     select i.id as item_id, d::date as d
-    from items i, params p, generate_series(p.today - 28, p.today - 1, interval '1 day') d
+    from params p
+    cross join items i
+    cross join lateral generate_series(p.today - 28, p.today - 1, interval '1 day') d
     where exists (select 1 from pos_product_usage u where u.inventory_item_id = i.id)
   ),
   usage as (
@@ -152,7 +154,8 @@ set search_path = public as $$
   forecast as (
     select h.item_id, h.days,
            sum(coalesce(da.avg_usage, 0)) as fc
-    from horizon h, params p
+    from params p
+    cross join horizon h
     cross join lateral generate_series(p.today, p.today + h.days - 1, interval '1 day') d
     left join dow_avg da on da.item_id = h.item_id and da.dow = extract(dow from d)::int
     group by h.item_id, h.days
