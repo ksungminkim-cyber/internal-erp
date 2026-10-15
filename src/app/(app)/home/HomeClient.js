@@ -140,6 +140,14 @@ export default function HomeClient({
 }) {
   const { currentWorkplaceId, currentWorkplace, supabase, profile, memberships, isManager } = useApp();
   const [orderCount, setOrderCount] = useState(0); // 발주 권장 품목 수 (OrderSuggestionsCard 가 채움)
+  const [orderOpen, setOrderOpen] = useState(() => {
+    try { return localStorage.getItem('home:orderCardOpen') !== '0'; } catch { return true; }
+  });
+  function toggleOrderCard() {
+    const next = !orderOpen;
+    setOrderOpen(next);
+    try { localStorage.setItem('home:orderCardOpen', next ? '1' : '0'); } catch { /* 무시 */ }
+  }
 
   // SSR 데이터로 즉시 초기화 → 스켈레톤 없음
   const [stats, setStats] = useState(initialStats);
@@ -343,6 +351,8 @@ export default function HomeClient({
             canDraft={!!isManager}
             limit={5}
             showAllLink
+            collapsed={!orderOpen}
+            onToggle={toggleOrderCard}
             onLoaded={({ count }) => setOrderCount(count)}
           />
         )}

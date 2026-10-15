@@ -123,8 +123,8 @@ export default function OrderSuggestionsCard({ workplaceId, workplaceName, canDr
             판매 추세로 예측한 소진량에서 현재 재고를 뺀 값이에요
           </div>
         </div>
-        {showAllLink && !onToggle && (
-          <Link href="/inventory" className="btn btn-ghost btn-xs" style={{ flexShrink: 0 }}>
+        {showAllLink && (
+          <Link href="/inventory" className="btn btn-ghost btn-xs" style={{ flexShrink: 0 }} onClick={(e) => e.stopPropagation()}>
             전체 <ChevronRight size={14} />
           </Link>
         )}
