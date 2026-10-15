@@ -32,7 +32,9 @@ export async function updateSession(request) {
 
   const url = request.nextUrl;
   const isAuthRoute = url.pathname.startsWith('/login') || url.pathname.startsWith('/auth');
-  const isPublicRoute = url.pathname === '/' || url.pathname.startsWith('/_next') || url.pathname === '/manifest.json';
+  // /api/pos/toss/sync 는 pg_cron 서버 간 호출 — 세션 대신 라우트의 비밀키 헤더(x-sync-secret)로 인증.
+  // 다른 /api/pos/* (웹훅 등)는 자체 검증이 선택적이라 세션 보호를 유지한다.
+  const isPublicRoute = url.pathname === '/' || url.pathname.startsWith('/_next') || url.pathname === '/manifest.json' || url.pathname === '/api/pos/toss/sync';
 
   // 리다이렉트 시에도 갱신된 쿠키를 반드시 전달해야 무한 로그아웃 루프 방지
   const carryCookies = (redirect) => {

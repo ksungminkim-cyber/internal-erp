@@ -229,3 +229,44 @@ export async function deleteSalesTip({ id }) {
   }
   return { ok: true };
 }
+
+/**
+ * 상품별 판매 집계 (토스 POS 동기화 데이터). from/to 는 'YYYY-MM-DD' 양 끝 포함.
+ * 권한은 getSalesSummary 와 동일 — 해당 매장 멤버 / 본사 / super_admin / 임원.
+ */
+export async function getProductSales({ workplaceId, from, to }) {
+  const authClient = await createServerClient();
+  const { data: { user } } = await authClient.auth.getUser();
+  if (!user || !workplaceId || !from || !to) return null;
+
+  const svc = getServiceClient();
+  const [{ data: prof }, { data: mems }] = await Promise.all([
+    svc.from('profiles').select('is_super_admin, is_executive').eq('user_id', user.id).maybeSingle(),
+    svc.from('memberships').select('workplace_id, workplaces(name)').eq('user_id', user.id).eq('active', true),
+  ]);
+  const isHQ = (mems ?? []).some((m) => m.workplaces?.name === '본사');
+  const allowed = (mems ?? []).some((m) => m.workplace_id === workplaceId) || isHQ || prof?.is_super_admin === true || prof?.is_executive === true;
+  if (!allowed) return null;
+
+  // 합산은 SQL 함수에서 (뷰를 직접 읽으면 PostgREST 1000행 제한에 걸려 긴 기간이 조용히 적게 집계됨)
+  const [{ data: rows, error: rpcError }, { data: lastLog }] = await Promise.all([
+    svc.rpc('pos_product_sales', { p_workplace_id: workplaceId, p_from: from, p_to: to }),
+    svc.from('pos_sync_log')
+      .select('finished_at')
+      .eq('workplace_id', workplaceId)
+      .is('error', null)
+      .not('finished_at', 'is', null)
+      .order('finished_at', { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  ]);
+
+  if (rpcError) throw new Error(`pos_product_sales: ${rpcError.message}`);
+  const items = (rows ?? []).map((r) => ({
+    item_title: r.item_title,
+    item_code: r.item_code ?? null,
+    qty: Number(r.qty) || 0,
+    amount: Number(r.amount) || 0,
+  }));
+  return { items, lastSyncedAt: lastLog?.finished_at ?? null };
+}

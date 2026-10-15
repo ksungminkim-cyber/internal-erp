@@ -248,12 +248,20 @@ curl -X POST https://counter.mclean21.com/api/pos/toss/sync -H "x-sync-secret: $
 3. 매출 페이지에서 "이번 달" 상품별 표가 토스 대시보드 상품별 매출과 대략 일치하는지 확인.
 4. 마이그레이션 적용 후 `cron.job`에 두 작업이 보이고 10분 뒤 `pos_sync_log`에 행이 생기는지 확인.
 
-## 첫 작업에서 확정할 미지수
+## 확정된 사실 (2026-10-15 스파이크, 테스트 매장 182323·166568)
 
-구현 시작 전에 테스트 매장에 실제 호출해 다음을 확정하고, 다르면 이 문서를 수정한다.
+1. `from`/`to`: ISO 8601 문자열(`2026-10-08T00:18:38.079Z`)과 epoch 밀리초 모두 200. epoch 초는 400 ("2022-01-01T00:00:00Z 이후 값"). 클라이언트는 ISO를 보낸다.
+2. 과거 조회: 매장 개설(2025-05)부터 전부 돌려준다. 16개월 이상.
+3. 테스트 매장으로 불러온 녹턴·나울은 실제 주문을 돌려준다. 빈 샌드박스가 아니다.
+4. `chargePrice.totalAmount`가 최종 금액. 예: listPrice 15000, discountAmount -3000, totalAmount 12000.
+5. 응답 `success`는 `Order[]` 배열. 총 건수 메타 없음. 길이 < size면 마지막 페이지.
+6. 타임스탬프는 ISO 문자열(`2026-10-14T08:52:36Z`). 주문 `id`는 18자리 숫자 문자열.
+7. **`item.category`는 문자열이 아니라 `{ title, code }` 객체.** `pos_order_items.item_category`에는 `category.title`을 저장한다.
+8. 주문 원본에 개인정보성 필드가 있다: `payments[].cardDetails`(마스킹 카드번호 앞 8자리)·`approvedNo`·`cashReceipt`·`easyPayDetails` 등, 최상위 `memo`·`requestedInfo`. `pos_orders.raw`에는 `payments[]`를 금액·수단·상태·시각 허용 목록만 남기고, `memo`·`requestedInfo`·라인아이템 `memo`를 제거해 저장한다.
 
-1. `from`/`to` 시각 형식 — ISO 8601 문자열인지 epoch 밀리초인지.
-2. 과거 주문 조회 가능 범위 — 몇 달 전까지 돌려주는지. 예측 이력 길이가 여기서 정해진다.
-3. 테스트 매장으로 불러온 녹턴·나울이 실제 주문을 돌려주는지, 빈 샌드박스인지.
-4. `chargePrice` 안의 최종 금액 필드명.
-5. 페이지네이션 종료 조건 — 응답에 총 건수나 다음 페이지 표시가 있는지.
+## 리뷰 반영 (2026-10-15)
+
+- `pos_product_daily` 뷰는 `security_invoker = true` (마이그레이션 38). 기본 뷰는 소유자 권한이라 RLS를 우회해 anon 키로 조회됐다.
+- 상품별 합산은 SQL 함수 `pos_product_sales(workplace_id, from, to)`로 수행한다. 뷰를 직접 읽으면 PostgREST 1000행 제한에 걸린다.
+- 라인아이템 교체는 delete 후 insert 가 아니라 `(order_id, line_no)` upsert 후 꼬리(`line_no >= 새 길이`) 삭제. 겹치는 실행이나 중단 시 아이템이 사라지지 않는다.
+- 세션 미들웨어 예외는 `/api/pos/toss/sync` 한 경로만. 기존 웹훅 라우트는 `POS_WEBHOOK_SECRET` 미설정 시 검증을 건너뛰므로 노출하지 않는다.

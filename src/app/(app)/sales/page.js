@@ -10,6 +10,7 @@ import { downloadCsv } from '@/lib/csvExport';
 import { ymd } from '@/lib/date';
 import { getPageCache, setPageCache } from '@/lib/pageCache';
 import { saveSales, getSalesSummary, getSalesTips, saveSalesTip, deleteSalesTip } from './actions';
+import ProductSalesCard from './ProductSalesCard';
 import { ChevronLeft, ChevronRight, TrendingUp, Plus, X, Info, Calendar, CreditCard, Banknote, Download, Lightbulb, Sparkles, Pencil, Trash2 } from 'lucide-react';
 
 function addDays(d, n) { const x = new Date(d); x.setDate(x.getDate() + n); return x; }
@@ -198,6 +199,9 @@ export default function SalesPage() {
             </div>
           </section>
         )}
+
+        {/* 상품별 판매 — 토스 POS 동기화 데이터 */}
+        {currentWorkplaceId && <ProductSalesCard workplaceId={currentWorkplaceId} />}
 
         {/* 매출 올리기 팁 — 직원 공통 노출. DB 팁 우선, 없으면 기본 팁 */}
         {(() => {
