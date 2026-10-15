@@ -3,10 +3,9 @@ import { createClient } from '@/lib/supabase/server';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import HomeClient from './HomeClient';
-import { kstDateKey } from '@/lib/date';
+import { kstDateKey, addDaysKey } from '@/lib/date';
 
 // 서버(UTC 런타임)에서 한국시간 기준 '오늘'
-function todayKey() { return kstDateKey(); }
 
 export default async function HomePage() {
   const supabase = await createClient();
@@ -46,7 +45,7 @@ export default async function HomePage() {
   // ── 모든 stats 서버에서 병렬 패치 ────────────────────────────────────────
   const todayStr   = kstDateKey();
   const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
-  const yesterdayStr = kstDateKey(new Date(todayStart.getTime() - 86400_000));
+  const yesterdayStr = addDaysKey(todayStr, -1); // KST 키 기준 어제 (서버는 UTC)
   const tomorrow   = new Date(todayStart); tomorrow.setDate(tomorrow.getDate() + 1);
 
   const [

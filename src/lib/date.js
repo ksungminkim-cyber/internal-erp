@@ -26,3 +26,13 @@ export function kstDateKey(date = new Date()) {
   // en-CA 로케일은 YYYY-MM-DD 포맷
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul' }).format(d);
 }
+
+/**
+ * 'YYYY-MM-DD' 키에 일수를 더한 키. 시간대와 무관한 순수 연산 —
+ * 서버(UTC)에서 KST 날짜 키의 "어제"를 구할 때 Date 자정 계산을 쓰면 틀린다.
+ */
+export function addDaysKey(key, n) {
+  const [y, m, d] = String(key).split('-').map(Number);
+  const t = new Date(Date.UTC(y, m - 1, d + n));
+  return `${t.getUTCFullYear()}-${String(t.getUTCMonth() + 1).padStart(2, '0')}-${String(t.getUTCDate()).padStart(2, '0')}`;
+}
