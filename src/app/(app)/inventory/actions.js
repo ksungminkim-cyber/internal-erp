@@ -103,6 +103,20 @@ export async function saveInventoryItem({ id, workplaceId, payload }) {
 
   let error;
   if (id) {
+    // 1단위당 소진량(usage_per_unit)이 바뀌면 기존 소요량 연결(세는 단위로 저장)을 다시 환산해
+    // "잔당 180ml" 같은 소진 단위 의미를 유지한다. 예) 1박스=1000개 → 500개 로 바꾸면 저장값 ×2
+    if ('usage_per_unit' in base && base.usage_per_unit != null) {
+      const { data: prev } = await svc.from('inventory_items').select('usage_per_unit, usage_unit').eq('id', id).maybeSingle();
+      const oldPer = Number(prev?.usage_per_unit);
+      const newPer = Number(base.usage_per_unit);
+      if (prev?.usage_unit && oldPer > 0 && newPer > 0 && oldPer !== newPer) {
+        const { data: links } = await svc.from('pos_product_usage').select('id, qty_per_unit').eq('inventory_item_id', id);
+        for (const l of links ?? []) {
+          const q = Math.round((Number(l.qty_per_unit) * oldPer / newPer) * 1000) / 1000;
+          if (q > 0) await svc.from('pos_product_usage').update({ qty_per_unit: q, updated_at: new Date().toISOString() }).eq('id', l.id);
+        }
+      }
+    }
     ({ error } = await svc
       .from('inventory_items')
       .update({ ...base, updated_at: new Date().toISOString() })
