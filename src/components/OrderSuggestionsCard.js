@@ -20,7 +20,7 @@ function fmtQty(n) {
   return Number.isInteger(v) ? String(v) : String(Math.round(v * 100) / 100);
 }
 
-export default function OrderSuggestionsCard({ workplaceId, workplaceName, canDraft = false, limit = null, onLoaded, showAllLink = false, refreshKey = '' }) {
+export default function OrderSuggestionsCard({ workplaceId, workplaceName, canDraft = false, limit = null, onLoaded, showAllLink = false, refreshKey = '', collapsed = false, onToggle = null }) {
   const router = useRouter();
   const [result, setResult] = useState({ key: null, data: null, error: null });
 
@@ -62,6 +62,11 @@ export default function OrderSuggestionsCard({ workplaceId, workplaceName, canDr
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
         <AlertTriangle size={18} color="#c2410c" />
         <h2 className="h4" style={{ flex: 1, color: '#c2410c' }}>발주 권장 {suggestions.length}품목</h2>
+        {onToggle && (
+          <button type="button" className="btn btn-ghost btn-xs" onClick={onToggle} aria-expanded={!collapsed} aria-label={collapsed ? '펼치기' : '접기'}>
+            <ChevronRight size={14} style={{ transform: collapsed ? 'none' : 'rotate(90deg)', transition: 'transform var(--t-sm) var(--ease)' }} />
+          </button>
+        )}
         {showAllLink && (
           <Link href="/inventory" className="text-muted" style={{ fontSize: 12, textDecoration: 'none', display: 'flex', alignItems: 'center' }}>
             재고 <ChevronRight size={14} />
@@ -69,6 +74,7 @@ export default function OrderSuggestionsCard({ workplaceId, workplaceName, canDr
         )}
       </div>
 
+      {!collapsed && (<>
       <div className="stack stack-1">
         {shown.map((s) => (
           <div key={s.inventory_item_id} style={{ display: 'flex', alignItems: 'baseline', gap: 8, fontSize: 13, padding: '4px 0', borderTop: '1px solid rgba(0,0,0,0.06)' }}>
@@ -91,6 +97,7 @@ export default function OrderSuggestionsCard({ workplaceId, workplaceName, canDr
           <ClipboardList size={14} /> 발주 기안 만들기
         </button>
       )}
+      </>)}
     </section>
   );
 }

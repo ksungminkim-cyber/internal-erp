@@ -20,6 +20,12 @@ export default function InventoryPage() {
   const router = useRouter();
   const { user, currentWorkplaceId, currentWorkplace, supabase, isManager } = useApp();
   const [daysLeftById, setDaysLeftById] = useState({}); // 연결 품목의 남은 일수 (추천 카드가 채움)
+  const [suggestionsOpen, setSuggestionsOpen] = useState(() => {
+    try { return localStorage.getItem('inventory:suggestionsOpen') !== '0'; } catch { return true; }
+  });
+  function toggleSuggestions() {
+    setSuggestionsOpen((v) => { try { localStorage.setItem('inventory:suggestionsOpen', v ? '0' : '1'); } catch { /* 무시 */ } return !v; });
+  }
   const [items, setItems] = useState(() => getPageCache(`inventory:${currentWorkplaceId}`) ?? []);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState('');
@@ -112,6 +118,8 @@ export default function InventoryPage() {
             workplaceId={currentWorkplaceId}
             workplaceName={currentWorkplace?.name}
             canDraft={!!isManager}
+            collapsed={!suggestionsOpen}
+            onToggle={toggleSuggestions}
             onLoaded={({ daysLeftById: m }) => setDaysLeftById(m)}
           />
         )}
@@ -160,11 +168,12 @@ export default function InventoryPage() {
                     <InventoryRow
                       key={it.id}
                       item={it}
-                      onAdjust={() => setAdjusting(it)}
+                      onAdjust={() => setAdjusting({ ...it, _linked: (usageCounts[it.id] ?? 0) > 0 })}
                       onEdit={() => setEditing(it)}
                       onUsage={() => setUsageItem(it)}
                       usageCount={usageCounts[it.id] ?? 0}
                       daysLeft={daysLeftById[it.id]}
+                      linked={(usageCounts[it.id] ?? 0) > 0}
                     />
                   ))}
                 </div>
@@ -577,9 +586,15 @@ function InventoryAdjust({ item, supabase, userId, workplaceId, onClose, onSaved
         <h2 className="h3">{item.name}</h2>
         <button onClick={onClose} className="btn btn-ghost btn-icon"><X size={18} /></button>
       </div>
-      <div className="text-muted" style={{ fontSize: 12, marginBottom: 16 }}>
+      <div className="text-muted" style={{ fontSize: 12, marginBottom: item._linked ? 8 : 16 }}>
         현재 <span className="num" style={{ fontWeight: 700, color: 'var(--text)' }}>{Number(item.current_qty)}{item.unit}</span>
       </div>
+      {item._linked && (
+        <div className="card" style={{ background: 'var(--warning-soft)', boxShadow: 'none', padding: '8px 10px', marginBottom: 12, fontSize: 12, lineHeight: 1.5 }}>
+          이 품목은 토스 판매량으로 <strong>자동 차감</strong>됩니다. 판매분을 &ldquo;사용&rdquo;으로 또 기록하면 이중으로 빠져요.
+          실제로 센 수량은 &ldquo;조정&rdquo;으로 넣어 주세요. 직전 10분 안의 판매는 다음 동기화 때 한 번 더 반영될 수 있어요.
+        </div>
+      )}
 
       <label className="label">유형</label>
       <div className="segment" style={{ width: '100%' }}>

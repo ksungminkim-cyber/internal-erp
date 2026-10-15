@@ -156,7 +156,7 @@ export default function HomeClient({
 
     const [
       board, inboxSteps, anns, reads, todayLogs, annTotal,
-      salesToday, inv, todayShifts, handover,
+      salesToday, todayShifts, handover,
     ] = await Promise.all([
       supabase.from('attendance_current_status').select('user_id, status').eq('workplace_id', currentWorkplaceId),
       supabase
@@ -185,11 +185,6 @@ export default function HomeClient({
         .eq('workplace_id', currentWorkplaceId)
         .in('sales_date', [today, yesterday]),
       supabase
-        .from('inventory_items')
-        .select('id, current_qty, min_qty')
-        .eq('workplace_id', currentWorkplaceId)
-        .eq('archived', false),
-      supabase
         .from('shifts')
         .select('id, user_id', { count: 'exact' })
         .eq('workplace_id', currentWorkplaceId)
@@ -209,7 +204,6 @@ export default function HomeClient({
         s.approval_requests?.current_step === s.step_order
     );
     const readIds  = new Set((reads.data ?? []).map((r) => r.announcement_id));
-    const lowStock = (inv.data ?? []).filter((i) => Number(i.current_qty) < Number(i.min_qty)).length;
 
     // 공지 작성자 이름 — 공용 액션으로 매핑 (RLS 무관)
     const annRows = anns.data ?? [];
@@ -224,7 +218,6 @@ export default function HomeClient({
       todaySales:         Number((salesToday.data ?? []).find((r) => r.sales_date === today)?.total_amount ?? 0),
       todayCount:         Number((salesToday.data ?? []).find((r) => r.sales_date === today)?.transaction_count ?? 0),
       yesterdaySales:     Number((salesToday.data ?? []).find((r) => r.sales_date === yesterday)?.total_amount ?? 0),
-      lowStock,
       todayShifts:        todayShifts.count ?? 0,
       handoverUnresolved: handover.count ?? 0,
     });
@@ -270,7 +263,7 @@ export default function HomeClient({
   })();
 
   const today       = new Date().toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', weekday: 'long' });
-  const s           = stats ?? { working: 0, inbox: 0, unread: 0, todayCheckins: 0, todaySales: 0, lowStock: 0, todayShifts: 0, handoverUnresolved: 0 };
+  const s           = stats ?? { working: 0, inbox: 0, unread: 0, todayCheckins: 0, todaySales: 0, todayShifts: 0, handoverUnresolved: 0 };
   const urgentCount = orderCount + s.handoverUnresolved + s.inbox;
 
   return (

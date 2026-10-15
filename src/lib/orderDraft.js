@@ -45,7 +45,7 @@ export function buildOrderDraft(suggestions, { workplaceName, dateKey }) {
     return `- ${s.name}: ${fmtQty(s.suggested_qty)}${s.unit ?? ''} (${why})`;
   });
   return {
-    title: `발주 — ${md} ${workplaceName}`,
+    title: `발주 — ${md}${workplaceName ? ` ${workplaceName}` : ''}`,
     body: `POS 판매 기반 발주 추천 (${dateKey})\n${lines.join('\n')}`,
     items,
   };

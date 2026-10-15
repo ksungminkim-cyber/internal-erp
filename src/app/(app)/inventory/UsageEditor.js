@@ -3,12 +3,14 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { X, Search, Link2 } from 'lucide-react';
+import { useFeedback } from '@/context/FeedbackContext';
 import BottomSheet from '@/components/BottomSheet';
 import { suggestQty } from '@/lib/usageSuggest';
 import { getProductUsage, saveProductUsage } from './actions';
 
 // 재고 품목 ↔ 토스 상품 소요량 연결 편집. 상품 1개당 이 품목이 얼마나 들어가는지(품목 단위).
 export default function UsageEditor({ item, workplaceId, onClose, onSaved }) {
+  const { toast } = useFeedback();
   const [loaded, setLoaded] = useState(null); // { products, links, recipes, avgDailyUsage }
   const [loadError, setLoadError] = useState(null);
   const [qtyByTitle, setQtyByTitle] = useState({}); // item_title → 입력 문자열 ('' = 연결 안 함)
@@ -49,6 +51,11 @@ export default function UsageEditor({ item, workplaceId, onClose, onSaved }) {
     return [...list].sort((a, b) => (linked.has(b.item_title) ? 1 : 0) - (linked.has(a.item_title) ? 1 : 0));
   }, [products, query, loaded]);
 
+  // 최근 90일 판매가 없어 목록에 없는 기존 연결 — 따로 보여 주고 해제할 수 있게
+  const staleLinks = useMemo(() => {
+    const shown = new Set(products.map((p) => p.item_title));
+    return Object.keys(qtyByTitle).filter((t) => !shown.has(t));
+  }, [products, qtyByTitle]);
   const checkedTitles = Object.keys(qtyByTitle);
   const validCount = checkedTitles.filter((t) => Number(qtyByTitle[t]) > 0).length;
   const emptyCount = checkedTitles.length - validCount;
@@ -64,7 +71,8 @@ export default function UsageEditor({ item, workplaceId, onClose, onSaved }) {
   }
   function applyBulk() {
     if (!(Number(bulk) > 0)) return;
-    setQtyByTitle((m) => Object.fromEntries(Object.keys(m).map((t) => [t, bulk])));
+    const visible = new Set(filtered.map((p) => p.item_title));
+    setQtyByTitle((m) => Object.fromEntries(Object.entries(m).map(([t, v]) => [t, visible.has(t) ? bulk : v])));
   }
 
   async function save() {
@@ -75,6 +83,7 @@ export default function UsageEditor({ item, workplaceId, onClose, onSaved }) {
       const rows = Object.entries(qtyByTitle).map(([item_title, v]) => ({ item_title, qty_per_unit: Number(v) }));
       const res = await saveProductUsage({ workplaceId, inventoryItemId: item.id, rows });
       if (res?.error) { setError(res.error); return; }
+      toast?.(`소요량 ${res?.count ?? 0}개 연결 저장`);
       onSaved?.();
     } catch (e) {
       setError(String(e?.message ?? e));
@@ -117,7 +126,7 @@ export default function UsageEditor({ item, workplaceId, onClose, onSaved }) {
               const sug = suggestions[p.item_title];
               return (
                 <div key={p.item_title} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', borderTop: '1px solid var(--border)' }}>
-                  <input type="checkbox" checked={on} onChange={() => toggle(p.item_title)} aria-label={`${p.item_title} 연결`} />
+                  <input type="checkbox" checked={on} onChange={() => toggle(p.item_title)} aria-label={`${p.item_title} 연결`} style={{ width: 20, height: 20, flexShrink: 0 }} />
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.item_title}</div>
                     <div className="text-muted" style={{ fontSize: 11 }}>
@@ -143,14 +152,27 @@ export default function UsageEditor({ item, workplaceId, onClose, onSaved }) {
                     onChange={(e) => setQty(p.item_title, e.target.value)}
                     aria-label={`${p.item_title} 소요량`}
                   />
-                  <span className="text-muted" style={{ fontSize: 11, width: 22 }}>{item.unit}</span>
+                  <span className="text-muted" style={{ fontSize: 11, minWidth: 22 }}>{item.unit}</span>
                 </div>
               );
             })}
           </div>
 
+          {staleLinks.length > 0 && (
+            <div style={{ marginTop: 10, padding: '8px 10px', background: 'var(--surface-soft)', borderRadius: 10 }}>
+              <div className="text-muted" style={{ fontSize: 11, fontWeight: 700, marginBottom: 4 }}>최근 90일 판매가 없는 연결 {staleLinks.length}개</div>
+              {staleLinks.map((t) => (
+                <div key={t} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, padding: '2px 0' }}>
+                  <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t}</span>
+                  <span className="num">{qtyByTitle[t]}{item.unit}</span>
+                  <button type="button" className="btn btn-ghost btn-xs" onClick={() => toggle(t)}>해제</button>
+                </div>
+              ))}
+            </div>
+          )}
+
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 10 }}>
-            <input className="input" type="number" inputMode="decimal" min="0" step="any" placeholder="선택한 상품 모두 같은 값" value={bulk} onChange={(e) => setBulk(e.target.value)} style={{ flex: 1 }} />
+            <input aria-label="일괄 적용 값" className="input" type="number" inputMode="decimal" min="0" step="any" placeholder="보이는 체크 상품에 같은 값" value={bulk} onChange={(e) => setBulk(e.target.value)} style={{ flex: 1 }} />
             <button type="button" className="btn btn-soft btn-sm" onClick={applyBulk} disabled={!(Number(bulk) > 0) || checkedTitles.length === 0}>일괄 적용</button>
           </div>
 

@@ -50,7 +50,7 @@ export default async function HomePage() {
 
   const [
     board, inboxSteps, anns, reads, todayLogs, annTotal,
-    salesToday, inv, todayShifts, handover,
+    salesToday, todayShifts, handover,
     myProfileRes, myMemsRes, allWpsRes,
   ] = await Promise.all([
     supabase
@@ -89,11 +89,6 @@ export default async function HomePage() {
       .eq('workplace_id', wpId)
       .in('sales_date', [todayStr, yesterdayStr]),
     supabase
-      .from('inventory_items')
-      .select('id, current_qty, min_qty')
-      .eq('workplace_id', wpId)
-      .eq('archived', false),
-    supabase
       .from('shifts')
       .select('id', { count: 'exact', head: true })
       .eq('workplace_id', wpId)
@@ -117,10 +112,6 @@ export default async function HomePage() {
       s.approval_requests?.status === 'pending' &&
       s.approval_requests?.current_step === s.step_order
   );
-  const lowStock = (inv.data ?? []).filter(
-    (i) => Number(i.current_qty) < Number(i.min_qty)
-  ).length;
-
   const initialStats = {
     working:            (board.data ?? []).filter((b) => b.status === 'working' || b.status === 'on_break').length,
     inbox:              inboxValid.length,
@@ -129,7 +120,6 @@ export default async function HomePage() {
     todaySales:         Number((salesToday.data ?? []).find((r) => r.sales_date === todayStr)?.total_amount ?? 0),
     todayCount:         Number((salesToday.data ?? []).find((r) => r.sales_date === todayStr)?.transaction_count ?? 0),
     yesterdaySales:     Number((salesToday.data ?? []).find((r) => r.sales_date === yesterdayStr)?.total_amount ?? 0),
-    lowStock,
     todayShifts:        todayShifts.count ?? 0,
     handoverUnresolved: handover.count ?? 0,
   };

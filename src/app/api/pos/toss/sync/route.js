@@ -1,5 +1,6 @@
 // src/app/api/pos/toss/sync/route.js
 import { NextResponse } from 'next/server';
+import crypto from 'crypto';
 import { createClient } from '@supabase/supabase-js';
 import { fetchOrders } from '@/lib/server/tossPlace';
 import { mapOrder } from '@/lib/posOrderMap';
@@ -25,6 +26,14 @@ function getServiceClient() {
 // 한국시간 기준 'YYYY-MM-DD'
 function kstDate(d) {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul' }).format(d);
+}
+
+// 길이가 달라도 상수 시간에 비교
+function secretMatches(given, expected) {
+  if (typeof given !== 'string') return false;
+  const a = crypto.createHash('sha256').update(given).digest();
+  const b = crypto.createHash('sha256').update(expected).digest();
+  return crypto.timingSafeEqual(a, b);
 }
 
 function resolveWindow({ from, to, hours }) {
@@ -116,7 +125,7 @@ async function syncWorkplace(svc, wp, window) {
 
 export async function POST(request) {
   const secret = process.env.POS_SYNC_SECRET;
-  if (!secret || request.headers.get('x-sync-secret') !== secret) {
+  if (!secret || !secretMatches(request.headers.get('x-sync-secret'), secret)) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   }
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {

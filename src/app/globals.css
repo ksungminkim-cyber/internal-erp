@@ -439,6 +439,9 @@ input[type="password"], input[type="date"], input[type="time"], textarea, select
 .slide-up { animation: slideUp .4s var(--ease) both; }
 .pop-in { animation: popIn .4s var(--ease-bounce) both; }
 
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
 @keyframes fadeIn {
   from { opacity: 0; }
   to   { opacity: 1; }
