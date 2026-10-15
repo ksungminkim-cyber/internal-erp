@@ -77,9 +77,9 @@ export default function ProductSalesCard({ workplaceId }) {
 
       {range === 'custom' && (
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 10 }}>
-          <input type="date" className="input" value={custom.from} max={custom.to} onChange={(e) => setCustom((c) => ({ ...c, from: e.target.value }))} />
+          <input type="date" className="input" style={{ flex: 1, minWidth: 0 }} value={custom.from} max={custom.to} onChange={(e) => setCustom((c) => ({ ...c, from: e.target.value }))} />
           <span className="text-muted">~</span>
-          <input type="date" className="input" value={custom.to} min={custom.from} onChange={(e) => setCustom((c) => ({ ...c, to: e.target.value }))} />
+          <input type="date" className="input" style={{ flex: 1, minWidth: 0 }} value={custom.to} min={custom.from} onChange={(e) => setCustom((c) => ({ ...c, to: e.target.value }))} />
         </div>
       )}
 
