@@ -44,8 +44,9 @@ export default async function HomePage() {
   }
 
   // ── 모든 stats 서버에서 병렬 패치 ────────────────────────────────────────
-  const todayStr   = todayKey();
+  const todayStr   = kstDateKey();
   const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
+  const yesterdayStr = kstDateKey(new Date(todayStart.getTime() - 86400_000));
   const tomorrow   = new Date(todayStart); tomorrow.setDate(tomorrow.getDate() + 1);
 
   const [
@@ -85,10 +86,9 @@ export default async function HomePage() {
       .eq('workplace_id', wpId),
     supabase
       .from('sales_daily')
-      .select('total_amount, transaction_count')
+      .select('sales_date, total_amount, transaction_count')
       .eq('workplace_id', wpId)
-      .eq('sales_date', todayStr)
-      .maybeSingle(),
+      .in('sales_date', [todayStr, yesterdayStr]),
     supabase
       .from('inventory_items')
       .select('id, current_qty, min_qty')
@@ -127,7 +127,9 @@ export default async function HomePage() {
     inbox:              inboxValid.length,
     unread:             Math.max(0, (annTotal.count ?? 0) - readIds.size),
     todayCheckins:      new Set((todayLogs.data ?? []).map((l) => l.user_id)).size,
-    todaySales:         Number(salesToday.data?.total_amount ?? 0),
+    todaySales:         Number((salesToday.data ?? []).find((r) => r.sales_date === todayStr)?.total_amount ?? 0),
+    todayCount:         Number((salesToday.data ?? []).find((r) => r.sales_date === todayStr)?.transaction_count ?? 0),
+    yesterdaySales:     Number((salesToday.data ?? []).find((r) => r.sales_date === yesterdayStr)?.total_amount ?? 0),
     lowStock,
     todayShifts:        todayShifts.count ?? 0,
     handoverUnresolved: handover.count ?? 0,

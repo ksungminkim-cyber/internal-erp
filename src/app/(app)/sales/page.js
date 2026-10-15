@@ -618,31 +618,20 @@ function PosGuide({ onClose }) {
 
       <div className="stack stack-3" style={{ fontSize: 14, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
         <div className="card" style={{ background: 'var(--surface-soft)', boxShadow: 'none' }}>
-          <div className="h4" style={{ marginBottom: 6 }}>🟦 토스 POS 실시간 연동 현황</div>
+          <div className="h4" style={{ marginBottom: 6 }}>🟦 토스 POS 자동 연동 중</div>
           <p style={{ fontSize: 13 }}>
-            토스플레이스(토스 POS)는 현재 일반 가맹점이 외부 시스템으로 결제 이벤트를 실시간 받을 수 있는
-            <strong> 공개 Webhook/API 가 없습니다</strong>. 토스 영업담당자에게 B2B 연동 가능 여부를 문의해보세요.
+            토스플레이스 Open API로 주문을 <strong>10분마다</strong> 가져와 일 매출(총액·건수·카드·현금·기타)과
+            상품별 판매를 자동으로 채웁니다. 매일 새벽에는 최근 이틀을 다시 맞춰 뒤늦은 취소도 반영됩니다.
           </p>
         </div>
 
         <div>
-          <div className="h4" style={{ marginBottom: 6, color: 'var(--text)' }}>현재 가능한 방식</div>
-          <ol style={{ paddingLeft: 18, fontSize: 13 }}>
-            <li><strong>수동 일 마감 입력</strong> — 매장 마감 시 매출 합계를 입력 (현재 사용 방식)</li>
-            <li><strong>토스 비즈 대시보드 CSV 다운로드</strong> → 우리 시스템에 업로드 (요청 시 구현)</li>
-            <li><strong>실시간 Webhook</strong> — 토스에서 권한을 받으면 즉시 동작 (코드 준비 완료)</li>
-          </ol>
-        </div>
-
-        <div>
-          <div className="h4" style={{ marginBottom: 6, color: 'var(--text)' }}>실시간 연동이 가능해지면</div>
-          <p style={{ fontSize: 13 }}>
-            관리자가 Supabase 의 <code style={{ background: 'var(--surface-strong)', padding: '2px 6px', borderRadius: 4, fontSize: 12 }}>workplaces.pos_store_code</code> 에 토스 가맹점 코드를 입력하고,
-            토스에 다음 URL 을 등록하면 자동 집계됩니다:
-          </p>
-          <div style={{ marginTop: 8, padding: 10, background: 'var(--surface-strong)', borderRadius: 8, fontSize: 11, fontFamily: 'monospace', wordBreak: 'break-all' }}>
-            POST https://your-domain.com/api/pos/toss/webhook
-          </div>
+          <div className="h4" style={{ marginBottom: 6, color: 'var(--text)' }}>직접 입력이 필요한 경우</div>
+          <ul style={{ paddingLeft: 18, fontSize: 13 }}>
+            <li>토스 POS를 거치지 않은 매출(계좌이체 등)은 그날 기록을 열어 금액을 고치고 메모를 남겨 주세요.</li>
+            <li>한 번 직접 수정한 날은 <strong>수기 입력</strong>으로 표시되고 이후 자동 갱신에서 제외됩니다.</li>
+            <li>동기화 시각은 &ldquo;상품별 판매&rdquo; 카드 아래에서 확인할 수 있어요. 오래 멈춰 있으면 관리자에게 알려 주세요.</li>
+          </ul>
         </div>
       </div>
 

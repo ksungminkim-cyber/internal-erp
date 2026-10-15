@@ -6,7 +6,7 @@ import { useApp } from '@/context/AppContext';
 import PageHeader from '@/components/PageHeader';
 import { formatRelative, formatCurrency, todayBoundary } from '@/lib/format';
 import { getProfileNames } from '@/app/_actions/names';
-import { todayKey } from '@/lib/date';
+import { todayKey, ymd } from '@/lib/date';
 import {
   Clock, FileText, Megaphone, Users, ChevronRight, Plus, Sparkles,
   Calendar, ClipboardCheck, Package, TrendingUp, AlertTriangle,
@@ -148,6 +148,7 @@ export default function HomeClient({
     if (!currentWorkplaceId) return;
     const since    = todayBoundary();
     const today    = todayKey();
+    const yesterday = ymd(new Date(Date.now() - 86400_000));
     const todayObj = new Date(); todayObj.setHours(0, 0, 0, 0);
     const tomorrow = new Date(todayObj); tomorrow.setDate(tomorrow.getDate() + 1);
 
@@ -178,10 +179,9 @@ export default function HomeClient({
       supabase.from('announcements').select('*', { count: 'exact', head: true }).eq('workplace_id', currentWorkplaceId),
       supabase
         .from('sales_daily')
-        .select('total_amount, transaction_count')
+        .select('sales_date, total_amount, transaction_count')
         .eq('workplace_id', currentWorkplaceId)
-        .eq('sales_date', today)
-        .maybeSingle(),
+        .in('sales_date', [today, yesterday]),
       supabase
         .from('inventory_items')
         .select('id, current_qty, min_qty')
@@ -219,7 +219,9 @@ export default function HomeClient({
       inbox:              inboxValid.length,
       unread:             Math.max(0, (annTotal.count ?? 0) - readIds.size),
       todayCheckins:      new Set((todayLogs.data ?? []).map((l) => l.user_id)).size,
-      todaySales:         Number(salesToday.data?.total_amount ?? 0),
+      todaySales:         Number((salesToday.data ?? []).find((r) => r.sales_date === today)?.total_amount ?? 0),
+      todayCount:         Number((salesToday.data ?? []).find((r) => r.sales_date === today)?.transaction_count ?? 0),
+      yesterdaySales:     Number((salesToday.data ?? []).find((r) => r.sales_date === yesterday)?.total_amount ?? 0),
       lowStock,
       todayShifts:        todayShifts.count ?? 0,
       handoverUnresolved: handover.count ?? 0,
@@ -347,7 +349,11 @@ export default function HomeClient({
               <div className="bento-value num">
                 {formatCurrency(s.todaySales)}<span style={{ fontSize: 14, opacity: 0.85, marginLeft: 4 }}>원</span>
               </div>
-              <div className="bento-sub">{currentWorkplace?.name}</div>
+              <div className="bento-sub">
+                {currentWorkplace?.name}
+                {s.todayCount ? ` · 거래 ${s.todayCount}건` : ''}
+                {` · 어제 ${formatCurrency(s.yesterdaySales)}원`}
+              </div>
             </div>
           </Link>
 
