@@ -14,10 +14,24 @@ function categoryTitle(category) {
   return category.title ?? null;
 }
 
-// raw 저장용 — 마스킹 카드번호·승인번호가 든 payments[].cardDetails 제거. 입력은 변형하지 않는다.
+// raw 저장용 정제. 입력은 변형하지 않는다.
+//  - payments[]: 금액·수단·상태·시각 허용 목록만 (cardDetails·approvedNo·cashReceipt·easyPayDetails 등 제거)
+//  - 최상위 memo·requestedInfo, 라인아이템 memo 제거 (고객 연락처 등 자유 입력란)
+const PAYMENT_KEEP = ['id', 'state', 'sourceType', 'paymentMethod', 'amount', 'taxAmount', 'supplyAmount',
+  'taxExemptAmount', 'tipAmount', 'approvedAt', 'cancelledAt'];
+
 function sanitizeRaw(order) {
-  if (!Array.isArray(order.payments)) return order;
-  return { ...order, payments: order.payments.map((p) => ({ ...p, cardDetails: null })) };
+  const { memo, requestedInfo, ...rest } = order;
+  void memo; void requestedInfo;
+  return {
+    ...rest,
+    payments: Array.isArray(order.payments)
+      ? order.payments.map((p) => Object.fromEntries(PAYMENT_KEEP.filter((k) => k in p).map((k) => [k, p[k]])))
+      : order.payments,
+    lineItems: Array.isArray(order.lineItems)
+      ? order.lineItems.map(({ memo: liMemo, ...li }) => { void liMemo; return li; })
+      : order.lineItems,
+  };
 }
 
 export function mapOrder(order, { workplaceId, merchantId }) {

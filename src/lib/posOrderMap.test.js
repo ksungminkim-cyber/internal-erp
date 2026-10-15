@@ -27,13 +27,28 @@ test('완료 주문: 주문 행 매핑', () => {
   assert.equal(order.raw.lineItems.length, fixture.lineItems.length);
 });
 
-test('raw: payments[].cardDetails 는 제거, 입력 객체는 변형하지 않음', () => {
-  const withCard = JSON.parse(JSON.stringify(fixture));
-  withCard.payments[0].cardDetails = { cardNo: '37918395*******', approvalNo: '75632250' };
-  const { order } = mapOrder(withCard, ctx);
-  assert.equal(order.raw.payments[0].cardDetails, null);
-  assert.equal(order.raw.payments[0].amount, withCard.payments[0].amount);
-  assert.deepEqual(withCard.payments[0].cardDetails, { cardNo: '37918395*******', approvalNo: '75632250' });
+test('raw: payments 는 허용 목록 필드만, 개인정보성 필드 제거, 입력 객체는 변형하지 않음', () => {
+  const withPii = JSON.parse(JSON.stringify(fixture));
+  Object.assign(withPii.payments[0], {
+    cardDetails: { cardNo: '37918395*******', approvalNo: '75632250' },
+    approvedNo: '75632250', cashReceipt: { number: '010****' }, easyPayDetails: { provider: 'x' },
+    pgDetails: { a: 1 }, settlement: { b: 2 },
+  });
+  withPii.memo = '연락처 010-0000-0000';
+  withPii.requestedInfo = { requestedAt: 'x' };
+  withPii.lineItems[0].memo = '얼음 적게';
+  const { order } = mapOrder(withPii, ctx);
+  const pay = order.raw.payments[0];
+  assert.deepEqual(Object.keys(pay).sort(), ['amount', 'approvedAt', 'cancelledAt', 'id', 'paymentMethod', 'sourceType', 'state', 'supplyAmount', 'taxAmount', 'taxExemptAmount', 'tipAmount']);
+  assert.equal(pay.amount, withPii.payments[0].amount);
+  assert.equal(order.raw.memo, undefined);
+  assert.equal(order.raw.requestedInfo, undefined);
+  assert.equal(order.raw.lineItems[0].memo, undefined);
+  assert.equal(order.raw.lineItems[0].item.title, withPii.lineItems[0].item.title);
+  // 입력 불변
+  assert.equal(withPii.memo, '연락처 010-0000-0000');
+  assert.equal(withPii.payments[0].approvedNo, '75632250');
+  assert.equal(withPii.lineItems[0].memo, '얼음 적게');
 });
 
 test('라인아이템: 순서·수량·단가·옵션·카테고리 제목', () => {
