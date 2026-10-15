@@ -272,7 +272,7 @@ export default function HomeClient({
 
   const today       = new Date().toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', weekday: 'long' });
   const s           = stats ?? { working: 0, inbox: 0, unread: 0, todayCheckins: 0, todaySales: 0, todayShifts: 0, handoverUnresolved: 0 };
-  const urgentCount = orderCount + s.handoverUnresolved + s.inbox;
+  const urgentCount = s.handoverUnresolved + s.inbox; // 재고는 아래 "오늘 챙길 재고" 카드가 담당
 
   return (
     <>
@@ -337,7 +337,6 @@ export default function HomeClient({
             <AlertTriangle size={18} color="#c2410c" />
             <div style={{ flex: 1, fontSize: 13, display: 'flex', flexWrap: 'wrap', gap: 12 }}>
               {s.inbox > 0 && <Link href="/approvals" style={{ color: '#c2410c', fontWeight: 700, textDecoration: 'none' }}>결재 {s.inbox}건</Link>}
-              {orderCount > 0 && <Link href="/inventory" style={{ color: '#c2410c', fontWeight: 700, textDecoration: 'none' }}>발주·제조 필요 {orderCount}품목</Link>}
               {s.handoverUnresolved > 0 && <Link href="/handover" style={{ color: '#c2410c', fontWeight: 700, textDecoration: 'none' }}>인수인계 {s.handoverUnresolved}건</Link>}
             </div>
           </section>

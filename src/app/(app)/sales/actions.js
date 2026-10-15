@@ -323,3 +323,75 @@ export async function getDaySalesDetail({ workplaceId, date }) {
   }));
   return { summary, items };
 }
+
+/**
+ * 월 매출 목표 KPI — 목표, 이달 매출(sales_daily), 이달 상품별 판매(카페/바 상위 3).
+ * 권한은 getSalesSummary 와 동일.
+ */
+export async function getSalesKpi({ workplaceId }) {
+  const authClient = await createServerClient();
+  const { data: { user } } = await authClient.auth.getUser();
+  if (!user || !workplaceId) return null;
+
+  const svc = getServiceClient();
+  const [{ data: prof }, { data: mems }] = await Promise.all([
+    svc.from('profiles').select('is_super_admin, is_executive').eq('user_id', user.id).maybeSingle(),
+    svc.from('memberships').select('workplace_id, role, workplaces(name)').eq('user_id', user.id).eq('active', true),
+  ]);
+  const isHQ = (mems ?? []).some((m) => m.workplaces?.name === '본사');
+  const mine = (mems ?? []).find((m) => m.workplace_id === workplaceId);
+  const allowed = !!mine || isHQ || prof?.is_super_admin === true || prof?.is_executive === true;
+  if (!allowed) return null;
+  const canEditTarget = isHQ || prof?.is_super_admin === true || prof?.is_executive === true || ['manager', 'owner'].includes(mine?.role);
+
+  const today = kstDate();
+  const monthStart = `${today.slice(0, 7)}-01`;
+  const [{ data: wp }, { data: sum, error: e1 }, { data: products, error: e2 }] = await Promise.all([
+    svc.from('workplaces').select('monthly_sales_target').eq('id', workplaceId).maybeSingle(),
+    svc.rpc('sales_summary', { p_workplace_id: workplaceId }),
+    svc.rpc('pos_product_sales', { p_workplace_id: workplaceId, p_from: monthStart, p_to: today }),
+  ]);
+  if (e1) throw new Error(`sales_summary: ${e1.message}`);
+  if (e2) throw new Error(`pos_product_sales: ${e2.message}`);
+
+  // 상위 후보 상품의 카테고리 (pos_order_items 에서 가장 최근 값)
+  const sorted = (products ?? []).map((p) => ({ item_title: p.item_title, qty: Number(p.qty) || 0, amount: Number(p.amount) || 0 }))
+    .sort((a, b) => b.amount - a.amount);
+  const candidates = sorted.slice(0, 40).map((p) => p.item_title);
+  const { data: cats } = candidates.length
+    ? await svc.from('pos_order_items').select('item_title, item_category').eq('workplace_id', workplaceId).in('item_title', candidates).limit(2000)
+    : { data: [] };
+  const categoryByTitle = {};
+  for (const r of cats ?? []) if (categoryByTitle[r.item_title] == null) categoryByTitle[r.item_title] = r.item_category ?? '';
+
+  return {
+    target: Number(wp?.monthly_sales_target) || 0,
+    monthTotal: Number(sum?.[0]?.month_total) || 0,
+    todayKey: today,
+    products: sorted.slice(0, 40).map((p) => ({ ...p, category: categoryByTitle[p.item_title] ?? '' })),
+    canEditTarget,
+  };
+}
+
+/** 월 매출 목표 저장 — 매니저 이상 */
+export async function updateSalesTarget({ workplaceId, target }) {
+  const authClient = await createServerClient();
+  const { data: { user } } = await authClient.auth.getUser();
+  if (!user || !workplaceId) return { ok: false, error: '로그인이 필요합니다.' };
+  const t = Math.round(Number(target));
+  if (!Number.isFinite(t) || t < 0 || t > 1e12) return { ok: false, error: '목표 금액을 확인해 주세요.' };
+
+  const svc = getServiceClient();
+  const [{ data: prof }, { data: mems }] = await Promise.all([
+    svc.from('profiles').select('is_super_admin, is_executive').eq('user_id', user.id).maybeSingle(),
+    svc.from('memberships').select('workplace_id, role, workplaces(name)').eq('user_id', user.id).eq('active', true),
+  ]);
+  const isHQ = (mems ?? []).some((m) => m.workplaces?.name === '본사');
+  const mine = (mems ?? []).find((m) => m.workplace_id === workplaceId);
+  const can = isHQ || prof?.is_super_admin === true || prof?.is_executive === true || ['manager', 'owner'].includes(mine?.role);
+  if (!can) return { ok: false, error: '매니저 이상만 목표를 바꿀 수 있어요.' };
+
+  const { error } = await svc.from('workplaces').update({ monthly_sales_target: t }).eq('id', workplaceId);
+  if (error) return { ok: false, error: error.message };
+  return { ok: true, target: t };
+}
