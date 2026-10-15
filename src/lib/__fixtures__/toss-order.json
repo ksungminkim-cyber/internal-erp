@@ -1,0 +1,111 @@
+{
+  "id": "765477376339239366",
+  "merchantId": 166568,
+  "source": "TERMINAL_POS",
+  "orderState": "COMPLETED",
+  "orderKey": "001_ea550d5e-b79f-4ee1-a283-5b41460f7725",
+  "orderNumber": "001",
+  "createdAt": "2026-10-14T07:33:48Z",
+  "updatedAt": "2026-10-14T07:33:49Z",
+  "openedAt": "2026-10-14T07:33:48Z",
+  "completedAt": "2026-10-14T07:33:48Z",
+  "cancelledAt": null,
+  "lineItems": [
+    {
+      "diningOption": "HERE",
+      "item": {
+        "title": "나울 시그니쳐 - ice",
+        "code": null,
+        "category": {
+          "title": "셋트",
+          "code": null
+        }
+      },
+      "itemPrice": {
+        "title": "기본",
+        "priceType": "FIXED",
+        "priceUnit": 1,
+        "priceValue": 13000,
+        "isTaxFree": false,
+        "taxPercentage": null,
+        "taxInclusive": true
+      },
+      "optionChoices": [],
+      "appliedDiscounts": [],
+      "quantity": 1,
+      "memo": ""
+    },
+    {
+      "diningOption": "HERE",
+      "item": {
+        "title": "아이스 아메리카노",
+        "code": null,
+        "category": {
+          "title": "커피",
+          "code": null
+        }
+      },
+      "itemPrice": {
+        "title": "기본",
+        "priceType": "FIXED",
+        "priceUnit": 1,
+        "priceValue": 6000,
+        "isTaxFree": false,
+        "taxPercentage": null,
+        "taxInclusive": true
+      },
+      "optionChoices": [],
+      "appliedDiscounts": [],
+      "quantity": 1,
+      "memo": ""
+    }
+  ],
+  "cancelledReason": null,
+  "payments": [
+    {
+      "id": "765477378545445252",
+      "merchantId": 166568,
+      "orderId": "765477376339239366",
+      "state": "APPROVED",
+      "sourceType": "CARD",
+      "paymentMethod": "SAMSUNG_MST",
+      "van": "NICE",
+      "amount": 19000,
+      "taxAmount": 1727,
+      "supplyAmount": 17273,
+      "taxExemptAmount": 0,
+      "tipAmount": 0,
+      "approvedNo": "<redacted>",
+      "approvedAt": "2026-10-14T07:33:48Z",
+      "cancelledAt": null,
+      "cashDetails": null,
+      "cardDetails": null,
+      "prepaidValueDetails": null,
+      "accountTransferDetails": null,
+      "easyPayDetails": null,
+      "externalDetails": null,
+      "pgDetails": null,
+      "cashReceipt": null,
+      "settlement": {
+        "settlementType": "ACQUIRER",
+        "settlementSubject": "하나카드"
+      },
+      "bundle": null,
+      "createdAt": "2026-10-14T07:33:49Z",
+      "updatedAt": "2026-10-14T07:33:49Z"
+    }
+  ],
+  "discounts": [],
+  "accruals": [],
+  "redemptions": [],
+  "chargePrice": {
+    "listPrice": 19000,
+    "discountAmount": 0,
+    "tipAmount": 0,
+    "serviceChargeAmount": 0,
+    "taxAmount": 1727,
+    "supplyAmount": 17273,
+    "taxExemptAmount": 0,
+    "totalAmount": 19000
+  }
+}
