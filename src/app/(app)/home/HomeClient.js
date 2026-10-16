@@ -7,6 +7,7 @@ import PageHeader from '@/components/PageHeader';
 import { formatRelative, formatCurrency, todayBoundary } from '@/lib/format';
 import { getProfileNames } from '@/app/_actions/names';
 import OrderSuggestionsCard from '@/components/OrderSuggestionsCard';
+import TrendPicksCard from '@/components/TrendPicksCard';
 import { todayKey, ymd } from '@/lib/date';
 import {
   Clock, FileText, Megaphone, Users, ChevronRight, Plus, Sparkles,
@@ -355,6 +356,9 @@ export default function HomeClient({
             onLoaded={({ count }) => setOrderCount(count)}
           />
         )}
+
+        {/* 이번 주 트렌드 픽 — 검색 추이 + 메뉴 개발 후보 */}
+        {currentWorkplaceId && <TrendPicksCard workplaceId={currentWorkplaceId} />}
 
         {/* Hero — 매출 + 인원/결재 */}
         <section className="stack stack-3 stagger">
