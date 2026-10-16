@@ -39,6 +39,9 @@ const SCHEMA = {
  */
 export async function generateTrendIdeas(ctx, deps = {}) {
   const client = deps.client ?? new Anthropic();
+  // 키워드는 입력 그대로 돌려받도록 enum 으로 고정 (변형되면 카드 행과 매칭이 끊김)
+  const schema = JSON.parse(JSON.stringify(SCHEMA));
+  schema.properties.picks.items.properties.keyword = { type: 'string', enum: ctx.trends.map((t) => t.keyword) };
   const system = [
     '당신은 한국 동네 카페·바의 메뉴 개발을 돕는 컨설턴트입니다.',
     '주어진 검색 트렌드와 매장 맥락만 근거로, 실제로 2주 안에 시험 출시할 수 있는 현실적인 메뉴 후보를 제안합니다.',
@@ -62,12 +65,13 @@ export async function generateTrendIdeas(ctx, deps = {}) {
 
   const res = await client.messages.create({
     model: IDEAS_MODEL,
-    max_tokens: 4000,
-    output_config: { effort: 'medium', format: { type: 'json_schema', schema: SCHEMA } },
+    max_tokens: 16000,
+    output_config: { effort: 'medium', format: { type: 'json_schema', schema } },
     system,
     messages: [{ role: 'user', content: user }],
   });
   if (res.stop_reason === 'refusal') throw new Error(`claude refusal: ${res.stop_details?.category ?? ''}`);
+  if (res.stop_reason === 'max_tokens') throw new Error('claude truncated (max_tokens)');
   const text = res.content.find((b) => b.type === 'text')?.text ?? '';
   const parsed = JSON.parse(text);
   return { picks: parsed.picks ?? [], model: res.model ?? IDEAS_MODEL };

@@ -52,8 +52,11 @@ export async function POST(request) {
 
   const today = kst(new Date());
   const thisWeek = weekStartKey(today);
-  const endDate = today;
-  const startDate = kst(new Date(Date.now() - WEEKS * 7 * 86400_000));
+  // 진행 중인 이번 주는 부분 집계라 시계열 끝이 꺼져 보인다 → 지난 일요일까지의 완전한 주 13개만 조회
+  const addDays = (key, n) => { const [y, m, d] = key.split('-').map(Number); const t = new Date(Date.UTC(y, m - 1, d + n)); return t.toISOString().slice(0, 10); };
+  const lastWeek = addDays(thisWeek, -7);          // 마지막 완전한 주의 월요일 (스냅샷 키)
+  const endDate = addDays(thisWeek, -1);           // 지난 일요일
+  const startDate = addDays(thisWeek, -WEEKS * 7); // 13주 전 월요일
 
   let series;
   try {
@@ -79,7 +82,7 @@ export async function POST(request) {
     const blogPosts = blogCounts[k.keyword] ?? null;
     const last = pts[pts.length - 1];
     if (last) {
-      snapshots.push({ keyword_id: k.id, week_start: thisWeek, search_index: Math.min(last.ratio, 999999.99), blog_posts: blogPosts, fetched_at: new Date().toISOString() });
+      snapshots.push({ keyword_id: k.id, week_start: lastWeek, search_index: Math.min(last.ratio, 999999.99), blog_posts: blogPosts, fetched_at: new Date().toISOString() });
     }
     scored.push({ keyword: k.keyword, group: k.group_name ?? '', series: ratios.slice(-WEEKS), blogPosts, ...(s ?? { recentAvg: 0, baseAvg: 0, changePct: null, score: 0 }) });
   }
@@ -88,26 +91,33 @@ export async function POST(request) {
     if (eSnap) console.error('trend_snapshots upsert', eSnap.message);
   }
   // 점수 상위 — 상승 중인 것 우선, 상승이 없으면 최근 평균 상위
-  const rising = scored.filter((x) => x.score > 0).sort((a, b) => b.score - a.score);
-  const fallback = scored.filter((x) => !(x.score > 0)).sort((a, b) => b.recentAvg - a.recentAvg);
+  const withData = scored.filter((x) => x.series.length >= 4 && x.recentAvg > 0);
+  const rising = withData.filter((x) => x.score > 0).sort((a, b) => b.score - a.score);
+  const fallback = withData.filter((x) => !(x.score > 0)).sort((a, b) => b.recentAvg - a.recentAvg);
   const picked = [...rising, ...fallback].slice(0, top);
 
   // 2. 매장별 맥락 + Claude
   let q = svc.from('workplaces').select('id, name').eq('pos_provider', 'toss').not('pos_store_code', 'is', null);
   if (body.workplaceId) q = q.eq('id', body.workplaceId);
-  const { data: wps } = await q;
+  const { data: wps, error: eWp } = await q;
+  if (eWp) return NextResponse.json({ error: `workplaces: ${eWp.message}` }, { status: 500 });
   const results = await Promise.all((wps ?? []).map(async (wp) => {
     const d90 = kst(new Date(Date.now() - 90 * 86400_000));
-    const [{ data: products }, { data: recipes }, { data: cats }] = await Promise.all([
+    const [{ data: products, error: eProd }, { data: recipes }, { data: barRows }] = await Promise.all([
       svc.rpc('pos_product_sales', { p_workplace_id: wp.id, p_from: d90, p_to: today }),
       svc.from('recipes').select('name').eq('active', true).or(`workplace_id.is.null,workplace_id.eq.${wp.id}`),
-      svc.from('pos_order_items').select('item_category').eq('workplace_id', wp.id).limit(500),
+      // 바 상품이 하나라도 있는지 — 카테고리로 직접 검색
+      svc.from('pos_order_items').select('item_category').eq('workplace_id', wp.id)
+        .or(['칵테일', '위스키', '스피리츠', '맥주', '와인', '하이볼', '주류'].map((w) => `item_category.ilike.%${w}%`).join(','))
+        .limit(1),
     ]);
+    if (eProd) return { workplace: wp.name, items: 0, ideas: 0, error: `pos_product_sales: ${eProd.message}` };
     const menu = (products ?? []).map((p) => p.item_title);
-    const hasBar = (cats ?? []).some((c) => isBarCategory(c.item_category));
+    const hasBar = (barRows ?? []).some((c) => isBarCategory(c.item_category));
     // 매장 내부 신호: 상품명에 키워드가 들어간 상품의 최근 90일 판매량
     const trends = picked.map((t) => {
-      const hits = (products ?? []).filter((p) => String(p.item_title).replace(/\s/g, '').includes(t.keyword.replace(/\s/g, '')));
+      const kw = t.keyword.replace(/\s/g, '');
+      const hits = kw.length >= 2 ? (products ?? []).filter((p) => String(p.item_title).replace(/\s/g, '').includes(kw)) : [];
       const qty = hits.reduce((a, p) => a + (Number(p.qty) || 0), 0);
       return { keyword: t.keyword, group: t.group, changePct: t.changePct, recentAvg: t.recentAvg, blogPosts: t.blogPosts,
         internal: hits.length ? `${hits.map((h) => h.item_title).slice(0, 2).join(', ')} 최근 90일 ${qty}개 판매` : null };

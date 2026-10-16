@@ -5,10 +5,12 @@ import { useEffect, useState } from 'react';
 import { Sparkles, ChevronDown, Coffee, Wine, TrendingUp, TrendingDown } from 'lucide-react';
 import { getTrendPicks } from '@/app/(app)/home/actions';
 
+// 기준 주(월요일 시작)를 날짜로 — "10.5~10.11 기준"
 function fmtWeek(weekStart) {
   if (!weekStart) return '';
-  const d = new Date(weekStart);
-  return `${d.getMonth() + 1}월 ${Math.ceil(d.getDate() / 7)}주`;
+  const [y, m, d] = String(weekStart).split('-').map(Number);
+  const a = new Date(Date.UTC(y, m - 1, d)), b = new Date(Date.UTC(y, m - 1, d + 6));
+  return `${a.getUTCMonth() + 1}.${a.getUTCDate()}~${b.getUTCMonth() + 1}.${b.getUTCDate()} 기준`;
 }
 
 function fmtCount(n) {
@@ -39,8 +41,8 @@ function IdeaList({ icon: Icon, label, ideas }) {
         <Icon size={12} /> {label}
       </div>
       <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'grid', gap: 6 }}>
-        {ideas.map((it) => (
-          <li key={it.name} style={{ padding: '8px 10px', background: 'var(--surface-soft)', borderRadius: 10 }}>
+        {ideas.map((it, i) => (
+          <li key={`${i}-${it.name}`} style={{ padding: '8px 10px', background: 'var(--surface-soft)', borderRadius: 10 }}>
             <div style={{ fontSize: 13, fontWeight: 700 }}>{it.name}</div>
             <div className="text-secondary" style={{ fontSize: 12, marginTop: 2, lineHeight: 1.45 }}>{it.why}</div>
           </li>
@@ -52,7 +54,7 @@ function IdeaList({ icon: Icon, label, ideas }) {
 
 function TrendRow({ item, open, onToggle }) {
   const rising = item.change_pct == null || item.change_pct >= 0;
-  const change = item.change_pct == null ? '신규' : `${item.change_pct >= 0 ? '+' : ''}${item.change_pct}%`;
+  const change = item.change_pct == null ? '새로 떠오름' : `${item.change_pct >= 0 ? '+' : ''}${item.change_pct}%`;
   return (
     <li style={{ borderTop: '1px solid var(--border)' }}>
       <button
