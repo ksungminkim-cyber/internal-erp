@@ -189,6 +189,9 @@ export default function ApprovalDetailPage({ params }) {
             <div style={{ flex: 1, minWidth: 0 }}>
               <div className="h4" style={{ color: 'var(--text)' }}>{req.drafter?.name || '—'}</div>
               <div className="text-muted" style={{ fontSize: 12 }}>{formatDateTime(req.submitted_at)}</div>
+              {req.edit_count > 0 && (
+                <div className="text-muted" style={{ fontSize: 11, marginTop: 2 }}>수정 {req.edit_count}회 · 마지막 {formatDateTime(req.edited_at)} · 결재 처음부터 다시 진행</div>
+              )}
             </div>
             <span className={`tag ${meta.tag} lg dot`}>
               <StatusIcon size={11} /> {meta.label}
@@ -418,9 +421,23 @@ export default function ApprovalDetailPage({ params }) {
         )}
 
         {canCancel && (
-          <button type="button" className="btn btn-outline btn-lg" onClick={cancelRequest} disabled={acting} style={{ color: 'var(--danger)' }}>
-            기안 취소
-          </button>
+          <div style={{ display: 'flex', gap: 10 }}>
+            <Link
+              href={`/approvals/new?edit=${req.id}`}
+              className="btn btn-primary btn-lg"
+              style={{ textDecoration: 'none', justifyContent: 'center', flex: 2 }}
+            >
+              ✎ 기안 수정
+            </Link>
+            <button type="button" className="btn btn-outline btn-lg" onClick={cancelRequest} disabled={acting} style={{ color: 'var(--danger)', flex: 1 }}>
+              기안 취소
+            </button>
+          </div>
+        )}
+        {canCancel && (
+          <div className="text-muted" style={{ fontSize: 11, marginTop: -6 }}>
+            수정하면 지금까지의 승인은 무효가 되고 결재를 처음부터 다시 받습니다.
+          </div>
         )}
 
         {/* 반려된 본인 기안 → 재기안 (revision_of로 연결) */}

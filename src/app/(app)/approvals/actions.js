@@ -476,3 +476,80 @@ export async function getApproverCandidates(workplaceId) {
 
   return list;
 }
+
+/**
+ * 진행 중 기안 수정 — 기안자만, status = pending.
+ * 제목·본문·항목·결재선을 교체하고 결재 단계를 모두 다시 만든다(처음부터 재결재, 기존 승인 무효).
+ * 첨부는 기존 것을 유지하고 새 파일만 추가. 결재 단계 insert 트리거가 첫 결재자에게 알림을 보낸다.
+ */
+export async function updateApproval({ requestId, title, body, items = [], approverIds = [], attachments = [] }) {
+  const authClient = await createServerClient();
+  const { data: { user } } = await authClient.auth.getUser();
+  if (!user) return { error: '로그인이 필요합니다.' };
+  if (!requestId) return { error: '결재 ID가 누락되었습니다.' };
+  if (!title?.trim()) return { error: '제목을 입력해주세요.' };
+  if (!approverIds.length) return { error: '결재자를 최소 1명 지정해주세요.' };
+
+  const svc = getServiceClient();
+  const { data: reqRow } = await svc
+    .from('approval_requests')
+    .select('id, drafter_id, status, edit_count')
+    .eq('id', requestId)
+    .maybeSingle();
+  if (!reqRow) return { error: '결재를 찾을 수 없습니다.' };
+  if (reqRow.drafter_id !== user.id) return { error: '기안자만 수정할 수 있습니다.' };
+  if (reqRow.status !== 'pending') return { error: '진행 중인 결재만 수정할 수 있습니다.' };
+
+  const total = items.reduce((sum, it) => sum + (Number(it.amount) || 0), 0);
+  const now = new Date().toISOString();
+
+  // 1) 본문·합계·수정 기록. current_step 은 1로 되돌린다
+  const { error: e1 } = await svc.from('approval_requests').update({
+    title: title.trim(),
+    body: body?.trim() || null,
+    total_amount: total,
+    current_step: 1,
+    edit_count: (reqRow.edit_count ?? 0) + 1,
+    edited_at: now,
+    updated_at: now,
+  }).eq('id', requestId);
+  if (e1) return { error: e1.message };
+
+  // 2) 항목 교체
+  const { error: e2 } = await svc.from('expense_items').delete().eq('request_id', requestId);
+  if (e2) return { error: e2.message };
+  if (items.length) {
+    const { error: e3 } = await svc.from('expense_items').insert(
+      items.map((it) => ({
+        request_id: requestId,
+        description: (it.description || '').trim(),
+        category: it.category,
+        amount: Number(it.amount) || 0,
+        vendor: it.vendor?.trim() || null,
+        product_url: it.product_url?.trim() || null,
+        kind: it.kind || 'opex',
+      }))
+    );
+    if (e3) return { error: e3.message };
+  }
+
+  // 3) 결재 단계 초기화 — 삭제 후 재생성 (트리거가 1단계 결재자에게 '결재 요청' 알림)
+  const { error: e4 } = await svc.from('approval_steps').delete().eq('request_id', requestId);
+  if (e4) return { error: e4.message };
+  const { error: e5 } = await svc.from('approval_steps').insert(
+    approverIds.map((uid, i) => ({ request_id: requestId, step_order: i + 1, approver_id: uid, status: 'waiting' }))
+  );
+  if (e5) return { error: e5.message };
+
+  // 4) 새 첨부만 추가
+  if (attachments.length) {
+    await svc.from('approval_attachments').insert(
+      attachments.map((a) => ({
+        request_id: requestId, file_path: a.path, file_name: a.name,
+        mime_type: a.type || null, size_bytes: a.size || null, uploaded_by: user.id,
+      }))
+    );
+  }
+
+  return { ok: true, requestId };
+}

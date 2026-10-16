@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useApp } from '@/context/AppContext';
-import { getApproverCandidates, submitApproval } from '../actions';
+import { getApproverCandidates, submitApproval, updateApproval } from '../actions';
 import PageHeader from '@/components/PageHeader';
 import { formatCurrency } from '@/lib/format';
 import { safeMutate } from '@/lib/safeMutate';
@@ -41,6 +41,7 @@ export default function NewApprovalPage() {
   const searchParams = useSearchParams();
   const revisionOfId = searchParams.get('revision_of');
   const prefill = searchParams.get('prefill') === '1'; // 발주 권장 카드에서 넘어온 초안
+  const editId = searchParams.get('edit'); // 진행 중 기안 수정 모드
   const { user, profile, currentWorkplaceId, supabase } = useApp();
   const drafterIsExec = profile?.is_executive === true;
 
@@ -53,6 +54,8 @@ export default function NewApprovalPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
   const [revisionInfo, setRevisionInfo] = useState(null);
+  const [editInfo, setEditInfo] = useState(null);            // { id, editCount, approverIds, attachmentCount }
+  const [editError, setEditError] = useState(null);
 
   // 재기안 모드: 이전 결재 데이터 미리 채우기
   useEffect(() => {
@@ -83,6 +86,31 @@ export default function NewApprovalPage() {
     })();
   }, [revisionOfId, user, supabase]);
 
+  // 수정 모드: 진행 중 본인 기안 불러오기 (결재선은 coworkers 가 로드된 뒤 아래 effect 에서 맞춤)
+  useEffect(() => {
+    if (!editId || !user) return;
+    (async () => {
+      const { data: prev } = await supabase
+        .from('approval_requests')
+        .select('id, title, body, status, drafter_id, edit_count, expense_items(*), approval_steps(approver_id, step_order), approval_attachments(id)')
+        .eq('id', editId)
+        .maybeSingle();
+      if (!prev) { setEditError('수정할 기안을 찾을 수 없어요.'); return; }
+      if (prev.drafter_id !== user.id) { setEditError('기안자만 수정할 수 있어요.'); return; }
+      if (prev.status !== 'pending') { setEditError('진행 중인 기안만 수정할 수 있어요.'); return; }
+      setTitle(prev.title || '');
+      setBody(prev.body || '');
+      if (prev.expense_items?.length) {
+        setItems(prev.expense_items.map((it) => ({
+          description: it.description || '', category: it.category || '식자재',
+          amount: String(it.amount ?? ''), vendor: it.vendor || '', product_url: it.product_url || '',
+        })));
+      }
+      const approverIds = [...(prev.approval_steps ?? [])].sort((a, b) => a.step_order - b.step_order).map((s) => s.approver_id);
+      setEditInfo({ id: prev.id, editCount: prev.edit_count ?? 0, approverIds, attachmentCount: prev.approval_attachments?.length ?? 0 });
+    })();
+  }, [editId, user, supabase]);
+
   // 발주 권장 카드가 sessionStorage 에 넣어 둔 초안 (제목·본문·항목). 한 번 쓰고 지운다
   useEffect(() => {
     if (!prefill) return;
@@ -111,13 +139,19 @@ export default function NewApprovalPage() {
       // 서버 액션으로 결재자 후보 조회 (서비스 롤 — 본사 직원 프로필 RLS 우회)
       try {
         const list = await getApproverCandidates(currentWorkplaceId);
-        if (!cancelled) setCoworkers(list);
+        if (!cancelled) {
+          setCoworkers(list);
+          // 수정 모드면 기존 결재선을 후보 목록에서 찾아 복원 (후보에서 빠진 사람은 제외)
+          if (editInfo?.approverIds?.length) {
+            setApprovers(editInfo.approverIds.map((uid) => list.find((c) => c.user_id === uid)).filter(Boolean));
+          }
+        }
       } catch (e) {
         if (!cancelled) setCoworkers([]);
       }
     })();
     return () => { cancelled = true; };
-  }, [currentWorkplaceId, user]);
+  }, [currentWorkplaceId, user, editInfo]);
 
   function updateItem(idx, key, value) {
     setItems((prev) => prev.map((it, i) => (i === idx ? { ...it, [key]: value } : it)));
@@ -161,8 +195,18 @@ export default function NewApprovalPage() {
         uploaded.push({ path, name: f.name, type: f.type, size: f.size });
       }
 
-      // 결재 본문·항목·결재선·첨부는 서버액션(서비스롤)으로 일괄 생성
-      const res = await submitApproval({
+      // 결재 본문·항목·결재선·첨부는 서버액션(서비스롤)으로 일괄 생성 (수정 모드면 같은 기안을 갱신)
+      const res = editInfo ? await updateApproval({
+        requestId: editInfo.id,
+        title,
+        body,
+        items: items.map((it) => ({
+          description: it.description, category: it.category, amount: parseFloat(it.amount) || 0,
+          vendor: it.vendor, product_url: it.product_url, kind: getKindByCategory(it.category),
+        })),
+        approverIds: approvers.map((a) => a.user_id),
+        attachments: uploaded,
+      }) : await submitApproval({
         workplaceId: currentWorkplaceId,
         title,
         body,
@@ -192,8 +236,8 @@ export default function NewApprovalPage() {
   return (
     <>
       <PageHeader
-        title={revisionInfo ? `재기안 (${revisionInfo.count}회차)` : '새 기안'}
-        subtitle={revisionInfo ? '반려된 내용을 수정해 다시 결재 올리기' : '지출결의서를 작성해요'}
+        title={editInfo ? '기안 수정' : revisionInfo ? `재기안 (${revisionInfo.count}회차)` : '새 기안'}
+        subtitle={editInfo ? '저장하면 결재를 처음부터 다시 받습니다' : revisionInfo ? '반려된 내용을 수정해 다시 결재 올리기' : '지출결의서를 작성해요'}
         hideSwitcher
         action={
           <button onClick={() => router.back()} className="btn btn-ghost btn-icon" aria-label="뒤로">
@@ -203,6 +247,16 @@ export default function NewApprovalPage() {
       />
 
       <form onSubmit={submit} className="fade-in page-main" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        {editError && (
+          <div className="card" style={{ background: 'var(--danger-soft)', color: 'var(--danger)', boxShadow: 'none', fontSize: 13 }}>{editError}</div>
+        )}
+        {editInfo && !editError && (
+          <div className="card" style={{ background: 'var(--warning-soft)', boxShadow: 'none', fontSize: 12.5, lineHeight: 1.5 }}>
+            진행 중인 기안을 수정합니다. 저장하면 지금까지의 승인은 무효가 되고 결재자들이 처음부터 다시 결재합니다.
+            {editInfo.attachmentCount > 0 && ` 기존 첨부 ${editInfo.attachmentCount}개는 유지되고, 새 파일만 추가됩니다.`}
+            {editInfo.editCount > 0 && ` (지금까지 ${editInfo.editCount}회 수정됨)`}
+          </div>
+        )}
         <section className="card">
           <label className="label">제목</label>
           <input className="input" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="예) 5월 4주차 식자재 발주" required />
@@ -416,7 +470,7 @@ export default function NewApprovalPage() {
             취소
           </button>
           <button type="submit" className="btn btn-primary btn-lg" disabled={submitting} style={{ flex: 2 }}>
-            {submitting ? '제출 중...' : '결재 올리기'}
+            {submitting ? (editInfo ? '저장 중...' : '제출 중...') : (editInfo ? '수정 저장 후 재결재' : '결재 올리기')}
           </button>
         </div>
       </form>
