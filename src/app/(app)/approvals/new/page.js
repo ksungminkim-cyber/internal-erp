@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useApp } from '@/context/AppContext';
-import { getApproverCandidates, submitApproval, updateApproval } from '../actions';
+import { getApproverCandidates, submitApproval, updateApproval, getApprovalDetail } from '../actions';
 import PageHeader from '@/components/PageHeader';
 import { formatCurrency } from '@/lib/format';
 import { safeMutate } from '@/lib/safeMutate';
@@ -89,27 +89,35 @@ export default function NewApprovalPage() {
   // 수정 모드: 진행 중 본인 기안 불러오기 (결재선은 coworkers 가 로드된 뒤 아래 effect 에서 맞춤)
   useEffect(() => {
     if (!editId || !user) return;
+    let cancelled = false;
     (async () => {
-      const { data: prev } = await supabase
-        .from('approval_requests')
-        .select('id, title, body, status, drafter_id, edit_count, expense_items(*), approval_steps(approver_id, step_order), approval_attachments(id)')
-        .eq('id', editId)
-        .maybeSingle();
+      // 서비스롤 조회 (상세 페이지와 동일 경로 — 기안자 본인은 RLS 와 무관하게 읽을 수 있어야 함)
+      const res = await getApprovalDetail(editId).catch(() => null);
+      if (cancelled) return;
+      const prev = res?.request;
       if (!prev) { setEditError('수정할 기안을 찾을 수 없어요.'); return; }
       if (prev.drafter_id !== user.id) { setEditError('기안자만 수정할 수 있어요.'); return; }
       if (prev.status !== 'pending') { setEditError('진행 중인 기안만 수정할 수 있어요.'); return; }
+      if (prev.doc_type !== 'expense') { setEditError('지출결의서만 수정할 수 있어요.'); return; }
       setTitle(prev.title || '');
       setBody(prev.body || '');
-      if (prev.expense_items?.length) {
-        setItems(prev.expense_items.map((it) => ({
+      if (res.items?.length) {
+        setItems(res.items.map((it) => ({
           description: it.description || '', category: it.category || '식자재',
           amount: String(it.amount ?? ''), vendor: it.vendor || '', product_url: it.product_url || '',
         })));
       }
-      const approverIds = [...(prev.approval_steps ?? [])].sort((a, b) => a.step_order - b.step_order).map((s) => s.approver_id);
-      setEditInfo({ id: prev.id, editCount: prev.edit_count ?? 0, approverIds, attachmentCount: prev.approval_attachments?.length ?? 0 });
+      const approverIds = [...(res.steps ?? [])].sort((a, b) => a.step_order - b.step_order).map((s) => s.approver_id);
+      setEditInfo({
+        id: prev.id, workplaceId: prev.workplace_id, editCount: prev.edit_count ?? 0,
+        approverIds, attachmentCount: res.attachments?.length ?? 0,
+      });
     })();
-  }, [editId, user, supabase]);
+    return () => { cancelled = true; };
+  }, [editId, user]);
+
+  // 결재선 후보·영수증 경로는 기안이 속한 매장 기준 (본사가 다른 매장을 보고 있어도 원래 매장 유지)
+  const targetWorkplaceId = editInfo?.workplaceId ?? currentWorkplaceId;
 
   // 발주 권장 카드가 sessionStorage 에 넣어 둔 초안 (제목·본문·항목). 한 번 쓰고 지운다
   useEffect(() => {
@@ -135,10 +143,10 @@ export default function NewApprovalPage() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      if (!currentWorkplaceId || !user) return;
+      if (!targetWorkplaceId || !user) return;
       // 서버 액션으로 결재자 후보 조회 (서비스 롤 — 본사 직원 프로필 RLS 우회)
       try {
-        const list = await getApproverCandidates(currentWorkplaceId);
+        const list = await getApproverCandidates(targetWorkplaceId);
         if (!cancelled) {
           setCoworkers(list);
           // 수정 모드면 기존 결재선을 후보 목록에서 찾아 복원 (후보에서 빠진 사람은 제외)
@@ -151,7 +159,7 @@ export default function NewApprovalPage() {
       }
     })();
     return () => { cancelled = true; };
-  }, [currentWorkplaceId, user, editInfo]);
+  }, [targetWorkplaceId, user, editInfo]);
 
   function updateItem(idx, key, value) {
     setItems((prev) => prev.map((it, i) => (i === idx ? { ...it, [key]: value } : it)));
@@ -180,6 +188,7 @@ export default function NewApprovalPage() {
     if (!title.trim()) return setError('제목을 입력해주세요.');
     if (items.some((it) => !it.description.trim() || !it.amount)) return setError('항목을 모두 입력해주세요.');
     if (approvers.length === 0) return setError('결재자를 최소 1명 지정해주세요.');
+    if (editId && !editInfo) return setError('기안 정보를 불러오지 못했어요. 새로고침 후 다시 시도해주세요.');
     if (!drafterIsExec && !approvers[approvers.length - 1].isExecutive) {
       return setError('결재선의 마지막 단계는 임원(본사 대표)이어야 합니다.');
     }
@@ -189,7 +198,7 @@ export default function NewApprovalPage() {
       // 영수증 파일은 클라이언트에서 storage 업로드 후 경로만 서버액션에 전달
       const uploaded = [];
       for (const f of files) {
-        const path = `${currentWorkplaceId}/${Date.now()}_${f.name}`;
+        const path = `${targetWorkplaceId}/${Date.now()}_${f.name}`;
         const { error: upErr } = await safeMutate(supabase.storage.from('receipts').upload(path, f, { contentType: f.type }), 30000);
         if (upErr) { console.warn('upload failed', upErr); continue; }
         uploaded.push({ path, name: f.name, type: f.type, size: f.size });
@@ -469,7 +478,7 @@ export default function NewApprovalPage() {
           <button type="button" className="btn btn-outline btn-lg" onClick={() => router.back()} style={{ flex: 1 }}>
             취소
           </button>
-          <button type="submit" className="btn btn-primary btn-lg" disabled={submitting} style={{ flex: 2 }}>
+          <button type="submit" className="btn btn-primary btn-lg" disabled={submitting || (!!editId && !editInfo)} style={{ flex: 2 }}>
             {submitting ? (editInfo ? '저장 중...' : '제출 중...') : (editInfo ? '수정 저장 후 재결재' : '결재 올리기')}
           </button>
         </div>

@@ -161,6 +161,7 @@ export default function ApprovalDetailPage({ params }) {
   const myStep = steps.find((s) => s.step_order === req.current_step && s.approver_id === user?.id && s.status === 'waiting');
   const canAct = req.status === 'pending' && !!myStep;
   const canCancel = req.status === 'pending' && req.drafter_id === user?.id;
+  const canEdit = canCancel && req.doc_type === 'expense'; // 스케줄·마감 등은 수정 폼이 없음
 
   return (
     <>
@@ -422,19 +423,21 @@ export default function ApprovalDetailPage({ params }) {
 
         {canCancel && (
           <div style={{ display: 'flex', gap: 10 }}>
-            <Link
-              href={`/approvals/new?edit=${req.id}`}
-              className="btn btn-primary btn-lg"
-              style={{ textDecoration: 'none', justifyContent: 'center', flex: 2 }}
-            >
-              ✎ 기안 수정
-            </Link>
+            {canEdit && (
+              <Link
+                href={`/approvals/new?edit=${req.id}`}
+                className="btn btn-primary btn-lg"
+                style={{ textDecoration: 'none', justifyContent: 'center', flex: 2 }}
+              >
+                ✎ 기안 수정
+              </Link>
+            )}
             <button type="button" className="btn btn-outline btn-lg" onClick={cancelRequest} disabled={acting} style={{ color: 'var(--danger)', flex: 1 }}>
               기안 취소
             </button>
           </div>
         )}
-        {canCancel && (
+        {canEdit && (
           <div className="text-muted" style={{ fontSize: 11, marginTop: -6 }}>
             수정하면 지금까지의 승인은 무효가 되고 결재를 처음부터 다시 받습니다.
           </div>

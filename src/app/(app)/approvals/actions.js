@@ -493,18 +493,30 @@ export async function updateApproval({ requestId, title, body, items = [], appro
   const svc = getServiceClient();
   const { data: reqRow } = await svc
     .from('approval_requests')
-    .select('id, drafter_id, status, edit_count')
+    .select('id, drafter_id, status, edit_count, doc_type')
     .eq('id', requestId)
     .maybeSingle();
   if (!reqRow) return { error: '결재를 찾을 수 없습니다.' };
   if (reqRow.drafter_id !== user.id) return { error: '기안자만 수정할 수 있습니다.' };
   if (reqRow.status !== 'pending') return { error: '진행 중인 결재만 수정할 수 있습니다.' };
+  if (reqRow.doc_type !== 'expense') return { error: '지출결의서만 수정할 수 있습니다.' };
+
+  // 마지막 결재자는 임원이어야 함 (기안자가 임원이면 예외) — DB 제약 트리거와 같은 규칙을 쓰기 전에 검증
+  const { data: execProfs } = await svc
+    .from('profiles')
+    .select('user_id, is_executive')
+    .in('user_id', [user.id, approverIds[approverIds.length - 1]]);
+  const isExec = (uid) => (execProfs ?? []).some((p) => p.user_id === uid && p.is_executive === true);
+  if (!isExec(user.id) && !isExec(approverIds[approverIds.length - 1])) {
+    return { error: '결재선의 마지막 단계는 임원(본사 대표)이어야 합니다.' };
+  }
 
   const total = items.reduce((sum, it) => sum + (Number(it.amount) || 0), 0);
   const now = new Date().toISOString();
 
-  // 1) 본문·합계·수정 기록. current_step 은 1로 되돌린다
-  const { error: e1 } = await svc.from('approval_requests').update({
+  // 1) 본문·합계·수정 기록. current_step 은 1로 되돌린다.
+  //    status = pending 을 조건에 넣어, 그 사이 승인/반려가 끝난 기안을 덮어쓰지 않는다
+  const { data: updated, error: e1 } = await svc.from('approval_requests').update({
     title: title.trim(),
     body: body?.trim() || null,
     total_amount: total,
@@ -512,8 +524,9 @@ export async function updateApproval({ requestId, title, body, items = [], appro
     edit_count: (reqRow.edit_count ?? 0) + 1,
     edited_at: now,
     updated_at: now,
-  }).eq('id', requestId);
+  }).eq('id', requestId).eq('status', 'pending').select('id');
   if (e1) return { error: e1.message };
+  if (!updated?.length) return { error: '결재가 이미 완료되어 수정할 수 없습니다.' };
 
   // 2) 항목 교체
   const { error: e2 } = await svc.from('expense_items').delete().eq('request_id', requestId);
@@ -540,6 +553,8 @@ export async function updateApproval({ requestId, title, body, items = [], appro
     approverIds.map((uid, i) => ({ request_id: requestId, step_order: i + 1, approver_id: uid, status: 'waiting' }))
   );
   if (e5) return { error: e5.message };
+  // 단계 교체 중 1단계 승인이 끼어들어 current_step 이 올라갔을 수 있으니 다시 1로
+  await svc.from('approval_requests').update({ current_step: 1 }).eq('id', requestId).eq('status', 'pending');
 
   // 4) 새 첨부만 추가
   if (attachments.length) {
