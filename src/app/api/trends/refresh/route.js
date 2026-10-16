@@ -14,8 +14,8 @@ import { isBarCategory } from '@/lib/salesKpi';
 //   2) 상승률 점수 상위 N(기본 5) → 매장별 메뉴 맥락과 함께 Claude 에 → trend_picks
 // ─────────────────────────────────────────────────────────────────────────
 
-// Vercel(Hobby, Fluid compute) 함수 상한 300초. 트렌드 13회 + 블로그 50회(동시 5) + Claude 매장별 1회 ≈ 30~60초
-export const maxDuration = 300;
+// Vercel Hobby 함수 상한: Fluid compute 꺼짐 60초 / 켜짐 300초. 배포 호환을 위해 60초로 두고 실행은 30초 안팎으로 유지
+export const maxDuration = 60;
 
 const ANCHOR = '카페';
 const BLOG_CONCURRENCY = 5;
