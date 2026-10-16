@@ -14,7 +14,11 @@ import { isBarCategory } from '@/lib/salesKpi';
 //   2) 상승률 점수 상위 N(기본 5) → 매장별 메뉴 맥락과 함께 Claude 에 → trend_picks
 // ─────────────────────────────────────────────────────────────────────────
 
+// Vercel(Hobby, Fluid compute) 함수 상한 300초. 트렌드 13회 + 블로그 50회(동시 5) + Claude 매장별 1회 ≈ 30~60초
+export const maxDuration = 300;
+
 const ANCHOR = '카페';
+const BLOG_CONCURRENCY = 5;
 const WEEKS = 13;
 const TOP_DEFAULT = 5;
 // 블로그 게시물 수는 동음이의어(밤=night, 감=feeling)로 부풀려지므로 그룹별 접미어를 붙여 센다
@@ -58,21 +62,30 @@ export async function POST(request) {
     return NextResponse.json({ error: `naver trend: ${String(err?.message ?? err).slice(0, 200)}` }, { status: 502 });
   }
 
+  // 블로그 게시물 수 — 동시 5개씩
+  const blogCounts = {};
+  for (let i = 0; i < keywords.length; i += BLOG_CONCURRENCY) {
+    await Promise.all(keywords.slice(i, i + BLOG_CONCURRENCY).map(async (k) => {
+      try { blogCounts[k.keyword] = await fetchBlogCount(`${k.keyword} ${BLOG_SUFFIX[k.group_name] ?? '카페'}`); } catch { blogCounts[k.keyword] = null; }
+    }));
+  }
+
   const scored = [];
+  const snapshots = [];
   for (const k of keywords) {
     const pts = series[k.keyword] ?? [];
     const ratios = pts.map((p) => p.ratio);
     const s = scoreTrend(ratios);
-    let blogPosts = null;
-    try { blogPosts = await fetchBlogCount(`${k.keyword} ${BLOG_SUFFIX[k.group_name] ?? '카페'}`); } catch { blogPosts = null; }
-    // 스냅샷: 이번 주 행만 upsert (지수는 마지막 포인트)
+    const blogPosts = blogCounts[k.keyword] ?? null;
     const last = pts[pts.length - 1];
     if (last) {
-      await svc.from('trend_snapshots').upsert({
-        keyword_id: k.id, week_start: thisWeek, search_index: last.ratio, blog_posts: blogPosts, fetched_at: new Date().toISOString(),
-      }, { onConflict: 'keyword_id,week_start' });
+      snapshots.push({ keyword_id: k.id, week_start: thisWeek, search_index: Math.min(last.ratio, 999999.99), blog_posts: blogPosts, fetched_at: new Date().toISOString() });
     }
     scored.push({ keyword: k.keyword, group: k.group_name ?? '', series: ratios.slice(-WEEKS), blogPosts, ...(s ?? { recentAvg: 0, baseAvg: 0, changePct: null, score: 0 }) });
+  }
+  if (snapshots.length) {
+    const { error: eSnap } = await svc.from('trend_snapshots').upsert(snapshots, { onConflict: 'keyword_id,week_start' });
+    if (eSnap) console.error('trend_snapshots upsert', eSnap.message);
   }
   // 점수 상위 — 상승 중인 것 우선, 상승이 없으면 최근 평균 상위
   const rising = scored.filter((x) => x.score > 0).sort((a, b) => b.score - a.score);
@@ -83,8 +96,7 @@ export async function POST(request) {
   let q = svc.from('workplaces').select('id, name').eq('pos_provider', 'toss').not('pos_store_code', 'is', null);
   if (body.workplaceId) q = q.eq('id', body.workplaceId);
   const { data: wps } = await q;
-  const results = [];
-  for (const wp of wps ?? []) {
+  const results = await Promise.all((wps ?? []).map(async (wp) => {
     const d90 = kst(new Date(Date.now() - 90 * 86400_000));
     const [{ data: products }, { data: recipes }, { data: cats }] = await Promise.all([
       svc.rpc('pos_product_sales', { p_workplace_id: wp.id, p_from: d90, p_to: today }),
@@ -118,8 +130,8 @@ export async function POST(request) {
     const { error: e2 } = await svc.from('trend_picks').upsert({
       workplace_id: wp.id, week_start: thisWeek, generated_at: new Date().toISOString(), items, model: ideas.model,
     }, { onConflict: 'workplace_id,week_start' });
-    results.push({ workplace: wp.name, items: items.length, ideas: (ideas.picks ?? []).length, error: e2?.message ?? null });
-  }
+    return { workplace: wp.name, items: items.length, ideas: (ideas.picks ?? []).length, error: e2?.message ?? null };
+  }));
 
   return NextResponse.json({ ok: results.every((r) => !r.error), week: thisWeek, keywords: keywords.length, top: picked.map((p) => `${p.keyword} ${p.changePct == null ? '신규' : p.changePct + '%'}`), results });
 }
