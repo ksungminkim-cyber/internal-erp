@@ -3,12 +3,13 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useApp } from '@/context/AppContext';
+import { useFeedback } from '@/context/FeedbackContext';
 import PageHeader from '@/components/PageHeader';
 import Avatar from '@/components/Avatar';
 import BottomSheet from '@/components/BottomSheet';
 import { formatRelative } from '@/lib/format';
-import { Plus, ChevronLeft, X, CheckCircle2, Package, Wrench, Users, Coins, Sparkles, ClipboardCheck } from 'lucide-react';
-import { getHandoverNotes, toggleHandoverResolved, createHandoverNote } from './actions';
+import { Plus, ChevronLeft, X, CheckCircle2, Package, Wrench, Users, Coins, Sparkles, ClipboardCheck, Edit3, Trash2 } from 'lucide-react';
+import { getHandoverNotes, toggleHandoverResolved, createHandoverNote, updateHandoverNote, deleteHandoverNote } from './actions';
 
 const SHIFT_LABEL = { open: '오픈', mid: '미들', close: '마감' };
 const SHIFT_TAG   = { open: 'tag-mint', mid: 'tag-accent', close: 'tag-violet' };
@@ -23,9 +24,11 @@ const FLAG_META = {
 
 export default function HandoverClient({ initialItems, ssrWorkplaceId, userId }) {
   const router = useRouter();
-  const { user, currentWorkplaceId, supabase } = useApp();
+  const { user, currentWorkplaceId, supabase, isManager } = useApp();
+  const { toast, confirmDialog } = useFeedback();
   const [items, setItems] = useState(initialItems ?? []);
   const [composing, setComposing] = useState(false);
+  const [editing, setEditing] = useState(null); // 수정 중인 노트
   const [filter, setFilter] = useState('all');
 
   const uid = user?.id ?? userId;
@@ -76,6 +79,14 @@ export default function HandoverClient({ initialItems, ssrWorkplaceId, userId })
     }
   }
 
+  async function removeNote(note) {
+    if (!(await confirmDialog({ message: '이 인수인계를 삭제하시겠습니까?', confirmLabel: '삭제', danger: true }))) return;
+    const res = await deleteHandoverNote(note.id);
+    if (res?.error) return toast(res.error, 'error');
+    toast('삭제했어요', 'success');
+    await load();
+  }
+
   const filtered = filter === 'unresolved' ? items.filter((i) => !i.resolved) : items;
 
   return (
@@ -106,7 +117,14 @@ export default function HandoverClient({ initialItems, ssrWorkplaceId, userId })
         ) : (
           <div className="stack stack-3 stagger">
             {filtered.map((n) => (
-              <HandoverCard key={n.id} note={n} onToggle={() => toggleResolved(n)} canManage={uid === n.author_id} />
+              <HandoverCard
+                key={n.id}
+                note={n}
+                onToggle={() => toggleResolved(n)}
+                canManage={uid === n.author_id || isManager}
+                onEdit={() => setEditing(n)}
+                onDelete={() => removeNote(n)}
+              />
             ))}
           </div>
         )}
@@ -125,11 +143,20 @@ export default function HandoverClient({ initialItems, ssrWorkplaceId, userId })
           onSaved={() => { setComposing(false); load(); }}
         />
       )}
+
+      {editing && (
+        <HandoverComposer
+          key={editing.id}
+          note={editing}
+          onClose={() => setEditing(null)}
+          onSaved={() => { setEditing(null); toast('수정했어요', 'success'); load(); }}
+        />
+      )}
     </>
   );
 }
 
-function HandoverCard({ note, onToggle, canManage }) {
+function HandoverCard({ note, onToggle, canManage, onEdit, onDelete }) {
   return (
     <article
       className="card"
@@ -170,7 +197,18 @@ function HandoverCard({ note, onToggle, canManage }) {
         </div>
       )}
 
-      <div style={{ marginTop: 14, display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+      <div style={{ marginTop: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
+        {canManage && (
+          <>
+            <button type="button" className="btn btn-ghost btn-sm" onClick={onEdit} aria-label="인수인계 수정">
+              <Edit3 size={14} /> 수정
+            </button>
+            <button type="button" className="btn btn-ghost btn-sm" onClick={onDelete} aria-label="인수인계 삭제" style={{ color: 'var(--danger)' }}>
+              <Trash2 size={14} /> 삭제
+            </button>
+          </>
+        )}
+        <div style={{ flex: 1 }} />
         <button
           type="button"
           className={`btn ${note.resolved ? 'btn-outline' : 'btn-success'} btn-sm`}
@@ -184,10 +222,11 @@ function HandoverCard({ note, onToggle, canManage }) {
   );
 }
 
-function HandoverComposer({ supabase, userId, workplaceId, onClose, onSaved }) {
-  const [shiftType, setShiftType] = useState('close');
-  const [content, setContent] = useState('');
-  const [flags, setFlags] = useState([]);
+// note 가 있으면 수정 모드 (시프트·내용·플래그 프리필, 저장 시 updateHandoverNote)
+function HandoverComposer({ supabase, userId, workplaceId, note = null, onClose, onSaved }) {
+  const [shiftType, setShiftType] = useState(note?.shift_type ?? 'close');
+  const [content, setContent] = useState(note?.content ?? '');
+  const [flags, setFlags] = useState(note?.flags ?? []);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
 
@@ -200,7 +239,9 @@ function HandoverComposer({ supabase, userId, workplaceId, onClose, onSaved }) {
     if (!content.trim()) return setError('내용을 입력해주세요.');
     setSaving(true);
     try {
-      const res = await createHandoverNote({ workplaceId, shiftType, content, flags });
+      const res = note
+        ? await updateHandoverNote({ noteId: note.id, shiftType, content, flags })
+        : await createHandoverNote({ workplaceId, shiftType, content, flags });
       if (res?.error) { setError(res.error); return; }
       onSaved();
     } catch (err) {
@@ -213,7 +254,7 @@ function HandoverComposer({ supabase, userId, workplaceId, onClose, onSaved }) {
   return (
     <BottomSheet onClose={onClose}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <h2 className="h3">새 인수인계</h2>
+        <h2 className="h3">{note ? '인수인계 수정' : '새 인수인계'}</h2>
         <button onClick={onClose} className="btn btn-ghost btn-icon"><X size={18} /></button>
       </div>
 
@@ -270,7 +311,7 @@ function HandoverComposer({ supabase, userId, workplaceId, onClose, onSaved }) {
       <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
         <button type="button" className="btn btn-outline" onClick={onClose} style={{ flex: 1 }}>취소</button>
         <button type="button" className="btn btn-primary" onClick={save} disabled={saving} style={{ flex: 2 }}>
-          {saving ? '저장 중...' : '게시'}
+          {saving ? '저장 중...' : note ? '저장' : '게시'}
         </button>
       </div>
     </BottomSheet>

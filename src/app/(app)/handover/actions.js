@@ -3,6 +3,7 @@
 import { createClient as createServerClient } from '@/lib/supabase/server';
 import { createClient } from '@supabase/supabase-js';
 import { kstDateKey } from '@/lib/date';
+import { loadActorPerms } from '@/lib/server/guard';
 
 function getServiceClient() {
   return createClient(
@@ -60,6 +61,55 @@ export async function toggleHandoverResolved(noteId, resolved) {
       resolved_at: resolved ? new Date().toISOString() : null,
     })
     .eq('id', noteId);
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
+// 수정·삭제 권한: 작성자 본인 또는 해당 매장 매니저 이상 (RLS update 정책과 동일 기준)
+async function loadEditableNote(svc, userId, noteId) {
+  const { data: note } = await svc.from('handover_notes').select('id, workplace_id, author_id').eq('id', noteId).maybeSingle();
+  if (!note) return { error: '노트를 찾을 수 없어요.' };
+  if (note.author_id !== userId) {
+    const perms = await loadActorPerms(svc, userId);
+    if (!perms.isManagerOf(note.workplace_id)) return { error: '작성자 또는 매니저만 수정·삭제할 수 있어요.' };
+  }
+  return { note };
+}
+
+/**
+ * 인수인계 노트 수정 (서비스 롤) — 시프트·내용·플래그만 바꾸고 날짜는 유지
+ */
+export async function updateHandoverNote({ noteId, shiftType, content, flags }) {
+  const authClient = await createServerClient();
+  const { data: { user } } = await authClient.auth.getUser();
+  if (!user) return { ok: false, error: '로그인이 필요합니다.' };
+  if (!content?.trim()) return { ok: false, error: '내용을 입력해주세요.' };
+
+  const svc = getServiceClient();
+  const chk = await loadEditableNote(svc, user.id, noteId);
+  if (chk.error) return { ok: false, error: chk.error };
+
+  const { error } = await svc
+    .from('handover_notes')
+    .update({ shift_type: shiftType, content: content.trim(), flags: flags ?? [] })
+    .eq('id', noteId);
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
+/**
+ * 인수인계 노트 삭제 (서비스 롤)
+ */
+export async function deleteHandoverNote(noteId) {
+  const authClient = await createServerClient();
+  const { data: { user } } = await authClient.auth.getUser();
+  if (!user) return { ok: false, error: '로그인이 필요합니다.' };
+
+  const svc = getServiceClient();
+  const chk = await loadEditableNote(svc, user.id, noteId);
+  if (chk.error) return { ok: false, error: chk.error };
+
+  const { error } = await svc.from('handover_notes').delete().eq('id', noteId);
   if (error) return { ok: false, error: error.message };
   return { ok: true };
 }
