@@ -8,6 +8,22 @@ export function parseLineQty(description) {
   return m ? Number(m[1]) : null;
 }
 
+/** 승인 → 입고 일수. 잘못된 값·0~30일 밖이면 null (리드타임 보정에 쓰지 않음) */
+export function leadDaysBetween(decidedAt, now = new Date()) {
+  if (!decidedAt) return null;
+  // Postgres 의 마이크로초(6자리) 소수는 Date 가 못 읽을 수 있어 밀리초로 자른다
+  const t = new Date(String(decidedAt).replace(/(\.\d{3})\d+/, '$1')).getTime();
+  if (!Number.isFinite(t)) return null;
+  const days = Math.round((now.getTime() - t) / 86400000);
+  return days >= 0 && days <= 30 ? days : null;
+}
+
+/** 리드타임을 관측값 쪽으로 절반 당긴다 */
+export function blendLeadTime(current, observed) {
+  const cur = Number.isFinite(Number(current)) && current != null ? Number(current) : observed;
+  return Math.round((cur + observed) / 2);
+}
+
 /**
  * @param {{ id, description, amount, inventory_item_id?, qty? }[]} expenseItems
  * @param {{ id, name }[]} inventoryItems

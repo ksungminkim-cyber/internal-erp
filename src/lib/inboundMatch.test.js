@@ -1,7 +1,7 @@
 // src/lib/inboundMatch.test.js
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseLineQty, matchInboundLines } from './inboundMatch.js';
+import { parseLineQty, matchInboundLines, leadDaysBetween, blendLeadTime } from './inboundMatch.js';
 
 const inventory = [
   { id: 'milk', name: '우유 1L', unit: '개' },
@@ -38,4 +38,19 @@ test('matchInboundLines: 저장값 없으면 이름 매칭 — 가장 긴 품목
   assert.equal(lines[1].qty, null);
   assert.equal(lines[2].itemId, null);
   assert.equal(lines[2].qty, null);
+});
+
+test('leadDaysBetween: 승인→입고 일수 (마이크로초 타임스탬프도 처리, 0~30일 밖이면 null)', () => {
+  const now = new Date('2026-10-22T09:00:00+09:00');
+  assert.equal(leadDaysBetween('2026-10-20T08:06:38.380804+00:00', now), 2);
+  assert.equal(leadDaysBetween('2026-10-22T08:59:00+09:00', now), 0);
+  assert.equal(leadDaysBetween('2026-08-01T00:00:00+00:00', now), null);
+  assert.equal(leadDaysBetween(null, now), null);
+  assert.equal(leadDaysBetween('garbage', now), null);
+});
+
+test('blendLeadTime: 현재값과 관측값의 중간으로 당긴다', () => {
+  assert.equal(blendLeadTime(2, 0), 1);
+  assert.equal(blendLeadTime(2, 5), 4);
+  assert.equal(blendLeadTime(null, 3), 3);
 });

@@ -363,8 +363,8 @@ export default function HomeClient({
                 {s.todayCount ? ` · 거래 ${s.todayCount}건` : ''}
                 {` · 어제 ${formatCurrency(s.yesterdaySales)}원`}
                 {s.salesVsUsualPct != null && s.salesUsualAvg > 0 && (
-                  <span className="num" style={{ marginLeft: 6, fontWeight: 800, color: s.salesVsUsualPct < 0 ? '#ffd1d1' : 'inherit' }}>
-                    평소 대비 {s.salesVsUsualPct > 0 ? '+' : ''}{s.salesVsUsualPct}%
+                  <span className="num" style={{ marginLeft: 4, fontWeight: 800, color: s.salesVsUsualPct < 0 ? '#ffd1d1' : 'inherit' }}>
+                    · 평소 대비 {s.salesVsUsualPct > 0 ? '+' : ''}{s.salesVsUsualPct}%
                   </span>
                 )}
               </div>

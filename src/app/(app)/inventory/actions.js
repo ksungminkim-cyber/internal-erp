@@ -2,7 +2,7 @@
 
 import { getServiceClient, getActor, loadActorPerms, friendlyDbError } from '@/lib/server/guard';
 import { buildCountPlan } from '@/lib/stockCount';
-import { matchInboundLines } from '@/lib/inboundMatch';
+import { matchInboundLines, leadDaysBetween, blendLeadTime } from '@/lib/inboundMatch';
 import { kstDateKey } from '@/lib/date';
 
 /**
@@ -383,15 +383,12 @@ export async function confirmInbound({ workplaceId, requestId, lines }) {
 
   const now = new Date();
   // 승인 → 입고 일수 (0~30일만 반영) 로 리드타임을 절반씩 당겨 맞춘다
-  const observed = doc.decided_at ? Math.round((now.getTime() - new Date(doc.decided_at).getTime()) / 86400000) : null;
+  const observed = leadDaysBetween(doc.decided_at, now);
   for (const l of rows) {
     const patch = { updated_at: now.toISOString() };
     const amount = Number(l.amount), qty = Number(l.qty);
     if (amount > 0 && qty > 0) patch.unit_cost = Math.round((amount / qty) * 100) / 100;
-    if (observed != null && observed >= 0 && observed <= 30) {
-      const cur = Number(known.get(l.itemId)?.lead_time_days ?? 2);
-      patch.lead_time_days = Math.round((cur + observed) / 2);
-    }
+    if (observed != null) patch.lead_time_days = blendLeadTime(known.get(l.itemId)?.lead_time_days ?? 2, observed);
     await svc.from('inventory_items').update(patch).eq('id', l.itemId);
     if (l.expenseItemId) await svc.from('expense_items').update({ inventory_item_id: l.itemId, qty }).eq('id', l.expenseItemId).eq('request_id', requestId);
   }
