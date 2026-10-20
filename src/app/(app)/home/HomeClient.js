@@ -8,10 +8,11 @@ import { formatRelative, formatCurrency, todayBoundary } from '@/lib/format';
 import { getProfileNames } from '@/app/_actions/names';
 import OrderSuggestionsCard from '@/components/OrderSuggestionsCard';
 import TrendPicksCard from '@/components/TrendPicksCard';
+import TodayTodoCard from '@/components/TodayTodoCard';
 import { todayKey, ymd } from '@/lib/date';
 import {
   Clock, FileText, Megaphone, Users, ChevronRight, Plus, Sparkles,
-  Calendar, ClipboardCheck, Package, TrendingUp, AlertTriangle,
+  Calendar, ClipboardCheck, Package, TrendingUp,
 } from 'lucide-react';
 
 // ─── 날씨 ──────────────────────────────────────────────────────────────────
@@ -273,7 +274,6 @@ export default function HomeClient({
 
   const today       = new Date().toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', weekday: 'long' });
   const s           = stats ?? { working: 0, inbox: 0, unread: 0, todayCheckins: 0, todaySales: 0, todayShifts: 0, handoverUnresolved: 0 };
-  const urgentCount = s.handoverUnresolved + s.inbox; // 재고는 아래 "오늘 챙길 재고" 카드가 담당
 
   return (
     <>
@@ -323,25 +323,14 @@ export default function HomeClient({
           </section>
         )}
 
-        {/* 긴급 알림 */}
-        {urgentCount > 0 && (
-          <section
-            className="card"
-            style={{
-              borderLeft: '3px solid var(--warning)',
-              background: 'var(--warning-soft)',
-              boxShadow: 'none',
-              padding: '12px 16px',
-              display: 'flex', alignItems: 'center', gap: 10,
-            }}
-          >
-            <AlertTriangle size={18} color="#c2410c" />
-            <div style={{ flex: 1, fontSize: 13, display: 'flex', flexWrap: 'wrap', gap: 12 }}>
-              {s.inbox > 0 && <Link href="/approvals" style={{ color: '#c2410c', fontWeight: 700, textDecoration: 'none' }}>결재 {s.inbox}건</Link>}
-              {s.handoverUnresolved > 0 && <Link href="/handover" style={{ color: '#c2410c', fontWeight: 700, textDecoration: 'none' }}>인수인계 {s.handoverUnresolved}건</Link>}
-            </div>
-          </section>
-        )}
+        {/* 오늘 할 일 — 체크리스트·결재·인수인계·입고 대기·재고 알림을 한 카드에 */}
+        <TodayTodoCard
+          inbox={s.inbox}
+          handoverUnresolved={s.handoverUnresolved}
+          checklists={s.checklists ?? []}
+          inboundPending={s.inboundPending ?? 0}
+          stockAlerts={orderCount}
+        />
 
         {/* 발주 권장 — POS 판매 예측(연결 품목) + 최소 수량(그 외). 매니저 이상은 기안 생성 */}
         {currentWorkplaceId && (
@@ -373,6 +362,11 @@ export default function HomeClient({
                 {currentWorkplace?.name}
                 {s.todayCount ? ` · 거래 ${s.todayCount}건` : ''}
                 {` · 어제 ${formatCurrency(s.yesterdaySales)}원`}
+                {s.salesVsUsualPct != null && s.salesUsualAvg > 0 && (
+                  <span className="num" style={{ marginLeft: 6, fontWeight: 800, color: s.salesVsUsualPct < 0 ? '#ffd1d1' : 'inherit' }}>
+                    평소 대비 {s.salesVsUsualPct > 0 ? '+' : ''}{s.salesVsUsualPct}%
+                  </span>
+                )}
               </div>
             </div>
           </Link>

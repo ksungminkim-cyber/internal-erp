@@ -105,6 +105,7 @@ export default function NewApprovalPage() {
         setItems(res.items.map((it) => ({
           description: it.description || '', category: it.category || '식자재',
           amount: String(it.amount ?? ''), vendor: it.vendor || '', product_url: it.product_url || '',
+          inventory_item_id: it.inventory_item_id ?? null, qty: it.qty ?? null,
         })));
       }
       const approverIds = [...(res.steps ?? [])].sort((a, b) => a.step_order - b.step_order).map((s) => s.approver_id);
@@ -134,6 +135,7 @@ export default function NewApprovalPage() {
       setItems(draft.items.map((it) => ({
         description: String(it.description ?? ''), category: String(it.category ?? '식자재'),
         amount: String(it.amount ?? ''), vendor: String(it.vendor ?? ''), product_url: String(it.product_url ?? ''),
+        inventory_item_id: it.inventory_item_id ?? null, qty: it.qty ?? null, // 발주 권장 → 입고 확인 연결용
       })));
     });
   }, [prefill]);
@@ -212,6 +214,7 @@ export default function NewApprovalPage() {
         items: items.map((it) => ({
           description: it.description, category: it.category, amount: parseFloat(it.amount) || 0,
           vendor: it.vendor, product_url: it.product_url, kind: getKindByCategory(it.category),
+          inventory_item_id: it.inventory_item_id ?? null, qty: it.qty ?? null,
         })),
         approverIds: approvers.map((a) => a.user_id),
         attachments: uploaded,
@@ -220,6 +223,8 @@ export default function NewApprovalPage() {
         title,
         body,
         items: items.map((it) => ({
+          inventory_item_id: it.inventory_item_id ?? null,
+          qty: it.qty ?? null,
           description: it.description,
           category: it.category,
           amount: parseFloat(it.amount) || 0,

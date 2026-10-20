@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ShoppingCart, ChefHat, ClipboardList, ChevronRight, ChevronDown } from 'lucide-react';
 import { ymd } from '@/lib/date';
-import { buildOrderDraft, formatDaysLeft, formatUsageQty } from '@/lib/orderDraft';
+import { buildOrderDraft, formatDaysLeft, formatUsageQty, vendorsOf } from '@/lib/orderDraft';
 import { getOrderSuggestions } from '@/app/(app)/inventory/actions';
 
 export const ORDER_DRAFT_KEY = 'approvalPrefill';
@@ -65,6 +65,7 @@ function Row({ s, verb }) {
 export default function OrderSuggestionsCard({ workplaceId, workplaceName, canDraft = false, limit = null, onLoaded, showAllLink = false, refreshKey = '', collapsed = false, onToggle = null }) {
   const router = useRouter();
   const [result, setResult] = useState({ key: null, data: null, error: null });
+  const [vendor, setVendor] = useState(null); // null = 전체, '' = 거래처 없음
 
   useEffect(() => {
     if (!workplaceId) return undefined;
@@ -93,8 +94,11 @@ export default function OrderSuggestionsCard({ workplaceId, workplaceName, canDr
   const shownMade = limit ? made.slice(0, limit) : made;
   const urgent = suggestions.filter((s) => urgency(s) === 0).length;
 
+  const vendors = vendorsOf(suggestions);
+  const draftCount = vendor == null ? purchase.length : (vendors.find((v) => v.vendor === vendor)?.count ?? 0);
+
   function openDraft() {
-    const draft = buildOrderDraft(suggestions, { workplaceName: workplaceName ?? '', dateKey: ymd(new Date()) });
+    const draft = buildOrderDraft(suggestions, { workplaceName: workplaceName ?? '', dateKey: ymd(new Date()), vendor });
     try { sessionStorage.setItem(ORDER_DRAFT_KEY, JSON.stringify(draft)); } catch { /* 저장 불가 시 빈 기안으로 이동 */ }
     router.push('/approvals/new?prefill=1');
   }
@@ -168,9 +172,23 @@ export default function OrderSuggestionsCard({ workplaceId, workplaceName, canDr
           )}
 
           {canDraft && purchase.length > 0 && (
-            <button type="button" className="btn btn-primary btn-sm btn-block" style={{ marginTop: 12 }} onClick={openDraft}>
-              <ClipboardList size={14} /> 발주 기안 만들기 · {purchase.length}품목
-            </button>
+            <div style={{ marginTop: 12 }}>
+              {vendors.length > 1 && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8 }} role="group" aria-label="거래처별 기안">
+                  <button type="button" className={`tag ${vendor == null ? 'tag-accent' : ''}`} style={{ cursor: 'pointer', border: vendor == null ? '1px solid currentColor' : '1px dashed var(--border-strong)' }} onClick={() => setVendor(null)}>전체 {purchase.length}</button>
+                  {vendors.map((v) => (
+                    <button key={v.vendor || '__none'} type="button" className={`tag ${vendor === v.vendor ? 'tag-accent' : ''}`}
+                      style={{ cursor: 'pointer', border: vendor === v.vendor ? '1px solid currentColor' : '1px dashed var(--border-strong)' }}
+                      onClick={() => setVendor(v.vendor)}>
+                      {v.vendor || '거래처 없음'} {v.count}
+                    </button>
+                  ))}
+                </div>
+              )}
+              <button type="button" className="btn btn-primary btn-sm btn-block" onClick={openDraft} disabled={draftCount === 0}>
+                <ClipboardList size={14} /> 발주 기안 만들기 · {draftCount}품목{vendor ? ` · ${vendor}` : ''}
+              </button>
+            </div>
           )}
         </div>
       )}

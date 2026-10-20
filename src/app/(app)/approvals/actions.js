@@ -72,6 +72,8 @@ export async function submitApproval({ workplaceId, title, body, items = [], app
         vendor: it.vendor?.trim() || null,
         product_url: it.product_url?.trim() || null,
         kind: it.kind || 'opex',
+        inventory_item_id: it.inventory_item_id || null,
+        qty: Number(it.qty) > 0 ? Number(it.qty) : null,
       }))
     );
     if (e2) return { error: e2.message, requestId };
@@ -541,6 +543,8 @@ export async function updateApproval({ requestId, title, body, items = [], appro
         vendor: it.vendor?.trim() || null,
         product_url: it.product_url?.trim() || null,
         kind: it.kind || 'opex',
+        inventory_item_id: it.inventory_item_id || null,
+        qty: Number(it.qty) > 0 ? Number(it.qty) : null,
       }))
     );
     if (e3) return { error: e3.message };
