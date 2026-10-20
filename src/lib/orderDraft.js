@@ -19,14 +19,24 @@ export function formatDaysLeft(days) {
   return d < 10 ? `약 ${Math.round(d * 10) / 10}일분` : `약 ${Math.round(d)}일분`;
 }
 
+/** 발주 품목의 거래처별 건수 — [{ vendor, count }], 거래처 없음은 vendor '' 로 마지막에 */
+export function vendorsOf(suggestions) {
+  const rows = (suggestions ?? []).filter((s) => Number(s.suggested_qty) > 0 && s.supply_type !== 'made');
+  const m = new Map();
+  for (const s of rows) { const v = (s.vendor ?? '').trim(); m.set(v, (m.get(v) ?? 0) + 1); }
+  const list = [...m.entries()].map(([vendor, count]) => ({ vendor, count }));
+  return [...list.filter((x) => x.vendor).sort((a, b) => a.vendor.localeCompare(b.vendor, 'ko')), ...list.filter((x) => !x.vendor)];
+}
+
 /**
  * @param {Array} suggestions inventory_order_suggestions 행
- * @param {{ workplaceName: string, dateKey: string }} ctx dateKey 'YYYY-MM-DD'
- * @returns {{ title: string, body: string, items: { description, category, amount, vendor, product_url }[] }}
+ * @param {{ workplaceName: string, dateKey: string, vendor?: string|null }} ctx dateKey 'YYYY-MM-DD'. vendor 지정 시 그 거래처만('' = 거래처 없음)
+ * @returns {{ title: string, body: string, items: { description, category, amount, vendor, product_url, inventory_item_id, qty }[] }}
  */
-export function buildOrderDraft(suggestions, { workplaceName, dateKey }) {
+export function buildOrderDraft(suggestions, { workplaceName, dateKey, vendor = null }) {
   // 직접 제조 품목은 발주 대상이 아님
-  const rows = (suggestions ?? []).filter((s) => Number(s.suggested_qty) > 0 && s.supply_type !== 'made');
+  const rows = (suggestions ?? []).filter((s) => Number(s.suggested_qty) > 0 && s.supply_type !== 'made')
+    .filter((s) => vendor == null || (s.vendor ?? '').trim() === vendor);
   const md = `${dateKey.slice(5, 7)}/${dateKey.slice(8, 10)}`;
   const items = rows.map((s) => {
     const qty = Number(s.suggested_qty);
@@ -37,6 +47,8 @@ export function buildOrderDraft(suggestions, { workplaceName, dateKey }) {
       amount: cost != null && cost > 0 ? String(Math.round(cost * qty)) : '',
       vendor: s.vendor ?? '',
       product_url: '',
+      inventory_item_id: s.inventory_item_id ?? null,
+      qty,
     };
   });
   const lines = rows.map((s) => {
@@ -46,7 +58,7 @@ export function buildOrderDraft(suggestions, { workplaceName, dateKey }) {
     return `- ${s.name}: ${fmtQty(s.suggested_qty)}${s.unit ?? ''} (${why})`;
   });
   return {
-    title: `발주 — ${md}${workplaceName ? ` ${workplaceName}` : ''}`,
+    title: `발주 — ${md}${workplaceName ? ` ${workplaceName}` : ''}${vendor ? ` · ${vendor}` : ''}`,
     body: `POS 판매 기반 발주 추천 (${dateKey})\n${lines.join('\n')}`,
     items,
   };
