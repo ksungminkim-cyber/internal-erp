@@ -27,8 +27,8 @@ export default function TodayTodoCard({ inbox = 0, handoverUnresolved = 0, check
         <span className="num text-muted" style={{ fontSize: 12, fontWeight: 700 }}>{rows.length}</span>
       </div>
       <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
-        {rows.map((r) => (
-          <li key={r.label} style={{ borderTop: '1px solid var(--border)' }}>
+        {rows.map((r, i) => (
+          <li key={`${r.href}-${i}`} style={{ borderTop: '1px solid var(--border)' }}>
             <Link href={r.href} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 0', textDecoration: 'none', color: 'inherit' }}>
               <span style={{ flex: 1, fontSize: 14, fontWeight: 600 }}>{r.label}</span>
               <span className="num" style={{ fontSize: 13, fontWeight: 800, color: r.tone === 'warn' ? '#c2410c' : 'var(--text-secondary)' }}>{r.meta}</span>

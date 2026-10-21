@@ -28,6 +28,12 @@ export function vendorsOf(suggestions) {
   return [...list.filter((x) => x.vendor).sort((a, b) => a.vendor.localeCompare(b.vendor, 'ko')), ...list.filter((x) => !x.vendor)];
 }
 
+/** 칩 선택값이 현재 목록에 없으면(품목이 빠져 거래처가 사라짐) 전체(null) 로 */
+export function effectiveVendor(vendors, vendor) {
+  if (vendor == null) return null;
+  return vendors.length > 1 && vendors.some((v) => v.vendor === vendor) ? vendor : null;
+}
+
 /**
  * @param {Array} suggestions inventory_order_suggestions 행
  * @param {{ workplaceName: string, dateKey: string, vendor?: string|null }} ctx dateKey 'YYYY-MM-DD'. vendor 지정 시 그 거래처만('' = 거래처 없음)

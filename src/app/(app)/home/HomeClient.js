@@ -220,7 +220,8 @@ export default function HomeClient({
     const annNames = await getProfileNames(annRows.map((a) => a.author_id));
     setRecentAnnouncements(annRows.map((a) => ({ ...a, author: { name: annNames[a.author_id] ?? null } })));
     setAnnouncementReadIds(readIds);
-    setStats({
+    setStats((prev) => ({
+      ...prev, // checklists·inboundPending·평소 대비는 SSR 값 유지 (매장 전환 시 다음 SSR 에서 갱신)
       working:            (board.data ?? []).filter((b) => b.status === 'working' || b.status === 'on_break').length,
       inbox:              inboxValid.length,
       unread:             Math.max(0, (annTotal.count ?? 0) - readIds.size),
@@ -230,7 +231,7 @@ export default function HomeClient({
       yesterdaySales:     Number((salesToday.data ?? []).find((r) => r.sales_date === yesterday)?.total_amount ?? 0),
       todayShifts:        todayShifts.count ?? 0,
       handoverUnresolved: handover.count ?? 0,
-    });
+    }));
   }, [supabase, currentWorkplaceId, userId]);
 
   // workplace가 SSR과 다를 때(사업장 전환)만 재로드

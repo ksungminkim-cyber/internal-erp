@@ -35,7 +35,9 @@ export default function StockCountSheet({ items, workplaceId, onClose, onSaved }
 
   const filledCount = Object.values(rows).filter((r) => r.counted !== '').length;
 
-  function setRow(id, patch) { setRows((prev) => ({ ...prev, [id]: { ...prev[id], ...patch } })); }
+  function setRow(id, patch) {
+    setRows((prev) => ({ ...prev, [id]: { ...(prev[id] ?? { counted: '', unit: (items ?? []).find((i) => i.id === id)?.unit ?? '개' }), ...patch } }));
+  }
 
   async function save() {
     if (filledCount === 0) return toast('센 수량을 하나 이상 입력해 주세요', 'error');
@@ -76,8 +78,9 @@ export default function StockCountSheet({ items, workplaceId, onClose, onSaved }
 
       <div style={{ maxHeight: '55vh', overflowY: 'auto', display: 'grid', gap: 6, paddingRight: 2 }}>
         {list.map((it) => {
-          const r = rows[it.id];
+          const r = rows[it.id] ?? { counted: '', unit: it.unit ?? '개' };
           const filled = r.counted !== '';
+          const unitLocked = !!it.usage_unit; // 소진 단위(ml/g) 연결 품목은 단위를 바꾸면 환산이 깨져 편집기에서만 변경
           return (
             <div key={it.id} style={{ display: 'grid', gridTemplateColumns: '1fr 96px 88px', gap: 6, alignItems: 'center', padding: '8px 10px', borderRadius: 10, background: filled ? 'var(--accent-soft)' : 'var(--surface-soft)' }}>
               <div style={{ minWidth: 0 }}>
@@ -86,7 +89,9 @@ export default function StockCountSheet({ items, workplaceId, onClose, onSaved }
                   현재 {Number(it.current_qty)}{it.unit}{formatCountedAgo(it.last_counted_at) ? ` · ${formatCountedAgo(it.last_counted_at)}` : ' · 실사 기록 없음'}
                 </div>
               </div>
-              <UnitSelect compact value={r.unit} onChange={(u) => setRow(it.id, { unit: u })} options={COUNT_UNITS} ariaLabel={`${it.name} 단위`} />
+              {unitLocked
+                ? <div className="input sm text-muted" style={{ display: 'flex', alignItems: 'center' }} title="판매 연결 품목은 품목 편집에서 단위를 바꿔 주세요">{r.unit}</div>
+                : <UnitSelect compact value={r.unit} onChange={(u) => setRow(it.id, { unit: u })} options={COUNT_UNITS} ariaLabel={`${it.name} 단위`} />}
               <input
                 className="input sm num" type="number" inputMode="decimal" min="0" step="any"
                 placeholder="센 수량" aria-label={`${it.name} 센 수량`}

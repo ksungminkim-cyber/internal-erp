@@ -76,6 +76,7 @@ export default function NewApprovalPage() {
             amount: String(it.amount ?? ''),
             vendor: it.vendor || '',
             product_url: it.product_url || '',
+            inventory_item_id: it.inventory_item_id ?? null, qty: it.qty ?? null,
           })));
         }
         setRevisionInfo({

@@ -307,8 +307,10 @@ export async function applyStockCount({ workplaceId, lines }) {
 
   const ids = (lines ?? []).map((l) => l.itemId).filter(Boolean);
   if (!ids.length) return { ok: false, error: '센 수량을 입력해 주세요.' };
-  const { data: items } = await svc.from('inventory_items').select('id, current_qty, unit').eq('workplace_id', workplaceId).in('id', ids);
+  const { data: items } = await svc.from('inventory_items').select('id, current_qty, unit, usage_unit').eq('workplace_id', workplaceId).in('id', ids);
   const plan = buildCountPlan(lines, items ?? [], { dateKey: kstDateKey() });
+  const linked = new Set((items ?? []).filter((i) => i.usage_unit).map((i) => i.id));
+  plan.unitChanges = plan.unitChanges.filter((u) => !linked.has(u.id));
   if (!plan.countedIds.length) return { ok: false, error: '저장할 품목이 없습니다.' };
 
   if (plan.transactions.length) {
@@ -376,12 +378,18 @@ export async function confirmInbound({ workplaceId, requestId, lines }) {
   const rows = valid.filter((l) => known.has(l.itemId));
   if (!rows.length) return { ok: false, error: '이 매장의 재고 품목이 아니에요.' };
 
+  const now = new Date();
+  // 선점: received_at 이 비어 있을 때만 닫는다. 두 사람이 동시에 눌러도 한 번만 입고된다
+  const { data: claimed } = await svc.from('approval_requests')
+    .update({ received_at: now.toISOString(), received_by: user.id, updated_at: now.toISOString() })
+    .eq('id', requestId).eq('workplace_id', workplaceId).is('received_at', null).select('id');
+  if (!claimed?.length) return { ok: false, error: '이미 입고 처리된 기안이에요.' };
+
   const { error } = await svc.from('inventory_transactions').insert(
     rows.map((l) => ({ item_id: l.itemId, workplace_id: workplaceId, user_id: user.id, type: 'restock', qty_delta: Number(l.qty), note: `입고 · ${doc.title}` }))
   );
-  if (error) return { ok: false, error: friendlyDbError(error) };
+  if (error) return { ok: false, error: '기안은 닫혔지만 입고 거래 기록에 실패했어요. 수량은 ± 조정으로 넣어 주세요. ' + friendlyDbError(error) };
 
-  const now = new Date();
   // 승인 → 입고 일수 (0~30일만 반영) 로 리드타임을 절반씩 당겨 맞춘다
   const observed = leadDaysBetween(doc.decided_at, now);
   for (const l of rows) {
@@ -392,7 +400,6 @@ export async function confirmInbound({ workplaceId, requestId, lines }) {
     await svc.from('inventory_items').update(patch).eq('id', l.itemId);
     if (l.expenseItemId) await svc.from('expense_items').update({ inventory_item_id: l.itemId, qty }).eq('id', l.expenseItemId).eq('request_id', requestId);
   }
-  await svc.from('approval_requests').update({ received_at: now.toISOString(), received_by: user.id, updated_at: now.toISOString() }).eq('id', requestId);
   return { ok: true, restocked: rows.length };
 }
 

@@ -1,7 +1,7 @@
 // src/lib/orderDraft.test.js
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildOrderDraft, formatDaysLeft, formatUsageQty, vendorsOf } from './orderDraft.js';
+import { buildOrderDraft, formatDaysLeft, formatUsageQty, vendorsOf, effectiveVendor } from './orderDraft.js';
 
 const suggestions = [
   { inventory_item_id: 'a', name: '아이스 컵', unit: '개', category: '비품', vendor: null, suggested_qty: 150, unit_cost: 80, days_left: 1.5, basis: 'forecast' },
@@ -80,4 +80,12 @@ test('buildOrderDraft: vendor 를 지정하면 그 거래처 품목만, 제목�
   assert.equal(d.title, '발주 — 10/20 녹턴 · 매일우유');
   const none = buildOrderDraft(suggestions, { workplaceName: '녹턴', dateKey: '2026-10-20', vendor: '' });
   assert.equal(none.items.length, 2);
+});
+
+test('effectiveVendor: 선택한 거래처가 목록에서 사라지면 전체로', () => {
+  const vendors = [{ vendor: '매일우유', count: 1 }, { vendor: '', count: 2 }];
+  assert.equal(effectiveVendor(vendors, '매일우유'), '매일우유');
+  assert.equal(effectiveVendor(vendors, '골든브라운'), null);
+  assert.equal(effectiveVendor([{ vendor: '매일우유', count: 1 }], '매일우유'), null);
+  assert.equal(effectiveVendor(vendors, null), null);
 });
