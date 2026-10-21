@@ -1,6 +1,9 @@
 'use server';
 
 import { getServiceClient, getActor, loadActorPerms, friendlyDbError } from '@/lib/server/guard';
+import { buildCountPlan } from '@/lib/stockCount';
+import { matchInboundLines, leadDaysBetween, blendLeadTime } from '@/lib/inboundMatch';
+import { kstDateKey } from '@/lib/date';
 
 /**
  * 품목 변경 이력 — 입고/사용/폐기/조정 트랜잭션 (작성자·메모 포함).
@@ -289,4 +292,140 @@ export async function getOrderSuggestions({ workplaceId }) {
     suggestions: rows.filter((r) => r.suggested_qty > 0),
     daysLeftById: Object.fromEntries(rows.filter((r) => r.days_left != null).map((r) => [r.inventory_item_id, r.days_left])),
   };
+}
+
+/**
+ * 재고 실사 일괄 저장 — 입력한 품목만 adjust 거래(차이 0 이면 실사 시각만), 바꾼 단위는 품목에 저장.
+ * 차이는 저장 시점의 최신 current_qty 로 다시 계산한다 (세는 동안 POS 자동 차감이 돌아도 센 수량이 기준).
+ */
+export async function applyStockCount({ workplaceId, lines }) {
+  const user = await getActor();
+  if (!user) return { ok: false, error: '로그인이 필요합니다.' };
+  const svc = getServiceClient();
+  const perms = await loadActorPerms(svc, user.id);
+  if (!perms.isMemberOf(workplaceId)) return { ok: false, error: '권한이 없습니다.' };
+
+  const ids = (lines ?? []).map((l) => l.itemId).filter(Boolean);
+  if (!ids.length) return { ok: false, error: '센 수량을 입력해 주세요.' };
+  const { data: items } = await svc.from('inventory_items').select('id, current_qty, unit, usage_unit').eq('workplace_id', workplaceId).in('id', ids);
+  const plan = buildCountPlan(lines, items ?? [], { dateKey: kstDateKey() });
+  const linked = new Set((items ?? []).filter((i) => i.usage_unit).map((i) => i.id));
+  plan.unitChanges = plan.unitChanges.filter((u) => !linked.has(u.id));
+  if (!plan.countedIds.length) return { ok: false, error: '저장할 품목이 없습니다.' };
+
+  if (plan.transactions.length) {
+    const { error } = await svc.from('inventory_transactions').insert(
+      plan.transactions.map((t) => ({ ...t, workplace_id: workplaceId, user_id: user.id }))
+    );
+    if (error) return { ok: false, error: friendlyDbError(error) };
+  }
+  const now = new Date().toISOString();
+  await svc.from('inventory_items').update({ last_counted_at: now, updated_at: now }).in('id', plan.countedIds);
+  for (const u of plan.unitChanges) await svc.from('inventory_items').update({ unit: u.unit, updated_at: now }).eq('id', u.id);
+  return { ok: true, counted: plan.countedIds.length, adjusted: plan.transactions.length };
+}
+
+/** 입고 대기 — 승인된 지출결의서(received_at 없음) + 라인별 재고 품목 매칭 */
+export async function getPendingInbound({ workplaceId }) {
+  const user = await getActor();
+  if (!user || !workplaceId) return null;
+  const svc = getServiceClient();
+  const perms = await loadActorPerms(svc, user.id);
+  if (!perms.isMemberOf(workplaceId)) return null;
+
+  const [{ data: docs }, { data: items }] = await Promise.all([
+    svc.from('approval_requests')
+      .select('id, title, decided_at, expense_items(id, description, amount, inventory_item_id, qty, created_at)')
+      .eq('workplace_id', workplaceId).eq('doc_type', 'expense').eq('status', 'approved').is('received_at', null)
+      .order('decided_at', { ascending: false }).limit(20),
+    svc.from('inventory_items').select('id, name, unit').eq('workplace_id', workplaceId).eq('archived', false).order('name'),
+  ]);
+  return {
+    items: items ?? [],
+    docs: (docs ?? []).map((d) => ({
+      id: d.id, title: d.title, decided_at: d.decided_at,
+      lines: matchInboundLines([...(d.expense_items ?? [])].sort((a, b) => String(a.created_at).localeCompare(String(b.created_at))), items ?? []),
+    })),
+  };
+}
+
+async function loadInboundDoc(svc, workplaceId, requestId) {
+  const { data: doc } = await svc.from('approval_requests').select('id, title, decided_at, status, doc_type, received_at').eq('id', requestId).eq('workplace_id', workplaceId).maybeSingle();
+  if (!doc) return { error: '기안을 찾을 수 없어요.' };
+  if (doc.doc_type !== 'expense' || doc.status !== 'approved') return { error: '승인된 지출결의서만 입고 처리할 수 있어요.' };
+  if (doc.received_at) return { error: '이미 입고 처리된 기안이에요.' };
+  return { doc };
+}
+
+/**
+ * 입고 확인 — 라인별 restock 거래, 매핑 저장, 단가(amount/qty)·리드타임(승인→입고 일수 평균) 보정, 기안 received_at.
+ * 라인마다 거래를 하나씩 남긴다(같은 품목이 두 줄이면 두 번).
+ */
+export async function confirmInbound({ workplaceId, requestId, lines }) {
+  const user = await getActor();
+  if (!user) return { ok: false, error: '로그인이 필요합니다.' };
+  const svc = getServiceClient();
+  const perms = await loadActorPerms(svc, user.id);
+  if (!perms.isMemberOf(workplaceId)) return { ok: false, error: '권한이 없습니다.' };
+  const chk = await loadInboundDoc(svc, workplaceId, requestId);
+  if (chk.error) return { ok: false, error: chk.error };
+  const doc = chk.doc;
+
+  const valid = (lines ?? []).filter((l) => l.itemId && Number(l.qty) > 0);
+  if (!valid.length) return { ok: false, error: '입고할 품목과 수량을 확인해 주세요.' };
+  const { data: items } = await svc.from('inventory_items').select('id, lead_time_days').eq('workplace_id', workplaceId).in('id', valid.map((l) => l.itemId));
+  const known = new Map((items ?? []).map((i) => [i.id, i]));
+  const rows = valid.filter((l) => known.has(l.itemId));
+  if (!rows.length) return { ok: false, error: '이 매장의 재고 품목이 아니에요.' };
+
+  const now = new Date();
+  // 선점: received_at 이 비어 있을 때만 닫는다. 두 사람이 동시에 눌러도 한 번만 입고된다
+  const { data: claimed } = await svc.from('approval_requests')
+    .update({ received_at: now.toISOString(), received_by: user.id, updated_at: now.toISOString() })
+    .eq('id', requestId).eq('workplace_id', workplaceId).is('received_at', null).select('id');
+  if (!claimed?.length) return { ok: false, error: '이미 입고 처리된 기안이에요.' };
+
+  const { error } = await svc.from('inventory_transactions').insert(
+    rows.map((l) => ({ item_id: l.itemId, workplace_id: workplaceId, user_id: user.id, type: 'restock', qty_delta: Number(l.qty), note: `입고 · ${doc.title}` }))
+  );
+  if (error) return { ok: false, error: '기안은 닫혔지만 입고 거래 기록에 실패했어요. 수량은 ± 조정으로 넣어 주세요. ' + friendlyDbError(error) };
+
+  // 승인 → 입고 일수 (0~30일만 반영) 로 리드타임을 절반씩 당겨 맞춘다
+  const observed = leadDaysBetween(doc.decided_at, now);
+  for (const l of rows) {
+    const patch = { updated_at: now.toISOString() };
+    const amount = Number(l.amount), qty = Number(l.qty);
+    if (amount > 0 && qty > 0) patch.unit_cost = Math.round((amount / qty) * 100) / 100;
+    if (observed != null) patch.lead_time_days = blendLeadTime(known.get(l.itemId)?.lead_time_days ?? 2, observed);
+    await svc.from('inventory_items').update(patch).eq('id', l.itemId);
+    if (l.expenseItemId) await svc.from('expense_items').update({ inventory_item_id: l.itemId, qty }).eq('id', l.expenseItemId).eq('request_id', requestId);
+  }
+  return { ok: true, restocked: rows.length };
+}
+
+/** 재고 입고가 아닌 기안 — 입고 대기에서 치우기만 (거래 없음) */
+export async function dismissInbound({ workplaceId, requestId }) {
+  const user = await getActor();
+  if (!user) return { ok: false, error: '로그인이 필요합니다.' };
+  const svc = getServiceClient();
+  const perms = await loadActorPerms(svc, user.id);
+  if (!perms.isMemberOf(workplaceId)) return { ok: false, error: '권한이 없습니다.' };
+  const chk = await loadInboundDoc(svc, workplaceId, requestId);
+  if (chk.error) return { ok: false, error: chk.error };
+  const now = new Date().toISOString();
+  const { error } = await svc.from('approval_requests').update({ received_at: now, received_by: user.id, updated_at: now }).eq('id', requestId);
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
+/** 장기 미사용 — p_days 동안 재고 거래가 없는 품목 { [itemId]: lastTxAt|null } */
+export async function getIdleItems({ workplaceId, days = 30 }) {
+  const user = await getActor();
+  if (!user || !workplaceId) return {};
+  const svc = getServiceClient();
+  const perms = await loadActorPerms(svc, user.id);
+  if (!perms.isMemberOf(workplaceId)) return {};
+  const { data, error } = await svc.rpc('inventory_idle_items', { p_workplace_id: workplaceId, p_days: days });
+  if (error) throw new Error(`inventory_idle_items: ${error.message}`);
+  return Object.fromEntries((data ?? []).map((r) => [r.inventory_item_id, r.last_tx_at]));
 }

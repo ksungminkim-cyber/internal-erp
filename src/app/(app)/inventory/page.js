@@ -7,45 +7,18 @@ import { useFeedback } from '@/context/FeedbackContext';
 import PageHeader from '@/components/PageHeader';
 import BottomSheet from '@/components/BottomSheet';
 import UsageEditor from './UsageEditor';
+import UnitSelect, { COUNT_UNITS, USAGE_UNITS } from './UnitSelect';
+import StockCountSheet from './StockCountSheet';
+import InboundCard from './InboundCard';
+import { formatCountedAgo } from '@/lib/stockCount';
 import OrderSuggestionsCard from '@/components/OrderSuggestionsCard';
 import { formatDaysLeft } from '@/lib/orderDraft';
 import { formatRelative } from '@/lib/format';
 import { getPageCache, setPageCache } from '@/lib/pageCache';
-import { closeInventoryMonth, deleteInventoryClosing, saveInventoryItem, archiveInventoryItem, recordInventoryTransaction, getInventoryItemHistory } from './actions';
-import { ChevronLeft, Plus, X, Package, TrendingUp, TrendingDown, Edit3, Trash2, Search, Lock, ClipboardList, Link2 } from 'lucide-react';
+import { closeInventoryMonth, deleteInventoryClosing, saveInventoryItem, archiveInventoryItem, recordInventoryTransaction, getInventoryItemHistory, getIdleItems } from './actions';
+import { ChevronLeft, Plus, X, Package, TrendingUp, TrendingDown, Edit3, Trash2, Search, Lock, ClipboardList, Link2, ClipboardCheck } from 'lucide-react';
 
 const CATEGORY_OPTIONS = ['식자재', '음료/시럽', '주류', '컵·뚜껑', '비품', '청소·세제', '포장', '기타'];
-// 세는 단위(입고·재고) / 소진 단위(판매 시 빠지는 단위)
-const COUNT_UNITS = ['개', '박스', '봉', '병', '캔', '팩', '통', '잔', 'kg', 'g', 'L', 'ml'];
-const USAGE_UNITS = ['개', 'g', 'ml', '잔', '샷', '스쿱', 'kg', 'L'];
-const CUSTOM = '__custom__';
-
-// 드롭박스 + 직접 입력
-function UnitSelect({ value, onChange, options, allowNone = false, noneLabel = '없음', ariaLabel }) {
-  const listed = options.includes(value) || (allowNone && value === '');
-  const [custom, setCustom] = useState(!listed && value !== '');
-  if (custom) {
-    return (
-      <div style={{ display: 'flex', gap: 6 }}>
-        <input className="input" value={value} onChange={(e) => onChange(e.target.value)} placeholder="단위 입력" aria-label={ariaLabel} autoFocus style={{ flex: 1 }} />
-        <button type="button" className="btn btn-ghost btn-xs" onClick={() => { setCustom(false); onChange(options[0]); }}>목록</button>
-      </div>
-    );
-  }
-  return (
-    <select
-      className="input"
-      value={listed ? value : CUSTOM}
-      aria-label={ariaLabel}
-      onChange={(e) => { if (e.target.value === CUSTOM) { setCustom(true); onChange(''); } else onChange(e.target.value); }}
-    >
-      {allowNone && <option value="">{noneLabel}</option>}
-      {options.map((u) => <option key={u} value={u}>{u}</option>)}
-      <option value={CUSTOM}>직접 입력…</option>
-    </select>
-  );
-}
-
 export default function InventoryPage() {
   const router = useRouter();
   const { user, currentWorkplaceId, currentWorkplace, supabase, isManager } = useApp();
@@ -67,6 +40,9 @@ export default function InventoryPage() {
   const [adjusting, setAdjusting] = useState(null);
   const [usageItem, setUsageItem] = useState(null); // 소요량 연결 편집
   const [usageCounts, setUsageCounts] = useState({}); // inventory_item_id → 연결 상품 수
+  const [counting, setCounting] = useState(false);     // 재고 실사 시트
+  const [idleById, setIdleById] = useState({});        // 30일 미사용 품목 { id: lastTxAt|null }
+  const [inboundKey, setInboundKey] = useState(0);     // 입고 대기 재조회
 
   const load = useCallback(async () => {
     if (!currentWorkplaceId) return;
@@ -91,7 +67,12 @@ export default function InventoryPage() {
     setUsageCounts(counts);
   }, [supabase, currentWorkplaceId]);
 
-  useEffect(() => { load(); loadUsageCounts(); }, [load, loadUsageCounts]);
+  const loadIdle = useCallback(async () => {
+    if (!currentWorkplaceId) return;
+    try { setIdleById(await getIdleItems({ workplaceId: currentWorkplaceId })); } catch { setIdleById({}); }
+  }, [currentWorkplaceId]);
+
+  useEffect(() => { load(); loadUsageCounts(); loadIdle(); }, [load, loadUsageCounts, loadIdle]);
 
   useEffect(() => {
     if (!currentWorkplaceId) return;
@@ -112,10 +93,12 @@ export default function InventoryPage() {
       list = list.filter((i) => i.name.toLowerCase().includes(q) || (i.category ?? '').toLowerCase().includes(q));
     }
     if (filter === 'low') list = list.filter((i) => Number(i.current_qty) < Number(i.min_qty));
+    if (filter === 'idle') list = list.filter((i) => i.id in idleById);
     return list;
-  }, [items, search, filter]);
+  }, [items, search, filter, idleById]);
 
   const lowCount = items.filter((i) => Number(i.current_qty) < Number(i.min_qty)).length;
+  const idleCount = items.filter((i) => i.id in idleById).length;
   const grouped = useMemo(() => {
     const g = {};
     filtered.forEach((it) => {
@@ -134,6 +117,9 @@ export default function InventoryPage() {
         hideSwitcher
         action={
           <div style={{ display: 'flex', gap: 6 }}>
+            <button onClick={() => setCounting(true)} className="btn btn-primary btn-sm">
+              <ClipboardCheck size={14} /> 재고 세기
+            </button>
             <button onClick={() => setShowClosing(true)} className="btn btn-soft btn-sm">
               <Lock size={14} /> 재고 마감
             </button>
@@ -156,6 +142,11 @@ export default function InventoryPage() {
           />
         )}
 
+        {/* 입고 대기 — 승인된 발주 기안을 입고 거래로 */}
+        {currentWorkplaceId && (
+          <InboundCard workplaceId={currentWorkplaceId} refreshKey={inboundKey} onChanged={() => { load(); loadIdle(); }} />
+        )}
+
         <div style={{ display: 'flex', gap: 8 }}>
           <div style={{ flex: 1, position: 'relative' }}>
             <Search size={16} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
@@ -176,6 +167,9 @@ export default function InventoryPage() {
           <button className={`segment-item ${filter === 'low' ? 'is-active' : ''}`} onClick={() => setFilter('low')}>
             최소 수량 미달 ({lowCount})
           </button>
+          <button className={`segment-item ${filter === 'idle' ? 'is-active' : ''}`} onClick={() => setFilter('idle')}>
+            장기 미사용 ({idleCount})
+          </button>
         </div>
 
         {loading ? (
@@ -184,7 +178,7 @@ export default function InventoryPage() {
           <div className="card empty">
             <div className="empty-icon"><Package size={26} /></div>
             <div className="empty-title">
-              {search ? '검색 결과 없음' : filter === 'low' ? '발주 필요 품목 없음' : '등록된 품목 없음'}
+              {search ? '검색 결과 없음' : filter === 'low' ? '발주 필요 품목 없음' : filter === 'idle' ? '30일 미사용 품목 없음' : '등록된 품목 없음'}
             </div>
             <div className="empty-desc">+ 버튼으로 품목을 추가해보세요</div>
           </div>
@@ -205,6 +199,7 @@ export default function InventoryPage() {
                       onUsage={() => setUsageItem(it)}
                       usageCount={usageCounts[it.id] ?? 0}
                       daysLeft={daysLeftById[it.id]}
+                      idle={it.id in idleById}
                     />
                   ))}
                 </div>
@@ -217,6 +212,15 @@ export default function InventoryPage() {
       <button type="button" className="fab" onClick={() => setEditing({})} aria-label="새 품목">
         <Plus size={26} />
       </button>
+
+      {counting && (
+        <StockCountSheet
+          items={items}
+          workplaceId={currentWorkplaceId}
+          onClose={() => setCounting(false)}
+          onSaved={() => { setCounting(false); load(); loadIdle(); setInboundKey((k) => k + 1); }}
+        />
+      )}
 
       {editing && (
         <InventoryEditor
@@ -400,8 +404,9 @@ function InventoryClosingDialog({ items, supabase, userId, workplaceId, onClose 
   );
 }
 
-function InventoryRow({ item, onAdjust, onEdit, onUsage, usageCount = 0, daysLeft = null }) {
+function InventoryRow({ item, onAdjust, onEdit, onUsage, usageCount = 0, daysLeft = null, idle = false }) {
   const low = Number(item.current_qty) < Number(item.min_qty);
+  const countedAgo = formatCountedAgo(item.last_counted_at);
   return (
     <div
       className="card compact"
@@ -413,7 +418,7 @@ function InventoryRow({ item, onAdjust, onEdit, onUsage, usageCount = 0, daysLef
       <div style={{ flex: 1, minWidth: 0 }}>
         <div className="h4">{item.name}</div>
         <div className="text-muted" style={{ fontSize: 11, marginTop: 2 }}>
-          {item.vendor ? `${item.vendor} · ` : ''}최소 {item.min_qty}{item.unit}{daysLeft != null ? ` · ${formatDaysLeft(daysLeft)}` : ''}
+          {item.vendor ? `${item.vendor} · ` : ''}최소 {item.min_qty}{item.unit}{daysLeft != null ? ` · ${formatDaysLeft(daysLeft)}` : ''}{countedAgo ? ` · ${countedAgo}` : ''}
         </div>
       </div>
       <div style={{ textAlign: 'right' }}>
@@ -429,6 +434,7 @@ function InventoryRow({ item, onAdjust, onEdit, onUsage, usageCount = 0, daysLef
         {item.supply_type === 'made' && <span className="tag" style={{ fontSize: 10, marginTop: 2 }}>직접 제조</span>}
         {low && <span className="tag tag-danger" style={{ fontSize: 10, marginTop: 2 }}>{item.supply_type === 'made' ? '제조' : '발주'}</span>}
         {usageCount > 0 && <span className="tag tag-mint" style={{ fontSize: 10, marginTop: 2 }}>연결 {usageCount}</span>}
+        {idle && <span className="tag" style={{ fontSize: 10, marginTop: 2, color: 'var(--text-muted)' }}>30일 미사용</span>}
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
         <button onClick={onAdjust} className="btn btn-soft btn-xs">±</button>
