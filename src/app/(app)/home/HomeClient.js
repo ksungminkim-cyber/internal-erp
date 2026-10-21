@@ -330,7 +330,6 @@ export default function HomeClient({
           handoverUnresolved={s.handoverUnresolved}
           checklists={s.checklists ?? []}
           inboundPending={s.inboundPending ?? 0}
-          stockAlerts={orderCount}
         />
 
         {/* 발주 권장 — POS 판매 예측(연결 품목) + 최소 수량(그 외). 매니저 이상은 기안 생성 */}
