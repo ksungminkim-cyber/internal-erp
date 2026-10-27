@@ -41,6 +41,11 @@ const ADMIN_LINKS = [
   { href: '/audit', label: '감사 로그', icon: FileSearch },
 ];
 
+// 대표(owner)·임원·super_admin 전용 — 본사 매니저·직원에게는 보이지 않는다
+const OWNER_LINKS = [
+  { href: '/ads', label: '광고 현황', icon: Megaphone },
+];
+
 const ROLE_META = {
   executive: { label: '대표',     icon: Crown },
   hq:        { label: '본사 관리자', icon: Building2 },
@@ -59,6 +64,8 @@ export default function Sidebar() {
   const [wpOpen, setWpOpen] = useState(false);
   const isHQMember = memberships.some((m) => m.workplaces?.name === '본사');
   const isAdmin = profile?.is_super_admin === true || isHQMember || memberships.some((m) => m.role === 'owner');
+  const isOwner = profile?.is_super_admin === true || profile?.is_executive === true || memberships.some((m) => m.role === 'owner');
+  const adminLinks = isOwner ? [...ADMIN_LINKS, ...OWNER_LINKS] : ADMIN_LINKS;
   // 월별 리포트: 본사 소속(임원·super_admin 포함)만
   const canViewReports = profile?.is_super_admin === true || profile?.is_executive === true || isHQMember;
   const mainLinks = MAIN_LINKS.filter((l) => l.href !== '/reports' || canViewReports);
@@ -191,7 +198,7 @@ export default function Sidebar() {
             }}>
               관리
             </div>
-            {ADMIN_LINKS.map(({ href, label, icon: Icon }) => (
+            {adminLinks.map(({ href, label, icon: Icon }) => (
               <NavLink key={href} href={href} icon={Icon} label={label} active={isActive(href)} />
             ))}
           </>
