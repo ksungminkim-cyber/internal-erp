@@ -275,7 +275,7 @@ export default function AdsPage() {
               <div key={i} className="card dense" style={{ display: 'flex', gap: 10, alignItems: 'flex-start', borderLeft: `4px solid ${a.level === 'critical' ? 'var(--danger)' : a.level === 'warning' ? '#f59e0b' : 'var(--accent)'}` }}>
                 <span style={{ color: a.level === 'critical' ? 'var(--danger)' : a.level === 'warning' ? '#c2410c' : 'var(--accent)', flexShrink: 0, marginTop: 1 }}>{a.level === 'info' ? <Info size={16} /> : <AlertTriangle size={16} />}</span>
                 <div style={{ fontSize: 13, minWidth: 0 }}>
-                  <strong>{a.ch}</strong> · {a.text} {a.at && <span className="text-muted" style={{ fontSize: 11 }}>({md(a.at)} 마감 기준)</span>}
+                  <strong>{a.ch}</strong> · {a.text} {a.at && <span className="text-muted" style={{ fontSize: 11 }}>({md(a.at)} 확인)</span>}
                 </div>
               </div>
             ))}
