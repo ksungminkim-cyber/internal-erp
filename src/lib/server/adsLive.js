@@ -70,6 +70,29 @@ async function meta(today) {
   return out;
 }
 
+// 당근 광고 OpenAPI (베타, 2026-10). 키는 전문가모드 → 온라인 문의 → [광고 도구 및 전환] > [OpenAPI 키 발급]. 60회/분.
+const KARROT_ADVERTISER = '4405635';
+async function karrot(today) {
+  const key = process.env.KARROT_OPENAPI_KEY;
+  if (!key) throw new Error('당근 OpenAPI 키 없음');
+  const H = { 'X-API-KEY': key, 'X-ADVERTISER-ID': KARROT_ADVERTISER, 'Content-Type': 'application/json' };
+  const cr = await fetch(`https://ads-openapi.kr.karrotmarket.com/v1/campaigns?pageNumber=1&pageSize=100&liveStatuses=ON`, { headers: H, cache: 'no-store' });
+  if (!cr.ok) throw new Error(`당근 캠페인 ${cr.status}`);
+  const camps = (await cr.json()).campaigns || [];
+  const out = { cost: 0, imp: 0, in: 0, c: [] };
+  if (!camps.length) return out;
+  const pr = await fetch('https://ads-openapi.kr.karrotmarket.com/v1/performance', { method: 'POST', headers: H, body: JSON.stringify({ analysisItem: 'Campaign', ids: camps.map((c) => c.id), startDateTime: `${today}T00:00:00+09:00`, endDateTime: `${today}T23:59:59+09:00`, timeGranularity: 'DAY' }), cache: 'no-store' });
+  if (!pr.ok) throw new Error(`당근 성과 ${pr.status}`);
+  const name = Object.fromEntries(camps.map((c) => [c.id, c.title]));
+  for (const row of (await pr.json()).performances || []) {
+    const imp = +row.impression || 0, clicks = +row.click || 0, cost = Math.round(+row.cost || 0);
+    if (!imp && !cost) continue;
+    out.imp += imp; out.in += clicks; out.cost += cost;
+    out.c.push({ name: name[row.id] || row.id, cost, imp, clicks });
+  }
+  return out;
+}
+
 let cache = null;
 
 // 오늘(KST) 채널별 광고비·노출·유입. 채널이 실패하면 그 채널만 null + errors 에 이유.
@@ -77,12 +100,13 @@ export async function fetchAdsLive() {
   if (cache && Date.now() - cache.at < CACHE_MS) return cache.data;
   const today = kstToday();
   const errors = {};
-  const [n, g, m] = await Promise.all([
+  const [n, g, m, k] = await Promise.all([
     naver(today).catch((e) => { errors.naver = e.message; return null; }),
     google(today).catch((e) => { errors.google = e.message; return null; }),
     meta(today).catch((e) => { errors.meta = e.message; return null; }),
+    karrot(today).catch((e) => { errors.karrot = e.message; return null; }),
   ]);
-  const data = { d: today, asOf: new Date().toISOString(), naver: n, google: g, meta: m, karrot: null, errors };
+  const data = { d: today, asOf: new Date().toISOString(), naver: n, google: g, meta: m, karrot: k, errors };
   cache = { at: Date.now(), data };
   return data;
 }

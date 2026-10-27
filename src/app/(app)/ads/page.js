@@ -191,8 +191,8 @@ export default function AdsPage() {
       </div>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, flex: 1 }}>
         {CH.map((c) => { const v = L && L[c.k]; const err = L && L.errors && L.errors[c.k]; return (
-          <span key={c.k} className="tag" style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, opacity: v ? 1 : 0.6 }} title={err || (c.k === 'karrot' ? '당근은 오늘 수치 없음 (전날 마감만)' : '')}>
-            <Dot color={c.color} />{c.label} <span className="num" style={{ fontWeight: 700 }}>{v ? won(v.cost) : c.k === 'karrot' ? '마감만' : err ? '오류' : '—'}</span>
+          <span key={c.k} className="tag" style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, opacity: v ? 1 : 0.6 }} title={err || ''}>
+            <Dot color={c.color} />{c.label} <span className="num" style={{ fontWeight: 700 }}>{v ? won(v.cost) : err ? (c.k === 'karrot' && /키 없음/.test(err) ? '키 대기' : '오류') : '—'}</span>
             {v && v.cost > 0 && <span style={{ color: '#15803d', fontSize: 10 }}>●</span>}
           </span>
         ); })}
@@ -309,7 +309,7 @@ export default function AdsPage() {
                 </div>
                 <div className="num" style={{ fontSize: 20, fontWeight: 800 }}>{noLive ? '—' : won(cc)}</div>
                 <div className="text-muted num" style={{ fontSize: 12 }}>
-                  {noLive ? (c.k === 'karrot' ? '오늘 수치 없음 · 전날 마감만' : `조회 실패: ${liveErrors[c.k] || '알 수 없음'}`) : <>노출 {num(sum(cur, c.k, 'imp'))} · {c.inL} {num(ci)} · {c.inL}당 {ci ? won(cc / ci) : '—'}</>}
+                  {noLive ? (c.k === 'karrot' && /키 없음/.test(liveErrors.karrot || '') ? '당근 OpenAPI 키 등록 전 · 전날 마감만' : `조회 실패: ${liveErrors[c.k] || '알 수 없음'}`) : <>노출 {num(sum(cur, c.k, 'imp'))} · {c.inL} {num(ci)} · {c.inL}당 {ci ? won(cc / ci) : '—'}</>}
                 </div>
                 {!noLive && camps.length > 0 && <div className="text-muted" style={{ fontSize: 11 }}>캠페인 {new Set(camps.map((x) => x.name)).size}개</div>}
               </div>
@@ -351,7 +351,7 @@ export default function AdsPage() {
                   <td style={{ ...td, ...left }}><span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Dot color={c.color} />{c.label}</span></td>
                   <td style={{ ...td, ...left, whiteSpace: 'normal', minWidth: 140 }}>{a.name}<div className="text-muted" style={{ fontSize: 11 }}>{a.type}</div></td>
                   <td style={{ ...td, ...left }}><Pill kind={k}>{t}</Pill></td>
-                  <td style={{ ...td, fontWeight: tc ? 700 : 400 }} className="num">{tc ? won(tc) : a.ch === 'karrot' ? <span className="text-muted">마감만</span> : '—'}</td>
+                  <td style={{ ...td, fontWeight: tc ? 700 : 400 }} className="num">{tc ? won(tc) : '—'}</td>
                   <td style={td} className="num">{a.budget ? won(a.budget) : '—'}</td>
                   <td style={td} className="num">{won(a.cost)}</td>
                   <td style={td} className="num">{num(a.in)}</td>
@@ -413,7 +413,7 @@ export default function AdsPage() {
             <div style={{ overflowX: 'auto' }}>
               <table style={{ borderCollapse: 'collapse', width: '100%' }}>
                 <thead><tr><th style={{ ...th, ...left }}>이름</th><th style={th}>광고비</th><th style={th}>노출</th><th style={th}>{inL}</th><th style={th}>{inL}당</th></tr></thead>
-                <tbody>{list.length === 0 ? <tr><td style={{ ...td, ...left }} colSpan={5} className="text-muted">{title.startsWith('당근') && range === 'today' ? '당근은 오늘 수치를 받을 수 없습니다 (전날 마감만).' : '이 기간에 집행된 항목이 없습니다.'}</td></tr> : list.map(([n, o]) => (
+                <tbody>{list.length === 0 ? <tr><td style={{ ...td, ...left }} colSpan={5} className="text-muted">{title.startsWith('당근') && range === 'today' && !L?.karrot ? '당근 오늘 수치는 OpenAPI 키 등록 후 표시됩니다 (지금은 전날 마감만).' : '이 기간에 집행된 항목이 없습니다.'}</td></tr> : list.map(([n, o]) => (
                   <tr key={n}><td style={{ ...td, ...left, whiteSpace: 'normal', minWidth: 160 }}>{n}</td><td style={td} className="num">{won(o.cost)}</td><td style={td} className="num">{num(o.imp)}</td><td style={td} className="num">{num(o.inn)}</td><td style={td} className="num">{o.inn ? won(o.cost / o.inn) : '—'}</td></tr>
                 ))}</tbody>
               </table>
@@ -439,7 +439,7 @@ export default function AdsPage() {
 
         <div className="text-muted" style={{ fontSize: 11, display: 'flex', gap: 6, alignItems: 'flex-start' }}>
           <Megaphone size={12} style={{ flexShrink: 0, marginTop: 2 }} />
-          <span>오늘 수치는 네이버·구글·메타 광고 API를 이 화면에서 직접 조회한 값입니다 (5분마다 갱신). 어제 이전은 매일 09:30에 마감한 값이고, 당근은 공개 API가 없어 마감 때만 받습니다. 메타는 2026-10-27 개설한 녹턴 광고 계정 기준이며 그 전 날짜는 이전 계정 기록입니다. 갱신 {formatDateTime(state.updated)}.</span>
+          <span>오늘 수치는 네이버·구글·메타 광고 API를 이 화면에서 직접 조회한 값입니다 (5분마다 갱신). 어제 이전은 매일 09:30에 마감한 값입니다. 당근은 광고 OpenAPI 키를 등록하면 오늘 수치도 같이 보입니다. 메타는 2026-10-27 개설한 녹턴 광고 계정 기준이며 그 전 날짜는 이전 계정 기록입니다. 갱신 {formatDateTime(state.updated)}.</span>
         </div>
       </main>
     </>
