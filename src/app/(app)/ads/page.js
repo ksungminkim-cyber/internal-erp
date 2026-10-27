@@ -7,7 +7,7 @@ import PageHeader from '@/components/PageHeader';
 import { formatCurrency, formatDateTime } from '@/lib/format';
 import { ymd } from '@/lib/date';
 import { ChevronLeft, Shield, BarChart3, AlertTriangle, Info, Megaphone } from 'lucide-react';
-import { getAdDashboard } from './actions';
+import { getAdDashboard, getAdLive } from './actions';
 
 // 광고 모니터링 팀이 매일 마감 후 올리는 데이터(ad_dashboard.data)를 ERP 스타일로 그린다.
 // 채널 색은 ERP 팔레트 안에서 고정 — 메타 파랑, 구글 주황, 네이버 초록, 당근 노랑.
@@ -20,6 +20,7 @@ const CH = [
 const BY = Object.fromEntries(CH.map((c) => [c.k, c]));
 
 const RANGES = [
+  { key: 'today', label: '오늘' },
   { key: 'yesterday', label: '어제' },
   { key: 'week', label: '이번 주' },
   { key: 'lastWeek', label: '지난 주' },
@@ -70,6 +71,7 @@ export default function AdsPage() {
   const [state, setState] = useState({ loading: true });
   const [range, setRange] = useState('week');
   const [team, setTeam] = useState('');
+  const [live, setLive] = useState({ loading: false });
 
   const isOwner = profile?.is_super_admin === true || profile?.is_executive === true || memberships.some((m) => m.role === 'owner');
 
@@ -80,9 +82,24 @@ export default function AdsPage() {
     return () => { alive = false; };
   }, [isOwner]);
 
+  // 오늘 탭: 광고 API를 직접 조회한 실시간 수치 (5분 캐시). 탭을 고를 때마다 다시 받는다.
+  useEffect(() => {
+    if (!isOwner || range !== 'today') return;
+    let alive = true;
+    getAdLive().then((r) => { if (alive) setLive({ loading: false, ...r }); });
+    return () => { alive = false; };
+  }, [isOwner, range]);
+
   const D = state.data;
   const view = useMemo(() => {
     if (!D) return null;
+    if (range === 'today') {
+      const L = live.live;
+      if (!L) return null;
+      const day = { d: L.d, naver: L.naver, google: L.google, meta: L.meta, karrot: null };
+      const prev = D.days.slice(-1); // 어제 하루 전체와 비교
+      return { from: L.d, to: L.d, cur: [day], prev, hasPrev: prev.length === 1, chartDays: [...D.days.slice(-13), day] };
+    }
     const { from, to } = rangeDates(range, D.closed);
     const cur = D.days.filter((x) => x.d >= from && x.d <= to);
     const len = cur.length;
@@ -91,7 +108,7 @@ export default function AdsPage() {
     const hasPrev = prev.length === len && len > 0;
     const chartDays = D.days.slice(-Math.max(len, 14));
     return { from, to, cur, prev, hasPrev, chartDays };
-  }, [D, range]);
+  }, [D, range, live.live]);
 
   if (!isOwner) {
     return (
@@ -132,7 +149,35 @@ export default function AdsPage() {
     );
   }
 
+  const rangeBar = (
+    <section style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+      <div style={{ fontSize: 14, fontWeight: 700 }}>{view ? (view.from === view.to ? `${md(view.from)} (${wd(view.from)})` : `${md(view.from)} ~ ${md(view.to)} · ${view.cur.length}일`) : '오늘'}{range === 'today' && live.live && <span className="text-muted" style={{ fontSize: 11, fontWeight: 500, marginLeft: 8 }}>{formatDateTime(live.live.asOf)} 기준 · 어제 전체와 비교</span>}</div>
+      <div className="segment" style={{ overflowX: 'auto', maxWidth: '100%' }}>
+        {RANGES.map((r) => (
+          <button key={r.key} type="button" className={`segment-item ${range === r.key ? 'is-active' : ''}`} onClick={() => { if (r.key === 'today') setLive({ loading: true }); setRange(r.key); }} style={{ padding: '7px 12px' }}>{r.label}</button>
+        ))}
+      </div>
+    </section>
+  );
+
+  if (!view) {
+    return (
+      <>
+        {header}
+        <main className="page-main" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {rangeBar}
+          <div className="card empty">
+            <div className="empty-icon">{live.loading ? <BarChart3 size={26} /> : <AlertTriangle size={26} />}</div>
+            <div className="empty-title">{live.loading ? '광고 API에서 오늘 수치를 받는 중…' : '오늘 수치를 받지 못했어요'}</div>
+            <div className="empty-desc">{live.loading ? '네이버 · 구글 · 메타' : live.error}</div>
+          </div>
+        </main>
+      </>
+    );
+  }
+
   const { from, to, cur, prev, hasPrev, chartDays } = view;
+  const liveErrors = range === 'today' && live.live ? live.live.errors : {};
   const cost = all(cur, 'cost'), imp = all(cur, 'imp'), inn = all(cur, 'in');
   const cpi = inn ? cost / inn : 0;
   const pCost = all(prev, 'cost'), pImp = all(prev, 'imp'), pIn = all(prev, 'in'), pCpi = pIn ? pCost / pIn : 0;
@@ -178,14 +223,7 @@ export default function AdsPage() {
         )}
 
         {/* 기간 */}
-        <section style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-          <div style={{ fontSize: 14, fontWeight: 700 }}>{periodLabel}</div>
-          <div className="segment" style={{ overflowX: 'auto', maxWidth: '100%' }}>
-            {RANGES.map((r) => (
-              <button key={r.key} type="button" className={`segment-item ${range === r.key ? 'is-active' : ''}`} onClick={() => setRange(r.key)} style={{ padding: '7px 12px' }}>{r.label}</button>
-            ))}
-          </div>
-        </section>
+        {rangeBar}
 
         {/* 합계 */}
         <section style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
@@ -200,11 +238,11 @@ export default function AdsPage() {
 
         {/* 채널별 */}
         <section style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
-          {CH.map((c) => { const cc = sum(cur, c.k, 'cost'), ci = sum(cur, c.k, 'in'); return (
-            <div key={c.k} className="card compact" style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {CH.map((c) => { const cc = sum(cur, c.k, 'cost'), ci = sum(cur, c.k, 'in'); const noLive = range === 'today' && !cur[0][c.k]; return (
+            <div key={c.k} className="card compact" style={{ display: 'flex', flexDirection: 'column', gap: 6, opacity: noLive ? 0.6 : 1 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 700, fontSize: 14 }}><Dot color={c.color} /> {c.label}</div>
-              <div className="num" style={{ fontSize: 20, fontWeight: 800 }}>{won(cc)}</div>
-              <div className="text-muted num" style={{ fontSize: 12 }}>노출 {num(sum(cur, c.k, 'imp'))} · {c.inL} {num(ci)} · {c.inL}당 {ci ? won(cc / ci) : '—'}</div>
+              <div className="num" style={{ fontSize: 20, fontWeight: 800 }}>{noLive ? '—' : won(cc)}</div>
+              <div className="text-muted num" style={{ fontSize: 12 }}>{noLive ? (c.k === 'karrot' ? '당근은 오늘 수치 없음 (전날 마감만)' : `조회 실패: ${liveErrors[c.k] || '알 수 없음'}`) : <>노출 {num(sum(cur, c.k, 'imp'))} · {c.inL} {num(ci)} · {c.inL}당 {ci ? won(cc / ci) : '—'}</>}</div>
             </div>
           ); })}
         </section>
@@ -336,7 +374,7 @@ export default function AdsPage() {
 
         <div className="text-muted" style={{ fontSize: 11, display: 'flex', gap: 6, alignItems: 'flex-start' }}>
           <Megaphone size={12} style={{ flexShrink: 0, marginTop: 2 }} />
-          <span>매일 아침 전날 마감 기준으로 갱신됩니다 (실시간 아님). 네이버는 검색광고 API, 당근은 당근 광고 MCP, 메타·구글은 광고 관리자 화면에서 읽은 값입니다. 녹턴만 집행 중이며 나울은 광고를 하지 않습니다.</span>
+          <span>「오늘」 탭은 네이버·구글·메타 광고 API를 그 자리에서 조회한 값(5분 캐시)이고, 나머지 기간은 매일 아침 09:30에 전날까지 마감한 값입니다. 당근은 당근 광고 MCP로 마감 때만 받습니다. 메타는 2026-10-27 개설한 녹턴 광고 계정 기준이며 그 전 날짜는 이전 계정 기록입니다.</span>
         </div>
       </main>
     </>
