@@ -17,10 +17,10 @@ export async function getAdDashboard() {
   const svc = getServiceClient();
   if (!(await isOwner(svc, user.id))) return { ok: false, error: '권한이 없습니다.', forbidden: true };
   const { data, error } = await svc.from('ad_dashboard')
-    .select('html, closed_date, built_at, updated_at')
+    .select('data, closed_date, built_at, updated_at')
     .eq('id', 'nocturne')
     .maybeSingle();
   if (error) return { ok: false, error: error.message };
-  if (!data) return { ok: true, html: null };
-  return { ok: true, html: data.html, closed: data.closed_date, built: data.built_at, updated: data.updated_at };
+  if (!data?.data) return { ok: true, data: null };
+  return { ok: true, data: data.data, closed: data.closed_date, built: data.built_at, updated: data.updated_at };
 }
