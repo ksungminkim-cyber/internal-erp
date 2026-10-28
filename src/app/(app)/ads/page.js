@@ -54,7 +54,7 @@ const won = (n) => `${formatCurrency(Math.round(n))}원`;
 const num = (n) => formatCurrency(Math.round(n));
 const sum = (arr, k, f) => arr.reduce((a, x) => a + ((x[k] && x[k][f]) || 0), 0);
 const all = (arr, f) => CH.reduce((a, c) => a + sum(arr, c.k, f), 0);
-const liveDay = (L) => L ? { d: L.d, naver: L.naver, google: L.google, meta: L.meta, karrot: null, live: true } : null;
+const liveDay = (L) => L ? { d: L.d, naver: L.naver, google: L.google, meta: L.meta, karrot: L.karrot, live: true } : null;
 
 function Delta({ cur, prev, label }) {
   if (!prev) return null;
