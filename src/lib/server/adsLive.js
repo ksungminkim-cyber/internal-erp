@@ -71,7 +71,7 @@ async function meta(today) {
 }
 
 // 당근 광고 OpenAPI (베타, 2026-10). 키는 전문가모드 → 온라인 문의 → [광고 도구 및 전환] > [OpenAPI 키 발급]. 60회/분.
-const KARROT_ADVERTISER = '4405635';
+const KARROT_ADVERTISER = '4722601'; // 전문가모드 녹턴_광고 (2026-10-28 이전). 간편모드 smk 4405635 는 OpenAPI 불가
 async function karrot(today) {
   const key = process.env.KARROT_OPENAPI_KEY;
   if (!key) throw new Error('당근 OpenAPI 키 없음');
