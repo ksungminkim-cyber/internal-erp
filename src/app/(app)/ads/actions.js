@@ -2,6 +2,7 @@
 
 import { getServiceClient, getActor } from '@/lib/server/guard';
 import { fetchAdsLive } from '@/lib/server/adsLive';
+import { runAdOp } from '@/lib/server/adsOps';
 
 // 대표 전용: 어느 매장이든 role='owner' 이거나 super_admin / 임원. 본사 일반 직원·매니저는 제외.
 async function isOwner(svc, userId) {
@@ -37,4 +38,26 @@ export async function getAdLive() {
   } catch (e) {
     return { ok: false, error: e.message };
   }
+}
+
+// 해석 카드의 버튼: 광고 설정을 실제로 바꾼다 (대표 전용). 결과는 ad_actions 에 남긴다 (표가 없으면 기록만 건너뜀).
+export async function runAdAction({ ch, kind, label, args }) {
+  const user = await getActor();
+  if (!user) return { ok: false, error: '로그인이 필요합니다.' };
+  const svc = getServiceClient();
+  if (!(await isOwner(svc, user.id))) return { ok: false, error: '권한이 없습니다.', forbidden: true };
+  let ok = true, result;
+  try { result = await runAdOp(kind, args || {}); } catch (e) { ok = false; result = e.message; }
+  await svc.from('ad_actions').insert({ user_id: user.id, ch, kind, label, args: args || {}, ok, result }).then(() => {}, () => {});
+  return ok ? { ok: true, result } : { ok: false, error: result };
+}
+
+export async function getAdActions() {
+  const user = await getActor();
+  if (!user) return { ok: false, error: '로그인이 필요합니다.' };
+  const svc = getServiceClient();
+  if (!(await isOwner(svc, user.id))) return { ok: false, error: '권한이 없습니다.', forbidden: true };
+  const { data, error } = await svc.from('ad_actions').select('id, at, ch, kind, label, ok, result').order('at', { ascending: false }).limit(10);
+  if (error) return { ok: true, actions: [] }; // 표가 아직 없으면 빈 목록
+  return { ok: true, actions: data || [] };
 }

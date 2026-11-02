@@ -6,8 +6,8 @@ import { useApp } from '@/context/AppContext';
 import PageHeader from '@/components/PageHeader';
 import { formatCurrency, formatDateTime } from '@/lib/format';
 import { ymd } from '@/lib/date';
-import { ChevronLeft, Shield, BarChart3, AlertTriangle, Info, RefreshCw, Megaphone, FlaskConical, ListChecks } from 'lucide-react';
-import { getAdDashboard, getAdLive } from './actions';
+import { ChevronLeft, Shield, BarChart3, AlertTriangle, Info, RefreshCw, Megaphone, FlaskConical, ExternalLink, Check } from 'lucide-react';
+import { getAdDashboard, getAdLive, runAdAction, getAdActions } from './actions';
 import { buildInsights, bucketize, stats } from '@/lib/adsInsights';
 
 // 광고 현황: 오늘은 광고 API 실시간(5분 캐시), 어제 이전은 매일 09:30 마감 데이터(ad_dashboard.data).
@@ -66,6 +66,9 @@ function Delta({ cur, prev, label }) {
   return <span className="num" style={{ fontSize: 11, color: 'var(--text-muted)' }}>{label} <span style={{ color: up ? '#c2410c' : '#15803d' }}>{up ? '▲' : '▼'} {Math.abs(p).toFixed(1)}%</span></span>;
 }
 
+const fkey = (f) => `${f.ch}|${f.title}`;
+const opKey = (f, o) => `${fkey(f)}|${o.label}`;
+
 function Dot({ color }) { return <span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: 3, background: color, flexShrink: 0 }} />; }
 
 function Pill({ kind, children }) {
@@ -90,6 +93,36 @@ function Section({ title, desc, right, children, collapsible, defaultOpen = true
   );
 }
 
+// 해석 한 줄: 배지 + 제목 + 버튼, 펼치면 뜻 · 할 일 · A/B
+function InsightRow({ f, n, compact, runs, onRun }) {
+  const color = BY[TEAM_KEY[f.ch]]?.color || 'var(--text-secondary)';
+  const ops = f.ops || [];
+  return (
+    <details style={{ borderRadius: 10, border: '1px solid var(--border)', padding: '8px 12px' }}>
+      <summary style={{ cursor: 'pointer', listStyle: 'none', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8, fontSize: 13 }}>
+        {n && <span className="num text-muted" style={{ fontSize: 12, width: 16 }}>{n}</span>}
+        <span className={`tag ${LEVEL[f.level][0]}`} style={{ fontSize: 10 }}>{LEVEL[f.level][1]}</span>
+        <span style={{ fontWeight: 700, color, whiteSpace: 'nowrap' }}>{f.ch}</span>
+        <span style={{ flex: 1, minWidth: 160, fontWeight: compact ? 500 : 600 }}>{n ? f.action : f.title}</span>
+        {ops.length > 0 && <span style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }} onClick={(e) => e.preventDefault()}>
+          {ops.map((o) => { const r = runs[opKey(f, o)] || {}; return (
+            <button key={o.label} type="button" className={`btn ${o.kind === 'link' ? 'btn-ghost' : 'btn-primary'}`} disabled={r.busy || r.ok} onClick={(e) => { e.preventDefault(); e.stopPropagation(); onRun(f, o); }} style={{ fontSize: 12, padding: '4px 10px', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+              {r.ok ? <Check size={12} /> : o.kind === 'link' ? <ExternalLink size={12} /> : null}{r.busy ? '적용 중…' : o.label}
+            </button>
+          ); })}
+        </span>}
+      </summary>
+      {ops.map((o) => { const r = runs[opKey(f, o)]; return r && !r.busy ? <div key={o.label} style={{ fontSize: 12, marginTop: 6, color: r.ok ? '#15803d' : 'var(--danger)' }}>{r.ok ? '적용됨' : '실패'} · {r.msg}</div> : null; })}
+      <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '4px 10px', fontSize: 13, marginTop: 8 }}>
+        {n && <><span className="text-muted" style={{ fontSize: 11 }}>근거</span><span>{f.title}</span></>}
+        {f.meaning && <><span className="text-muted" style={{ fontSize: 11 }}>뜻</span><span className="text-secondary">{f.meaning}</span></>}
+        {f.action && !n && <><span className="text-muted" style={{ fontSize: 11 }}>할 일</span><span>{f.action}</span></>}
+        {f.test && <><span className="text-muted" style={{ fontSize: 11, display: 'inline-flex', alignItems: 'center', gap: 3 }}><FlaskConical size={11} />A/B</span><span style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '2px 8px', fontSize: 12 }}><span className="text-muted">비교</span><span>{f.test.what}</span><span className="text-muted">방법</span><span>{f.test.how}</span><span className="text-muted">판정</span><span>{f.test.judge}</span></span></>}
+      </div>
+    </details>
+  );
+}
+
 export default function AdsPage() {
   const router = useRouter();
   const { profile, memberships } = useApp();
@@ -100,6 +133,9 @@ export default function AdsPage() {
   const [hover, setHover] = useState(null);
   const [tick, setTick] = useState(0);
   const [unit, setUnit] = useState('week');
+  const [insTab, setInsTab] = useState('');
+  const [runs, setRuns] = useState({}); // 버튼 키 → { busy, ok, msg }
+  const [actLog, setActLog] = useState([]);
   const [trendCh, setTrendCh] = useState('all');
 
   const isOwner = profile?.is_super_admin === true || profile?.is_executive === true || memberships.some((m) => m.role === 'owner');
@@ -108,6 +144,7 @@ export default function AdsPage() {
     if (!isOwner) return;
     let alive = true;
     getAdDashboard().then((r) => { if (alive) setState({ loading: false, ...r }); });
+    getAdActions().then((r) => { if (alive && r.ok) setActLog(r.actions); });
     return () => { alive = false; };
   }, [isOwner]);
 
@@ -273,6 +310,18 @@ export default function AdsPage() {
   const { findings, plan } = buildInsights({ cur, prev, base, D, isToday: range === 'today' });
   const byCh = {}; findings.forEach((f) => (byCh[f.ch] = byCh[f.ch] || []).push(f));
   const chOrder = ['종합', ...CH.map((c) => c.label)].filter((k) => byCh[k]);
+  const runOp = async (f, o) => {
+    if (o.kind === 'link') { window.open(o.url, '_blank', 'noopener'); return; }
+    if (!window.confirm(`${o.confirm}
+
+지금 바로 적용됩니다. 진행할까요?`)) return;
+    const k = opKey(f, o);
+    setRuns((r) => ({ ...r, [k]: { busy: true } }));
+    const res = await runAdAction({ ch: f.ch, kind: o.kind, label: o.label, args: o.args });
+    setRuns((r) => ({ ...r, [k]: { busy: false, ok: res.ok, msg: res.ok ? res.result : res.error } }));
+    getAdActions().then((r) => { if (r.ok) setActLog(r.actions); });
+  };
+
 
   // 일·주·월 추이: 마감 일자 + 오늘(실시간)을 묶어 채널별(또는 합계) 표
   const U = UNITS.find((u) => u.key === unit);
@@ -336,39 +385,32 @@ export default function AdsPage() {
           })}
         </section>
 
-        {/* 해석과 다음 액션 */}
-        <Section title="해석과 다음 액션" desc={`${range === 'today' ? '오늘 지금까지' : periodLabel}를 평소(직전 마감 ${base.length}일 평균)와 비교해 자동으로 뽑은 해석입니다. 실제 변경은 대표가 결정합니다.`}>
-          {plan.length > 0 && (
-            <div style={{ padding: '10px 12px', borderRadius: 10, background: 'var(--surface-soft)', marginBottom: 12 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 700, fontSize: 13, marginBottom: 6 }}><ListChecks size={15} /> 액션 플랜 (우선순위순)</div>
-              <ol style={{ margin: 0, paddingLeft: 20, fontSize: 13, display: 'flex', flexDirection: 'column', gap: 4 }}>
-                {plan.map((f, i) => <li key={i}><strong style={{ color: BY[TEAM_KEY[f.ch]]?.color || 'var(--text)' }}>{f.ch}</strong> · {f.action}</li>)}
-              </ol>
+        {/* 액션 플랜 */}
+        <Section title="액션 플랜" desc={`${range === 'today' ? '오늘 지금까지' : periodLabel}를 평소(직전 마감 ${base.length}일 평균)와 비교해 뽑은 할 일. 버튼은 누르면 바로 광고 설정이 바뀌고, 「열기」는 해당 광고 관리자로 갑니다.`}>
+          {plan.length === 0 ? <div className="text-muted" style={{ fontSize: 13 }}>지금 손볼 일이 없습니다.</div> : (
+            <div className="stack stack-2">
+              {plan.map((f, i) => <InsightRow key={fkey(f)} f={f} n={i + 1} runs={runs} onRun={runOp} />)}
             </div>
           )}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {chOrder.map((k) => (
-              <div key={k}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 700, fontSize: 13, marginBottom: 6 }}>{BY[TEAM_KEY[k]] && <Dot color={BY[TEAM_KEY[k]].color} />}{k}</div>
-                <div className="stack stack-2">
-                  {byCh[k].map((f, i) => (
-                    <div key={i} style={{ padding: '10px 12px', borderRadius: 10, border: '1px solid var(--border)', fontSize: 13, display: 'flex', flexDirection: 'column', gap: 4 }}>
-                      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}><span className={`tag ${LEVEL[f.level][0]}`} style={{ fontSize: 11 }}>{LEVEL[f.level][1]}</span><strong>{f.title}</strong></div>
-                      {f.meaning && <div className="text-secondary"><span className="text-muted" style={{ fontSize: 11, marginRight: 6 }}>뜻</span>{f.meaning}</div>}
-                      {f.action && <div><span className="text-muted" style={{ fontSize: 11, marginRight: 6 }}>할 일</span>{f.action}</div>}
-                      {f.test && (
-                        <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '2px 8px', padding: '8px 10px', borderRadius: 8, background: 'var(--surface-soft)', fontSize: 12 }}>
-                          <span style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'center', gap: 5, fontWeight: 700 }}><FlaskConical size={13} /> A/B 테스트 제안</span>
-                          <span className="text-muted">비교</span><span>{f.test.what}</span>
-                          <span className="text-muted">방법</span><span>{f.test.how}</span>
-                          <span className="text-muted">판정</span><span>{f.test.judge}</span>
-                        </div>
-                      )}
-                    </div>
-                  ))}
+          {actLog.length > 0 && (
+            <details style={{ marginTop: 12 }}>
+              <summary className="text-muted" style={{ fontSize: 12, cursor: 'pointer' }}>실행 기록 {actLog.length}건</summary>
+              <div className="stack stack-2" style={{ marginTop: 6 }}>{actLog.map((x) => (
+                <div key={x.id} style={{ display: 'flex', gap: 8, fontSize: 12, alignItems: 'baseline' }}>
+                  <span className="text-muted num" style={{ whiteSpace: 'nowrap' }}>{md(ymd(new Date(x.at)))} {hm(x.at)}</span>
+                  <span className={`tag ${x.ok ? 'tag-success' : 'tag-danger'}`} style={{ fontSize: 10 }}>{x.ok ? '성공' : '실패'}</span>
+                  <span style={{ minWidth: 0, overflowWrap: 'anywhere' }}><strong>{x.ch}</strong> · {x.label} — {x.result}</span>
                 </div>
-              </div>
-            ))}
+              ))}</div>
+            </details>
+          )}
+        </Section>
+
+        {/* 채널별 해석 */}
+        <Section title="채널별 해석" desc="제목만 훑고, 궁금한 줄을 눌러 뜻 · 할 일 · A/B 테스트를 펼쳐 보세요."
+          right={<div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>{[['', '전체'], ...chOrder.map((k) => [k, k])].map(([k, l]) => <button key={k} type="button" className={`tag ${insTab === k ? 'tag-accent' : ''}`} onClick={() => setInsTab(k)}>{l}{k && <span className="num" style={{ marginLeft: 4, opacity: 0.7 }}>{byCh[k].length}</span>}</button>)}</div>}>
+          <div className="stack stack-2">
+            {findings.filter((f) => !insTab || f.ch === insTab).map((f) => <InsightRow key={fkey(f)} f={f} compact runs={runs} onRun={runOp} />)}
           </div>
         </Section>
 
