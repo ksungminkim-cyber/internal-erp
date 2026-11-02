@@ -6,8 +6,9 @@ import { useApp } from '@/context/AppContext';
 import PageHeader from '@/components/PageHeader';
 import { formatCurrency, formatDateTime } from '@/lib/format';
 import { ymd } from '@/lib/date';
-import { ChevronLeft, Shield, BarChart3, AlertTriangle, Info, RefreshCw, Megaphone } from 'lucide-react';
+import { ChevronLeft, Shield, BarChart3, AlertTriangle, Info, RefreshCw, Megaphone, FlaskConical, ListChecks } from 'lucide-react';
 import { getAdDashboard, getAdLive } from './actions';
+import { buildInsights, bucketize, stats } from '@/lib/adsInsights';
 
 // 광고 현황: 오늘은 광고 API 실시간(5분 캐시), 어제 이전은 매일 09:30 마감 데이터(ad_dashboard.data).
 // 채널 색은 ERP 팔레트 안에서 고정 — 메타 파랑, 구글 주황, 네이버 초록, 당근 노랑.
@@ -30,6 +31,8 @@ const RANGES = [
   { key: 'd30', label: '최근 30일' },
 ];
 const LIVE_EVERY_MS = 5 * 60 * 1000;
+const UNITS = [{ key: 'day', label: '일', limit: 14 }, { key: 'week', label: '주', limit: 8 }, { key: 'month', label: '월', limit: 6 }];
+const LEVEL = { bad: ['tag-danger', '문제'], warn: ['tag-warning', '주의'], good: ['tag-success', '좋음'], info: ['', '참고'] };
 
 function addDays(d, n) { const x = new Date(d); x.setDate(x.getDate() + n); return x; }
 function monday(d) { return addDays(d, -((d.getDay() + 6) % 7)); }
@@ -96,6 +99,8 @@ export default function AdsPage() {
   const [team, setTeam] = useState('');
   const [hover, setHover] = useState(null);
   const [tick, setTick] = useState(0);
+  const [unit, setUnit] = useState('week');
+  const [trendCh, setTrendCh] = useState('all');
 
   const isOwner = profile?.is_super_admin === true || profile?.is_executive === true || memberships.some((m) => m.role === 'owner');
 
@@ -262,6 +267,20 @@ export default function AdsPage() {
   const periodLabel = from === to ? `${md(from)} (${wd(from)})` : `${md(from)} ~ ${md(to)}`;
   const ads = [...(D.ads || [])].sort((a, b) => (liveCamp[b.name] || 0) - (liveCamp[a.name] || 0) || b.cost - a.cost);
 
+  // 해석: 이 기간을 "평소"(기간 직전 마감 28일)와 비교해 뜻·할 일·실험을 뽑는다
+  const baseEnd = range === 'today' ? D.days.length : D.days.findIndex((x) => x.d === from);
+  const base = baseEnd > 0 ? D.days.slice(Math.max(0, baseEnd - 28), baseEnd) : [];
+  const { findings, plan } = buildInsights({ cur, prev, base, D, isToday: range === 'today' });
+  const byCh = {}; findings.forEach((f) => (byCh[f.ch] = byCh[f.ch] || []).push(f));
+  const chOrder = ['종합', ...CH.map((c) => c.label)].filter((k) => byCh[k]);
+
+  // 일·주·월 추이: 마감 일자 + 오늘(실시간)을 묶어 채널별(또는 합계) 표
+  const U = UNITS.find((u) => u.key === unit);
+  const buckets = bucketize(L ? [...D.days, liveDay(L)] : D.days, unit, { limit: U.limit });
+  const bStats = (b) => trendCh === 'all' ? CH.reduce((a, c) => { const s = stats(b.days, c.k); a.cost += s.cost; a.imp += s.imp; a.inn += s.inn; return a; }, { cost: 0, imp: 0, inn: 0 }) : stats(b.days, trendCh);
+  const bLabel = (b) => unit === 'day' ? `${md(b.from)} (${wd(b.from)})` : unit === 'week' ? `${md(b.from)}~${md(b.to)}` : `${+b.key.slice(5)}월 (${md(b.from)}~${md(b.to)})`;
+  const trendInL = trendCh === 'all' ? '유입' : BY[trendCh].inL;
+
   return (
     <>
       {header}
@@ -316,6 +335,66 @@ export default function AdsPage() {
             );
           })}
         </section>
+
+        {/* 해석과 다음 액션 */}
+        <Section title="해석과 다음 액션" desc={`${range === 'today' ? '오늘 지금까지' : periodLabel}를 평소(직전 마감 ${base.length}일 평균)와 비교해 자동으로 뽑은 해석입니다. 실제 변경은 대표가 결정합니다.`}>
+          {plan.length > 0 && (
+            <div style={{ padding: '10px 12px', borderRadius: 10, background: 'var(--surface-soft)', marginBottom: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 700, fontSize: 13, marginBottom: 6 }}><ListChecks size={15} /> 액션 플랜 (우선순위순)</div>
+              <ol style={{ margin: 0, paddingLeft: 20, fontSize: 13, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                {plan.map((f, i) => <li key={i}><strong style={{ color: BY[TEAM_KEY[f.ch]]?.color || 'var(--text)' }}>{f.ch}</strong> · {f.action}</li>)}
+              </ol>
+            </div>
+          )}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {chOrder.map((k) => (
+              <div key={k}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 700, fontSize: 13, marginBottom: 6 }}>{BY[TEAM_KEY[k]] && <Dot color={BY[TEAM_KEY[k]].color} />}{k}</div>
+                <div className="stack stack-2">
+                  {byCh[k].map((f, i) => (
+                    <div key={i} style={{ padding: '10px 12px', borderRadius: 10, border: '1px solid var(--border)', fontSize: 13, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}><span className={`tag ${LEVEL[f.level][0]}`} style={{ fontSize: 11 }}>{LEVEL[f.level][1]}</span><strong>{f.title}</strong></div>
+                      {f.meaning && <div className="text-secondary"><span className="text-muted" style={{ fontSize: 11, marginRight: 6 }}>뜻</span>{f.meaning}</div>}
+                      {f.action && <div><span className="text-muted" style={{ fontSize: 11, marginRight: 6 }}>할 일</span>{f.action}</div>}
+                      {f.test && (
+                        <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '2px 8px', padding: '8px 10px', borderRadius: 8, background: 'var(--surface-soft)', fontSize: 12 }}>
+                          <span style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'center', gap: 5, fontWeight: 700 }}><FlaskConical size={13} /> A/B 테스트 제안</span>
+                          <span className="text-muted">비교</span><span>{f.test.what}</span>
+                          <span className="text-muted">방법</span><span>{f.test.how}</span>
+                          <span className="text-muted">판정</span><span>{f.test.judge}</span>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </Section>
+
+        {/* 일·주·월 추이 */}
+        <Section title="기간별 성과 추이" desc="마감 데이터와 오늘(실시간)을 일·주·월로 묶은 표. 변화는 바로 앞 기간 대비 광고비. 진행 중인 기간은 「진행 중」으로 표시."
+          right={<div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
+            <div style={{ display: 'flex', gap: 4 }}>{[['all', '합계'], ...CH.map((c) => [c.k, c.label])].map(([k, l]) => <button key={k} type="button" className={`tag ${trendCh === k ? 'tag-accent' : ''}`} onClick={() => setTrendCh(k)}>{l}</button>)}</div>
+            <div className="segment">{UNITS.map((u) => <button key={u.key} type="button" className={`segment-item ${unit === u.key ? 'is-active' : ''}`} onClick={() => setUnit(u.key)} style={{ padding: '5px 10px' }}>{u.label}</button>)}</div>
+          </div>}>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ borderCollapse: 'collapse', width: '100%' }}>
+              <thead><tr><th style={{ ...th, ...left }}>기간</th><th style={th}>광고비</th><th style={th}>노출</th><th style={th}>{trendInL}</th><th style={th}>클릭률</th><th style={th}>{trendInL}당</th><th style={th}>변화</th></tr></thead>
+              <tbody>{[...buckets].reverse().map((b, i, arr) => { const s = bStats(b); const p = arr[i + 1] ? bStats(arr[i + 1]) : null; return (
+                <tr key={b.key}>
+                  <td style={{ ...td, ...left }} className="num">{bLabel(b)}{(b.live || b.partial) && <span className="tag tag-accent" style={{ fontSize: 10, marginLeft: 6 }}>{b.live ? '진행 중' : `${b.days.length}일`}</span>}</td>
+                  <td style={td} className="num"><strong>{won(s.cost)}</strong></td>
+                  <td style={td} className="num">{num(s.imp)}</td>
+                  <td style={td} className="num">{num(s.inn)}</td>
+                  <td style={td} className="num">{s.imp ? `${((s.inn / s.imp) * 100).toFixed(1)}%` : '—'}</td>
+                  <td style={td} className="num">{s.inn ? won(s.cost / s.inn) : '—'}</td>
+                  <td style={td}><Delta cur={s.cost} prev={p && !b.partial && !b.live ? p.cost : 0} label="" /></td>
+                </tr>
+              ); })}</tbody>
+            </table>
+          </div>
+        </Section>
 
         {/* 일별 광고비 */}
         <Section title="일별 광고비" right={<div style={{ display: 'flex', gap: 10, fontSize: 11, color: 'var(--text-muted)' }}>{CH.map((c) => <span key={c.k} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><Dot color={c.color} />{c.label}</span>)}</div>}>
