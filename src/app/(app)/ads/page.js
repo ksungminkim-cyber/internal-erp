@@ -268,8 +268,17 @@ export default function AdsPage() {
         {c.k === 'naver' && (D.naver?.ads || []).length > 0 && (
           <div>
             <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 6 }}>소재 <span className="text-muted" style={{ fontWeight: 400, fontSize: 11 }}>· 최근 7일, 마감 기준. 노출이 고르니 클릭률로 비교</span></div>
-            <Table cols={[{ h: '소재', left: true }, { h: '광고비' }, { h: '노출' }, { h: '클릭' }, { h: '클릭률' }, { h: '클릭당' }]}
-              rows={[...D.naver.ads].filter((a) => a.imp).sort((a, b) => b.clicks / b.imp - a.clicks / a.imp).map((a) => [a.name, won(a.cost), num(a.imp), num(a.clicks), `${((a.clicks / a.imp) * 100).toFixed(1)}%`, a.clicks ? won(a.cost / a.clicks) : '—'])} empty="" />
+            <Table cols={[{ h: '소재', left: true }, { h: '광고비' }, { h: '노출' }, { h: '클릭' }, { h: '클릭률' }, { h: '클릭당' }, { h: '상태 (실시간)', left: true }]}
+              rows={[...D.naver.ads].filter((a) => a.imp).sort((a, b) => b.clicks / b.imp - a.clicks / a.imp).map((a) => {
+                const lv = ((L && L.naver && L.naver.ads) || []).find((x) => x.name === a.name); // 실시간 on/off
+                const pf = { ch: '네이버', title: `소재 ${a.name}` };
+                const o = lv ? { kind: 'naver.adLock', label: lv.off ? '켜기' : '끄기', args: { name: a.name, lock: !lv.off }, confirm: `네이버 플레이스 소재 「${a.name}」를 ${lv.off ? '켭니다' : '끕니다'}.` } : null;
+                const r = o ? runs[opKey(pf, o)] || {} : {};
+                return [a.name, won(a.cost), num(a.imp), num(a.clicks), `${((a.clicks / a.imp) * 100).toFixed(1)}%`, a.clicks ? won(a.cost / a.clicks) : '—',
+                  <span key="s" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>{lv ? <Pill kind={lv.off ? 'off' : 'on'}>{lv.off ? '꺼짐' : '노출 중'}</Pill> : <span className="text-muted">—</span>}
+                    {o && <button type="button" className="btn btn-ghost" disabled={r.busy} onClick={() => runOp(pf, o)} style={{ fontSize: 11, padding: '2px 8px' }}>{r.busy ? '적용 중…' : o.label}</button>}
+                    {r.msg && !r.busy && <span style={{ fontSize: 11, color: r.ok ? '#15803d' : 'var(--danger)' }}>{r.ok ? '적용됨' : r.msg}</span>}</span>];
+              })} empty="" />
           </div>
         )}
         <div>

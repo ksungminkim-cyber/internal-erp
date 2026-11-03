@@ -23,12 +23,16 @@ async function naver(today) {
     if (!r.ok) throw new Error(`네이버 ${r.status}`);
     return r.json();
   };
-  const [st, biz] = await Promise.all([
+  const [st, biz, groups] = await Promise.all([
     call('/stats', { id: NAVER_CAMPAIGN, fields: JSON.stringify(['impCnt', 'clkCnt', 'salesAmt']), timeRange: JSON.stringify({ since: today, until: today }), timeIncrement: 'allDays' }),
     call('/billing/bizmoney', {}).catch(() => null), // 잔액은 실패해도 수치는 보여준다
+    call('/ncc/adgroups', { nccCampaignId: NAVER_CAMPAIGN }).catch(() => []),
   ]);
+  // 소재 on/off 상태 (화면의 끄기/켜기 버튼용). 이름 규칙은 collect_naver 와 동일
+  const ads = [];
+  for (const g of groups) for (const a of await call('/ncc/ads', { nccAdgroupId: g.nccAdgroupId }).catch(() => [])) ads.push({ name: (a.ad && (a.ad.description || a.ad.headline)) || g.name, off: !!a.userLock, status: a.status });
   const s = (st.data && st.data[0]) || {};
-  return { cost: Math.round(s.salesAmt || 0), imp: s.impCnt || 0, in: s.clkCnt || 0, bal: biz ? Math.round(biz.bizmoney) : null, c: [{ name: '플레이스#1_녹턴', cost: Math.round(s.salesAmt || 0), imp: s.impCnt || 0, clicks: s.clkCnt || 0 }] };
+  return { cost: Math.round(s.salesAmt || 0), imp: s.impCnt || 0, in: s.clkCnt || 0, bal: biz ? Math.round(biz.bizmoney) : null, ads, c: [{ name: '플레이스#1_녹턴', cost: Math.round(s.salesAmt || 0), imp: s.impCnt || 0, clicks: s.clkCnt || 0 }] };
 }
 
 async function google(today) {
