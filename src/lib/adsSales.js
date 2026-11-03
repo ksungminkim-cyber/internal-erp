@@ -65,7 +65,7 @@ export function changePoints(rev, days, { window = 14 } = {}) {
       const raw = (post.day / post.n) / (pre.day / pre.n) - 1;
       const adj = preLY.n >= window * 0.7 && postLY.n >= window * 0.5 && preLY.day && postLY.day ? ((post.day / post.n) / (postLY.day / postLY.n)) / ((pre.day / pre.n) / (preLY.day / preLY.n)) - 1 : null;
       const adDelta = after - before; // 하루 광고비 변화
-      const revDelta = post.day / post.n - pre.day / pre.n; // 하루 낮 매출 변화
+      const revDelta = (adj ?? raw) * (pre.day / pre.n); // 하루 낮 매출 변화 (전년 보정값이 있으면 그것으로)
       out.push({ ch: k, d, before, after, chg, preDays: pre.n, postDays: post.n, partial: post.n < window, raw, adj, adDelta, revDelta, ratio: adDelta > 0 ? revDelta / adDelta : null });
     }
   }
