@@ -151,11 +151,8 @@ export function buildInsights({ cur, prev = [], base = [], D = {}, isToday = fal
     if (s.days && !small(s)) add('당근', 'info', `클릭당 ${won(s.cpi)} — 네이버·구글보다 비싸지만 성격이 다름`, '당근은 반경 몇 km 안 주민에게만 나갑니다. 단골이 될 확률이 높은 대신 클릭 단가는 높습니다.', '클릭 수보다 비즈프로필 "단골"·"관심" 증가로 판단하세요. 주 단위로 단골 수를 적어 두면 비용 대비 효과가 보입니다.', null, 3);
   }
 
-  // ── 잔액·경고 (마감 기준)
-  for (const a of D.alerts || []) {
-    if (/잔액|비즈머니|캐시|소진|한도/.test(a.text)) add(a.ch, a.level === 'critical' ? 'bad' : 'warn', a.text, '잔액이 떨어지면 광고가 멈추고 그날 유입이 0이 됩니다. 재개해도 학습이 초기화돼 며칠간 단가가 오릅니다.', '오늘 충전. 반복되면 자동충전 또는 충전 주기를 2주 단위로.', null, 1, [link('충전 페이지 열기', a.ch === '네이버' ? LINKS.naver : a.ch === '구글' ? LINKS.googleBilling : a.ch === '당근' ? LINKS.karrotCash : LINKS.meta)]);
-    else add(a.ch, a.level === 'critical' ? 'bad' : a.level === 'warning' ? 'warn' : 'info', a.text, null, null, null, 3); // 마감 때 남긴 메모성 경고는 그대로 보여준다
-  }
+  // ── 마감 때 남긴 메모성 경고만 참고로 (잔액 경고는 채널 카드의 잔액 표시로 대신한다)
+  for (const a of D.alerts || []) if (!/잔액|비즈머니|캐시|소진|한도/.test(a.text)) add(a.ch, 'info', a.text, null, null, null, 3);
 
   // ── 전체: 채널 믹스
   {

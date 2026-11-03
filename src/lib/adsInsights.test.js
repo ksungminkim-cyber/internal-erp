@@ -29,7 +29,7 @@ test('buildInsights: 지출 0원 날·단가 상승(소재 피로)·잔액 경�
   assert.ok(titles.some((t) => /4일 중 1일 지출 0원/.test(t)));
   const cpi = r.findings.find((f) => /클릭당 비용/.test(f.title));
   assert.ok(cpi && /소재 피로/.test(cpi.meaning) && cpi.test);
-  assert.equal(r.plan[0].priority, 1); // 잔액 경고가 먼저
+  assert.ok(!r.findings.some((f) => /잔액/.test(f.title))); // 잔액 경고는 해석에 넣지 않는다 (채널 카드가 보여줌)
   assert.ok(r.plan.every((f) => f.level !== 'good'));
 });
 
@@ -53,11 +53,10 @@ test('buildInsights: 구글 디맨드젠 집중 + 높은 클릭률은 실수 클
   assert.deepEqual(lim.ops[0], { kind: 'google.budget', label: '일예산 15,000원으로', args: { campaign: '녹턴 검색', amount: 15000 }, confirm: '구글 「녹턴 검색」 캠페인 일예산을 15,000원으로 바꿉니다.' });
 });
 
-test('buildInsights: 잔액 경고는 충전 링크, 지출 0원은 재개 버튼, 효율 좋음은 예산 +20% 버튼', () => {
+test('buildInsights: 지출 0원은 재개 버튼, 효율 좋음은 예산 +20% 버튼', () => {
   const base = seq('2026-09-01', 28, (d) => day(d, 'naver', 10000, 10000, 100));
   const cur = seq('2026-10-01', 4, (d, i) => day(d, 'naver', i === 3 ? 0 : 7000, 10000, 100)); // 단가 70원 (-30%), 하루 0원
   const r = buildInsights({ cur, base, D: { alerts: [{ ch: '네이버', level: 'warning', text: '비즈머니 잔액 1,000원' }] } });
-  assert.equal(r.findings.find((f) => /잔액/.test(f.title)).ops[0].kind, 'link');
   assert.equal(r.findings.find((f) => /지출 0원/.test(f.title)).ops[0].kind, 'naver.campaignLock');
   assert.deepEqual(r.findings.find((f) => /저렴/.test(f.title)).ops[0].args, { pct: 20 });
 });

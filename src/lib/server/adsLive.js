@@ -23,9 +23,12 @@ async function naver(today) {
     if (!r.ok) throw new Error(`네이버 ${r.status}`);
     return r.json();
   };
-  const st = await call('/stats', { id: NAVER_CAMPAIGN, fields: JSON.stringify(['impCnt', 'clkCnt', 'salesAmt']), timeRange: JSON.stringify({ since: today, until: today }), timeIncrement: 'allDays' });
+  const [st, biz] = await Promise.all([
+    call('/stats', { id: NAVER_CAMPAIGN, fields: JSON.stringify(['impCnt', 'clkCnt', 'salesAmt']), timeRange: JSON.stringify({ since: today, until: today }), timeIncrement: 'allDays' }),
+    call('/billing/bizmoney', {}).catch(() => null), // 잔액은 실패해도 수치는 보여준다
+  ]);
   const s = (st.data && st.data[0]) || {};
-  return { cost: Math.round(s.salesAmt || 0), imp: s.impCnt || 0, in: s.clkCnt || 0, c: [{ name: '플레이스#1_녹턴', cost: Math.round(s.salesAmt || 0), imp: s.impCnt || 0, clicks: s.clkCnt || 0 }] };
+  return { cost: Math.round(s.salesAmt || 0), imp: s.impCnt || 0, in: s.clkCnt || 0, bal: biz ? Math.round(biz.bizmoney) : null, c: [{ name: '플레이스#1_녹턴', cost: Math.round(s.salesAmt || 0), imp: s.impCnt || 0, clicks: s.clkCnt || 0 }] };
 }
 
 async function google(today) {
