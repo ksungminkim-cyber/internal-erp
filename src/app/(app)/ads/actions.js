@@ -52,6 +52,27 @@ export async function runAdAction({ ch, kind, label, args }) {
   return ok ? { ok: true, result } : { ok: false, error: result };
 }
 
+// 광고 → 매출: 녹턴 POS 일매출(낮=19시 전, 바=19시 이후). 10분 캐시. 클라이언트가 adsSales 로 광고비와 맞춰 본다.
+let salesCache = null;
+export async function getAdSales() {
+  const user = await getActor();
+  if (!user) return { ok: false, error: '로그인이 필요합니다.' };
+  const svc = getServiceClient();
+  if (!(await isOwner(svc, user.id))) return { ok: false, error: '권한이 없습니다.', forbidden: true };
+  if (salesCache && Date.now() - salesCache.at < 10 * 60 * 1000) return { ok: true, rev: salesCache.rev };
+  const { data: wp } = await svc.from('workplaces').select('id').eq('name', '녹턴').maybeSingle();
+  if (!wp) return { ok: false, error: '녹턴 매장을 찾지 못했습니다.' };
+  const rev = {};
+  for (let i = 0; ; i += 1000) {
+    const { data, error } = await svc.from('pos_orders').select('completed_at, charge_total').eq('workplace_id', wp.id).eq('order_state', 'COMPLETED').not('completed_at', 'is', null).order('completed_at').range(i, i + 999);
+    if (error) return { ok: false, error: error.message };
+    for (const o of data) { const k = new Date(new Date(o.completed_at).getTime() + 9 * 3600e3); const d = k.toISOString().slice(0, 10); const r = (rev[d] ||= { day: 0, bar: 0 }); if (k.getUTCHours() >= 19) r.bar += +o.charge_total; else r.day += +o.charge_total; }
+    if (data.length < 1000) break;
+  }
+  salesCache = { at: Date.now(), rev };
+  return { ok: true, rev };
+}
+
 export async function getAdActions() {
   const user = await getActor();
   if (!user) return { ok: false, error: '로그인이 필요합니다.' };

@@ -7,8 +7,9 @@ import PageHeader from '@/components/PageHeader';
 import { formatCurrency } from '@/lib/format';
 import { ymd } from '@/lib/date';
 import { ChevronLeft, ChevronDown, Shield, BarChart3, AlertTriangle, RefreshCw, FlaskConical, ExternalLink, Check } from 'lucide-react';
-import { getAdDashboard, getAdLive, runAdAction, getAdActions } from './actions';
+import { getAdDashboard, getAdLive, runAdAction, getAdActions, getAdSales } from './actions';
 import { buildInsights, bucketize, stats } from '@/lib/adsInsights';
+import { monthly, dailyCorrelation, changePoints, verdict, BREAK_EVEN } from '@/lib/adsSales';
 
 // 광고 현황 — 한 화면: 기간 선택 → 합계 한 줄 → 채널 카드 4개(잔액 포함, 누르면 그 채널의 캠페인·소재·해석·버튼) → 추이(차트/일/주/월) → 할 일.
 // 오늘은 광고 API 실시간(5분 캐시), 어제 이전은 매일 09:30 마감 데이터(ad_dashboard.data).
@@ -123,6 +124,7 @@ export default function AdsPage() {
   const [trendCh, setTrendCh] = useState('all');
   const [runs, setRuns] = useState({}); // 버튼 키 → { busy, ok, msg }
   const [actLog, setActLog] = useState([]);
+  const [sales, setSales] = useState({ loading: true }); // 녹턴 POS 일매출 (광고 → 매출)
 
   const isOwner = profile?.is_super_admin === true || profile?.is_executive === true || memberships.some((m) => m.role === 'owner');
 
@@ -131,6 +133,7 @@ export default function AdsPage() {
     let alive = true;
     getAdDashboard().then((r) => { if (alive) setState({ loading: false, ...r }); });
     getAdActions().then((r) => { if (alive && r.ok) setActLog(r.actions); });
+    getAdSales().then((r) => { if (alive) setSales({ loading: false, ...r }); });
     return () => { alive = false; };
   }, [isOwner]);
 
@@ -244,6 +247,15 @@ export default function AdsPage() {
   const bLabel = (b) => trend === 'day' ? `${md(b.from)} (${wd(b.from)})` : trend === 'week' ? `${md(b.from)}~${md(b.to)}` : `${+b.key.slice(5)}월`;
   const maxBar = Math.max(1, ...chartDays.map((x) => all([x], 'cost')));
   const hovered = hover ? chartDays.find((x) => x.d === hover) : null;
+
+  // 광고 → 매출: 월별 전년 대비 증분 ÷ 광고비, 예산 변화 시점 전후, 일 단위 상관
+  const rev = sales.rev || null;
+  const SM = rev ? monthly(rev, D.days, { months: 7 }).filter((r) => r.adDays >= 7) : []; // 광고 기록이 일주일도 안 되는 달은 뺀다
+  const SV = rev ? verdict(SM) : null;
+  const SC = rev ? changePoints(rev, D.days).slice(0, 6) : [];
+  const SR = rev ? dailyCorrelation(rev, D.days) : null;
+  const pctS = (v) => v === null || v === undefined ? '—' : <span style={{ color: v >= 0 ? '#15803d' : '#c2410c' }}>{v >= 0 ? '+' : ''}{Math.round(v * 100)}%</span>;
+  const xS = (v) => v === null || v === undefined ? '—' : <strong style={{ color: v >= BREAK_EVEN * 2 ? '#15803d' : v >= BREAK_EVEN ? 'inherit' : '#c2410c' }}>{v.toFixed(1)}배</strong>;
 
   // 채널 상세 (카드를 누르면)
   const agg = (key, inF) => {
@@ -378,6 +390,29 @@ export default function AdsPage() {
               rows={[...buckets].reverse().map((b, i, arr) => { const s = bStats(b); const p = arr[i + 1] ? bStats(arr[i + 1]) : null; return [
                 <span key="l">{bLabel(b)}{(b.live || b.partial) && <span className="tag tag-accent" style={{ fontSize: 10, marginLeft: 6 }}>{b.live ? '진행 중' : `${b.days.length}일`}</span>}</span>, <strong key="c">{won(s.cost)}</strong>, num(s.imp), num(s.inn), s.imp ? `${((s.inn / s.imp) * 100).toFixed(1)}%` : '—', s.inn ? won(s.cost / s.inn) : '—', <Delta key="d" cur={s.cost} prev={p && !b.partial && !b.live ? p.cost : 0} />];
               })} empty="" />
+          )}
+        </section>
+
+        {/* 광고 → 매출 */}
+        <section className="card compact">
+          <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 4 }}>광고 → 매출 <span className="text-muted" style={{ fontWeight: 400, fontSize: 11 }}>· 녹턴 POS 매출과 광고비를 같은 달·같은 날짜로 맞춘 것. 낮(19시 전)·바(19시 이후) 분리</span></div>
+          {sales.loading ? <div className="text-muted" style={{ fontSize: 13 }}>매출 불러오는 중…</div> : !rev ? <div className="text-muted" style={{ fontSize: 13 }}>매출을 불러오지 못했습니다: {sales.error}</div> : (
+            <>
+              {SV && <div style={{ padding: '8px 12px', borderRadius: 10, background: 'var(--surface-soft)', fontSize: 13, margin: '6px 0 10px', borderLeft: `4px solid ${SV.level === 'good' ? '#15803d' : SV.level === 'warn' ? '#c2410c' : 'var(--accent)'}` }}>{SV.text}</div>}
+              <div className="text-muted" style={{ fontSize: 11, marginBottom: 6 }}>월별 · 증분은 전년 같은 달의 하루 평균 대비. 「배」= 낮 매출 하루 증분 ÷ 하루 광고비. 매출총이익률 70% 기준 손익분기 {BREAK_EVEN.toFixed(1)}배, 그 2배부터 초록.</div>
+              <Table cols={[{ h: '월', left: true }, { h: '매출 (낮 / 바)' }, { h: '낮 전년비' }, { h: '바 전년비' }, { h: '광고비' }, { h: '매출 대비' }, { h: '낮 증분/일' }, { h: '광고비/일' }, { h: '배' }]}
+                rows={[...SM].reverse().map((r) => [
+                  <span key="m">{+r.m.slice(0, 4) !== new Date().getFullYear() ? r.m.slice(2, 4) + '년 ' : ''}{+r.m.slice(5)}월{r.partial && <span className="tag tag-accent" style={{ fontSize: 10, marginLeft: 6 }}>{r.adDays}일</span>}</span>,
+                  <span key="r">{won(r.total)} <span className="text-muted" style={{ fontSize: 11 }}>({num(r.day)} / {num(r.bar)})</span></span>, pctS(r.dayYoy), pctS(r.barYoy), won(r.ad), `${(r.adShare * 100).toFixed(1)}%`,
+                  r.incrDayPerDay === null ? '—' : won(r.incrDayPerDay), won(r.adPerDay), xS(r.ratioDay)])} empty="광고비와 매출이 같이 있는 달이 없습니다." />
+              <div className="text-muted" style={{ fontSize: 11, margin: '12px 0 6px' }}>예산 변화 전후 · 채널 하루 광고비가 30% 이상 바뀐 시점의 앞뒤 14일 낮 매출. 「전년 보정」은 작년 같은 날짜의 변화를 뺀 값. 「배」= 하루 낮 매출 변화 ÷ 하루 광고비 변화. 예산을 올려 보면 여기에 자동으로 잡힙니다.</div>
+              <Table cols={[{ h: '채널', left: true }, { h: '시점', left: true }, { h: '하루 광고비' }, { h: '낮 매출 전후' }, { h: '전년 보정' }, { h: '배' }]}
+                rows={SC.map((c) => [
+                  <span key="c" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Dot color={BY[c.ch].color} />{BY[c.ch].label}</span>,
+                  <span key="d">{md(c.d)}{c.partial && <span className="tag tag-accent" style={{ fontSize: 10, marginLeft: 6 }}>진행 중</span>}</span>,
+                  <span key="a">{won(c.before)} → {won(c.after)} <span className="text-muted">({c.chg >= 0 ? '+' : ''}{Math.round(c.chg * 100)}%)</span></span>, pctS(c.raw), pctS(c.adj), c.ratio === null ? <span className="text-muted">감액</span> : xS(c.ratio)])} empty="광고비가 크게 바뀐 시점이 아직 없습니다." />
+              {SR && SR.r !== null && <div className="text-muted" style={{ fontSize: 11, marginTop: 10 }}>일 단위 상관계수 {SR.r.toFixed(2)} ({SR.n}일). 0에 가까우면 「광고를 더 쓴 날 매출이 더 나온다」는 식으로는 읽을 수 없다는 뜻입니다. 판단은 월 단위 증분과 예산 변화 전후로 하세요. 이 표는 상관이지 인과가 아닙니다. 날씨·행사·메뉴 변경도 같이 움직입니다.</div>}
+            </>
           )}
         </section>
 
