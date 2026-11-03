@@ -101,6 +101,8 @@ async function karrot(today) {
 }
 
 let cache = null;
+// 광고 설정을 바꾼 직후 호출: 다음 조회가 캐시를 건너뛰어 바뀐 상태(소재 on/off 등)가 바로 보이게
+export function invalidateAdsLive() { cache = null; }
 
 // 오늘(KST) 채널별 광고비·노출·유입. 채널이 실패하면 그 채널만 null + errors 에 이유.
 export async function fetchAdsLive() {

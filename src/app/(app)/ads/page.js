@@ -234,6 +234,7 @@ export default function AdsPage() {
     const res = await runAdAction({ ch: f.ch, kind: o.kind, label: o.label, args: o.args });
     setRuns((r) => ({ ...r, [k]: { busy: false, ok: res.ok, msg: res.ok ? res.result : res.error } }));
     getAdActions().then((r) => { if (r.ok) setActLog(r.actions); });
+    if (res.ok) { setLive((s) => ({ ...s, loading: true })); setTick((t) => t + 1); } // 바뀐 상태를 바로 다시 읽는다
   };
 
   // 추이: 마감 일자 + 오늘(실시간)을 일·주·월로

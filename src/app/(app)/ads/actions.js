@@ -1,7 +1,7 @@
 'use server';
 
 import { getServiceClient, getActor } from '@/lib/server/guard';
-import { fetchAdsLive } from '@/lib/server/adsLive';
+import { fetchAdsLive, invalidateAdsLive } from '@/lib/server/adsLive';
 import { runAdOp } from '@/lib/server/adsOps';
 
 // 대표 전용: 어느 매장이든 role='owner' 이거나 super_admin / 임원. 본사 일반 직원·매니저는 제외.
@@ -47,7 +47,7 @@ export async function runAdAction({ ch, kind, label, args }) {
   const svc = getServiceClient();
   if (!(await isOwner(svc, user.id))) return { ok: false, error: '권한이 없습니다.', forbidden: true };
   let ok = true, result;
-  try { result = await runAdOp(kind, args || {}); } catch (e) { ok = false; result = e.message; }
+  try { result = await runAdOp(kind, args || {}); invalidateAdsLive(); } catch (e) { ok = false; result = e.message; }
   await svc.from('ad_actions').insert({ user_id: user.id, ch, kind, label, args: args || {}, ok, result }).then(() => {}, () => {});
   return ok ? { ok: true, result } : { ok: false, error: result };
 }
