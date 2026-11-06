@@ -12,7 +12,7 @@ import { Plus, ChevronLeft, ChevronRight, X, Trash2, Send, CheckCircle2, AlertCi
 import { isHoliday } from '@/lib/holidays';
 import { matchAttendance } from '@/lib/attendanceMatch';
 import { getPageCache, setPageCache } from '@/lib/pageCache';
-import { buildWeekdayCopyMap, formatShiftRange } from '@/lib/shiftCopy';
+import { buildWeekdayCopyMap, formatShiftRange, formatShiftRangeCompact } from '@/lib/shiftCopy';
 import { getScheduleData, saveShift, deleteShift, submitScheduleApproval, copyPreviousShifts } from './actions';
 import { getApproverCandidates } from '../approvals/actions';
 
@@ -706,7 +706,7 @@ function CalendarGrid({ anchor, shifts, logs, todayStr, isManager, hasApproval, 
     <div className="card compact" style={{ padding: 0, overflow: 'hidden' }}>
       {/* 요일 헤더 */}
       <div style={{
-        display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)',
+        display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))',
         background: 'var(--surface-soft)',
         borderBottom: '1px solid var(--border)',
       }}>
@@ -721,7 +721,7 @@ function CalendarGrid({ anchor, shifts, logs, todayStr, isManager, hasApproval, 
       </div>
       {/* 날짜 셀 */}
       <div style={{
-        display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)',
+        display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))',
       }}>
         {cells.map((d, i) => {
           const dayShifts = d ? shiftsForDate(d) : [];
@@ -734,10 +734,10 @@ function CalendarGrid({ anchor, shifts, logs, todayStr, isManager, hasApproval, 
           return (
             <div
               key={i}
+              className="cal-cell"
               onClick={() => { if (clickable) onCellClick(d); }}
               style={{
                 minHeight: 110,
-                padding: 8,
                 borderRight: dow < 6 ? '1px solid var(--border)' : undefined,
                 borderBottom: !isLastRow ? '1px solid var(--border)' : undefined,
                 background: !d ? 'var(--surface-soft)' :
@@ -775,6 +775,7 @@ function CalendarGrid({ anchor, shifts, logs, todayStr, isManager, hasApproval, 
                     {dayShifts.slice(0, 4).map((s) => {
                       const att = matchAttendance(s, logs);
                       const rangeStr = formatShiftRange(s.start_at, s.end_at);
+                      const rangeCompact = formatShiftRangeCompact(s.start_at, s.end_at);
                       const bgColor =
                         s.status === 'confirmed' ? 'var(--success-soft)' :
                         s.status === 'cancelled' ? 'var(--surface-soft)' :
@@ -786,25 +787,31 @@ function CalendarGrid({ anchor, shifts, logs, todayStr, isManager, hasApproval, 
                       return (
                         <div
                           key={s.id}
+                          className="shift-chip"
                           onClick={(e) => { e.stopPropagation(); onShiftClick(s); }}
                           title={`${s.user?.name ?? '—'} · ${rangeStr}${att ? ' · ' + att.label : ''}`}
                           style={{
                             fontSize: 12, fontWeight: 600,
-                            padding: '4px 6px',
                             background: bgColor, color: fgColor,
                             borderRadius: 6,
                             lineHeight: 1.25,
+                            overflow: 'hidden', minWidth: 0, position: 'relative',
                             cursor: isManager && !s.approval_request_id ? 'pointer' : 'default',
                           }}
                         >
-                          {/* 구글시트 근무표처럼 "09:00-13:00" 이 먼저 보이게 — 시작 시각만 있으면 언제 끝나는지 알 수 없다는 현장 의견 */}
-                          <div className="num" style={{ fontSize: 11, fontWeight: 800, whiteSpace: 'nowrap', letterSpacing: -0.2 }}>{rangeStr}</div>
-                          <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {s.user?.name?.slice(0, 5) ?? '—'}
-                            {att && (att.status === 'late' || att.status === 'absent') && (
-                              <span style={{ marginLeft: 4, color: 'var(--danger)' }}>●</span>
-                            )}
+                          {/* 구글시트 근무표처럼 "09:00-13:00" 이 먼저 보이게 — 시작 시각만 있으면 언제 끝나는지 알 수 없다는 현장 의견.
+                              좁은 화면(휴대폰)에서는 "11-14" 로 줄여 칸이 늘어나지 않게 (globals.css .shift-time-*) */}
+                          <div className="num shift-time" style={{ fontWeight: 800, whiteSpace: 'nowrap', letterSpacing: -0.2, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            <span className="shift-time-full">{rangeStr}</span>
+                            <span className="shift-time-compact">{rangeCompact}</span>
                           </div>
+                          <div className="shift-name" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {s.user?.name?.slice(0, 5) ?? '—'}
+                          </div>
+                          {/* 지각·결근 표시는 칩 모서리 점으로 — 좁은 칸에서 이름 옆에 두면 이름이 잘림 */}
+                          {att && (att.status === 'late' || att.status === 'absent') && (
+                            <span aria-label={att.label} style={{ position: 'absolute', top: 2, right: 2, width: 5, height: 5, borderRadius: 999, background: 'var(--danger)' }} />
+                          )}
                         </div>
                       );
                     })}

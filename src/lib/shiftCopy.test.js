@@ -1,7 +1,7 @@
 // src/lib/shiftCopy.test.js
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildWeekdayCopyMap, formatShiftRange } from './shiftCopy.js';
+import { buildWeekdayCopyMap, formatShiftRange, formatShiftRangeCompact } from './shiftCopy.js';
 
 const key = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
@@ -40,4 +40,10 @@ test('buildWeekdayCopyMap: 2월 → 3월 (28일짜리 달)', () => {
 test('formatShiftRange: 시작-끝 시각', () => {
   assert.equal(formatShiftRange('2026-11-05T00:00:00.000Z', '2026-11-05T04:00:00.000Z', 'Asia/Seoul'), '09:00-13:00');
   assert.equal(formatShiftRange('2026-11-05T00:30:00.000Z', '2026-11-05T09:00:00.000Z', 'Asia/Seoul'), '09:30-18:00');
+});
+
+test('formatShiftRangeCompact: 정각이면 시만, 아니면 시:분 (좁은 화면용)', () => {
+  assert.equal(formatShiftRangeCompact('2026-11-05T02:00:00.000Z', '2026-11-05T05:00:00.000Z', 'Asia/Seoul'), '11-14');
+  assert.equal(formatShiftRangeCompact('2026-11-05T00:30:00.000Z', '2026-11-05T04:00:00.000Z', 'Asia/Seoul'), '9:30-13');
+  assert.equal(formatShiftRangeCompact('2026-11-05T09:00:00.000Z', '2026-11-05T14:15:00.000Z', 'Asia/Seoul'), '18-23:15');
 });

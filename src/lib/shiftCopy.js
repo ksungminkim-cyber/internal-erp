@@ -32,6 +32,18 @@ export function buildWeekdayCopyMap(targetYear, targetMonth0) {
   return map;
 }
 
+/** '11-14' / '9:30-13' — 좁은 칸용. 정각이면 분을 생략 */
+export function formatShiftRangeCompact(startIso, endIso, timeZone) {
+  const f = (iso) => {
+    const d = new Date(iso);
+    const parts = new Intl.DateTimeFormat('en-GB', { hour: 'numeric', minute: '2-digit', hour12: false, ...(timeZone ? { timeZone } : {}) }).formatToParts(d);
+    const h = Number(parts.find((p) => p.type === 'hour')?.value ?? 0) % 24;
+    const m = parts.find((p) => p.type === 'minute')?.value ?? '00';
+    return m === '00' ? String(h) : `${h}:${m}`;
+  };
+  return `${f(startIso)}-${f(endIso)}`;
+}
+
 /** '09:00-13:00' — 시작·끝 시각 (timeZone 은 테스트용, 브라우저에서는 기본 로컬) */
 export function formatShiftRange(startIso, endIso, timeZone) {
   const opt = { hour: '2-digit', minute: '2-digit', hour12: false, ...(timeZone ? { timeZone } : {}) };
