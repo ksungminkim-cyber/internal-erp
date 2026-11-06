@@ -318,6 +318,20 @@ input[type="password"], input[type="date"], input[type="time"], textarea, select
 .input.lg { padding: 18px 20px; font-size: 17px; }
 .input.sm { padding: 8px 10px; font-size: 13px; border-radius: var(--r-xs); }
 
+/* 시프트 월간 캘린더 — 넓은 화면은 "09:00-13:00", 좁은 화면(휴대폰 7칸)은 "9-13" 에 여백도 줄임 */
+.cal-cell { padding: 8px; }
+.shift-chip { padding: 4px 6px; }
+.shift-time { font-size: 11px; }
+.shift-time-compact { display: none; }
+@media (max-width: 640px) {
+  .cal-cell { padding: 4px 2px; }
+  .shift-chip { padding: 3px 3px; border-radius: 5px !important; }
+  .shift-time { font-size: 10.5px; }
+  .shift-name { font-size: 11px; }
+  .shift-time-full { display: none; }
+  .shift-time-compact { display: inline; }
+}
+
 .label {
   display: block;
   font-size: 13px;
@@ -608,3 +622,5 @@ input[type="password"], input[type="date"], input[type="time"], textarea, select
   gap: 8px;
 }
 .dialog-actions .btn { flex: 1; }
+
+
