@@ -12,6 +12,7 @@ import { Plus, ChevronLeft, ChevronRight, X, Trash2, Send, CheckCircle2, AlertCi
 import { isHoliday } from '@/lib/holidays';
 import { matchAttendance } from '@/lib/attendanceMatch';
 import { getPageCache, setPageCache } from '@/lib/pageCache';
+import { buildWeekdayCopyMap, formatShiftRange } from '@/lib/shiftCopy';
 import { getScheduleData, saveShift, deleteShift, submitScheduleApproval, copyPreviousShifts } from './actions';
 import { getApproverCandidates } from '../approvals/actions';
 
@@ -773,7 +774,7 @@ function CalendarGrid({ anchor, shifts, logs, todayStr, isManager, hasApproval, 
                   <div className="stack" style={{ gap: 4 }}>
                     {dayShifts.slice(0, 4).map((s) => {
                       const att = matchAttendance(s, logs);
-                      const startStr = new Date(s.start_at).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false });
+                      const rangeStr = formatShiftRange(s.start_at, s.end_at);
                       const bgColor =
                         s.status === 'confirmed' ? 'var(--success-soft)' :
                         s.status === 'cancelled' ? 'var(--surface-soft)' :
@@ -786,20 +787,24 @@ function CalendarGrid({ anchor, shifts, logs, todayStr, isManager, hasApproval, 
                         <div
                           key={s.id}
                           onClick={(e) => { e.stopPropagation(); onShiftClick(s); }}
-                          title={`${s.user?.name ?? '—'} · ${startStr}${att ? ' · ' + att.label : ''}`}
+                          title={`${s.user?.name ?? '—'} · ${rangeStr}${att ? ' · ' + att.label : ''}`}
                           style={{
                             fontSize: 12, fontWeight: 600,
-                            padding: '5px 8px',
+                            padding: '4px 6px',
                             background: bgColor, color: fgColor,
                             borderRadius: 6,
-                            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                            lineHeight: 1.25,
                             cursor: isManager && !s.approval_request_id ? 'pointer' : 'default',
                           }}
                         >
-                          <span className="num">{startStr}</span> {s.user?.name?.slice(0, 5) ?? '—'}
-                          {att && (att.status === 'late' || att.status === 'absent') && (
-                            <span style={{ marginLeft: 4, color: 'var(--danger)' }}>●</span>
-                          )}
+                          {/* 구글시트 근무표처럼 "09:00-13:00" 이 먼저 보이게 — 시작 시각만 있으면 언제 끝나는지 알 수 없다는 현장 의견 */}
+                          <div className="num" style={{ fontSize: 11, fontWeight: 800, whiteSpace: 'nowrap', letterSpacing: -0.2 }}>{rangeStr}</div>
+                          <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {s.user?.name?.slice(0, 5) ?? '—'}
+                            {att && (att.status === 'late' || att.status === 'absent') && (
+                              <span style={{ marginLeft: 4, color: 'var(--danger)' }}>●</span>
+                            )}
+                          </div>
                         </div>
                       );
                     })}
@@ -869,34 +874,36 @@ function CopyPrevMonthDialog({ year, month, coworkers, workplaceId, userId, supa
     });
   }
 
+  // 요일 기준 매핑: 대상 달의 각 날짜 ← 같은 요일인 4주 전(없으면 5주 전) 날짜. 지난달 날짜 → 대상 날짜들
+  const copyMap = useMemo(() => buildWeekdayCopyMap(year, month), [year, month]);
+  const targetsOf = (s) => copyMap.get(ymd(new Date(s.start_at))) ?? [];
+  const selectedRowCount = prevShifts.filter((s) => selectedIds.has(s.id)).reduce((n, s) => n + targetsOf(s).length, 0);
+
   async function save() {
     const targets = prevShifts.filter((s) => selectedIds.has(s.id));
     if (targets.length === 0) return setError('복사할 시프트를 선택해주세요.');
     setSaving(true);
     setError(null);
-    // 각 시프트를 다음 달의 같은 일자로 변환
-    const newRows = targets.map((s) => {
+    // 지난달 시프트 하나가 대상 달의 같은 요일 날짜(들)로 — 시각·야간 걸침(날짜 차이)은 그대로 유지
+    const newRows = targets.flatMap((s) => {
       const sStart = new Date(s.start_at);
       const sEnd = new Date(s.end_at);
-      const day = sStart.getDate();
-      const newStart = new Date(year, month, day, sStart.getHours(), sStart.getMinutes(), 0);
-      const newEnd = new Date(year, month, day, sEnd.getHours(), sEnd.getMinutes(), 0);
-      // 만약 대상 월에 그 일자가 없으면(예: 2월 30일) 마지막 날로
-      const lastDay = new Date(year, month + 1, 0).getDate();
-      if (day > lastDay) {
-        newStart.setDate(lastDay);
-        newEnd.setDate(lastDay);
-      }
-      return {
-        workplace_id: workplaceId,
-        user_id: s.user_id,
-        start_at: newStart.toISOString(),
-        end_at: newEnd.toISOString(),
-        role_label: s.role_label,
-        notes: s.notes,
-        status: 'scheduled',
-      };
+      const dayDiff = Math.round((new Date(sEnd.getFullYear(), sEnd.getMonth(), sEnd.getDate()) - new Date(sStart.getFullYear(), sStart.getMonth(), sStart.getDate())) / 86400000);
+      return targetsOf(s).map((t) => {
+        const newStart = new Date(t.getFullYear(), t.getMonth(), t.getDate(), sStart.getHours(), sStart.getMinutes(), 0);
+        const newEnd = new Date(t.getFullYear(), t.getMonth(), t.getDate() + dayDiff, sEnd.getHours(), sEnd.getMinutes(), 0);
+        return {
+          workplace_id: workplaceId,
+          user_id: s.user_id,
+          start_at: newStart.toISOString(),
+          end_at: newEnd.toISOString(),
+          role_label: s.role_label,
+          notes: s.notes,
+          status: 'scheduled',
+        };
+      });
     });
+    if (newRows.length === 0) return setError('선택한 시프트는 대상 달에 들어갈 요일 자리가 없어요.');
     try {
       const res = await copyPreviousShifts({ workplaceId, rows: newRows });
       if (res?.error) { setError(res.error); return; }
@@ -918,7 +925,7 @@ function CopyPrevMonthDialog({ year, month, coworkers, workplaceId, userId, supa
       <div className="card" style={{ background: 'var(--accent-soft)', boxShadow: 'none', marginBottom: 14 }}>
         <p style={{ fontSize: 13 }}>
           <strong>{prevYear}년 {prevMonth + 1}월</strong> → <strong>{targetMonthLabel}</strong> 로 복사합니다.
-          같은 일자·같은 시간으로 새 시프트가 생성됩니다.
+          <strong>같은 요일</strong>·같은 시간으로 옮겨집니다 (예: 10/4 일요일 → 11/1 일요일). 지난달 첫 며칠은 자리가 없어 빠지고, 마지막 주는 두 번 쓰일 수 있어요.
         </p>
       </div>
 
@@ -959,8 +966,8 @@ function CopyPrevMonthDialog({ year, month, coworkers, workplaceId, userId, supa
                     type="checkbox" checked={checked} onChange={() => toggleId(s.id)}
                     style={{ accentColor: 'var(--accent)' }}
                   />
-                  <span className="num" style={{ width: 60, fontSize: 12, fontWeight: 700 }}>
-                    {d.getMonth() + 1}/{d.getDate()}
+                  <span className="num" style={{ width: 150, fontSize: 12, fontWeight: 700, whiteSpace: 'nowrap' }}>
+                    {d.getMonth() + 1}/{d.getDate()}({DOW[d.getDay()]}) → {targetsOf(s).length ? targetsOf(s).map((t) => `${t.getMonth() + 1}/${t.getDate()}`).join(', ') : <span className="text-muted">자리 없음</span>}
                   </span>
                   <span style={{ flex: 1, fontSize: 13, fontWeight: 600 }}>{s.user?.name ?? '—'}</span>
                   <span className="num text-muted" style={{ fontSize: 11 }}>{startStr}-{endStr}</span>
@@ -980,7 +987,7 @@ function CopyPrevMonthDialog({ year, month, coworkers, workplaceId, userId, supa
       <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
         <button type="button" className="btn btn-outline" onClick={onClose} style={{ flex: 1 }}>취소</button>
         <button type="button" className="btn btn-primary" onClick={save} disabled={saving || selectedIds.size === 0} style={{ flex: 2 }}>
-          <Copy size={14} /> {saving ? '복사 중...' : `${selectedIds.size}개 복사`}
+          <Copy size={14} /> {saving ? '복사 중...' : `${selectedRowCount}개 복사`}
         </button>
       </div>
     </BottomSheet>
