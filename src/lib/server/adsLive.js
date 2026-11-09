@@ -13,7 +13,7 @@ const CACHE_MS = 5 * 60 * 1000;
 
 const kstToday = () => new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10);
 
-async function naver(today) {
+export async function naver(today) {
   const key = process.env.NAVER_AD_API_KEY, secret = process.env.NAVER_AD_SECRET_KEY, customer = process.env.NAVER_AD_CUSTOMER_ID;
   if (!key || !secret || !customer) throw new Error('네이버 API 환경변수 없음');
   const call = async (uri, query) => {
@@ -35,7 +35,7 @@ async function naver(today) {
   return { cost: Math.round(s.salesAmt || 0), imp: s.impCnt || 0, in: s.clkCnt || 0, bal: biz ? Math.round(biz.bizmoney) : null, ads, c: [{ name: '플레이스#1_녹턴', cost: Math.round(s.salesAmt || 0), imp: s.impCnt || 0, clicks: s.clkCnt || 0 }] };
 }
 
-async function google(today) {
+export async function google(today) {
   const raw = process.env.GOOGLE_ADS_SA_JSON;
   if (!raw) throw new Error('구글 서비스 계정 환경변수 없음');
   const sa = JSON.parse(raw);
@@ -59,7 +59,7 @@ async function google(today) {
   return out;
 }
 
-async function meta(today) {
+export async function meta(today) {
   const token = process.env.META_ADS_TOKEN;
   if (!token) throw new Error('메타 토큰 환경변수 없음');
   const q = new URLSearchParams({ level: 'campaign', fields: 'campaign_name,spend,impressions,reach,actions', time_range: JSON.stringify({ since: today, until: today }), access_token: token });
@@ -79,7 +79,7 @@ async function meta(today) {
 
 // 당근 광고 OpenAPI (베타, 2026-10). 키는 전문가모드 → 온라인 문의 → [광고 도구 및 전환] > [OpenAPI 키 발급]. 60회/분.
 const KARROT_ADVERTISER = '4722601'; // 전문가모드 녹턴_광고 (2026-10-28 이전). 간편모드 smk 4405635 는 OpenAPI 불가
-async function karrot(today) {
+export async function karrot(today) {
   const key = process.env.KARROT_OPENAPI_KEY;
   if (!key) throw new Error('당근 OpenAPI 키 없음');
   const H = { 'X-API-KEY': key, 'X-ADVERTISER-ID': KARROT_ADVERTISER, 'Content-Type': 'application/json' };
