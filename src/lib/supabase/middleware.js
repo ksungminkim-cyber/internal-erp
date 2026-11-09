@@ -35,7 +35,7 @@ export async function updateSession(request) {
   // /api/pos/toss/sync, /api/trends/refresh 는 pg_cron 서버 간 호출, /api/ads/publish 는 광고 모니터링 팀의 로컬 호출, /api/ads/close 는 pg_cron 자동 마감 —
   // 세션 대신 각 라우트의 비밀키 헤더(x-sync-secret / x-ads-secret)로 인증.
   // 다른 /api/pos/* (웹훅 등)는 자체 검증이 선택적이라 세션 보호를 유지한다.
-  const isPublicRoute = url.pathname === '/' || url.pathname.startsWith('/_next') || url.pathname === '/manifest.json' || url.pathname === '/api/pos/toss/sync' || url.pathname === '/api/trends/refresh' || url.pathname === '/api/ads/publish' || url.pathname === '/api/ads/close';
+  const isPublicRoute = url.pathname === '/' || url.pathname.startsWith('/_next') || url.pathname === '/manifest.json' || url.pathname === '/api/pos/toss/sync' || url.pathname === '/api/trends/refresh' || url.pathname === '/api/ads/publish' || url.pathname === '/api/ads/close' || url.pathname === '/api/ads/status';
 
   // 리다이렉트 시에도 갱신된 쿠키를 반드시 전달해야 무한 로그아웃 루프 방지
   const carryCookies = (redirect) => {
