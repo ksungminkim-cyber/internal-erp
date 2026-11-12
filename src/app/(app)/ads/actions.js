@@ -28,13 +28,14 @@ export async function getAdDashboard() {
 }
 
 // 오늘 실시간: 네이버·구글·메타 광고 API를 직접 조회 (5분 캐시). 당근은 오늘 수치 없음.
-export async function getAdLive() {
+// force: 새로고침 버튼 — 캐시를 건너뛰고 지금 수치를 다시 받는다
+export async function getAdLive({ force = false } = {}) {
   const user = await getActor();
   if (!user) return { ok: false, error: '로그인이 필요합니다.' };
   const svc = getServiceClient();
   if (!(await isOwner(svc, user.id))) return { ok: false, error: '권한이 없습니다.', forbidden: true };
   try {
-    return { ok: true, live: await fetchAdsLive() };
+    return { ok: true, live: await fetchAdsLive({ force: force === true }) };
   } catch (e) {
     return { ok: false, error: e.message };
   }
