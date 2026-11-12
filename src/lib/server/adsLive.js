@@ -10,6 +10,10 @@ const GOOGLE_CUSTOMER = '1309305023'; // 130-930-5023
 const META_ACCOUNT = 'act_1513789977241121'; // 녹턴 (2026-10-27 개설)
 const META_RESULT_ACTIONS = ['instagram_profile_visit', 'onsite_conversion.ig_profile_visit', 'profile_visit', 'link_click', 'post_engagement'];
 const CACHE_MS = 5 * 60 * 1000;
+const FORCE_MIN_MS = 15 * 1000; // 새로고침 버튼을 연타해도 광고 API는 15초에 한 번만
+
+// 캐시를 그대로 쓸지: 자동 갱신은 5분, 새로고침 버튼(force)은 15초
+export function liveCacheFresh(ageMs, force) { return ageMs < (force ? FORCE_MIN_MS : CACHE_MS); }
 
 const kstToday = () => new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10);
 
@@ -105,8 +109,8 @@ let cache = null;
 export function invalidateAdsLive() { cache = null; }
 
 // 오늘(KST) 채널별 광고비·노출·유입. 채널이 실패하면 그 채널만 null + errors 에 이유.
-export async function fetchAdsLive() {
-  if (cache && Date.now() - cache.at < CACHE_MS) return cache.data;
+export async function fetchAdsLive({ force = false } = {}) {
+  if (cache && liveCacheFresh(Date.now() - cache.at, force)) return cache.data;
   const today = kstToday();
   const errors = {};
   const [n, g, m, k] = await Promise.all([

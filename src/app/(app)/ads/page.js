@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useApp } from '@/context/AppContext';
 import PageHeader from '@/components/PageHeader';
@@ -120,6 +120,7 @@ export default function AdsPage() {
   const [open, setOpen] = useState(null); // 펼친 채널
   const [hover, setHover] = useState(null);
   const [tick, setTick] = useState(0);
+  const forceLive = useRef(false); // 새로고침 버튼이 켠다 — 다음 실시간 조회 한 번만 서버 캐시를 건너뜀
   const [trend, setTrend] = useState('chart');
   const [trendCh, setTrendCh] = useState('all');
   const [runs, setRuns] = useState({}); // 버튼 키 → { busy, ok, msg }
@@ -141,10 +142,20 @@ export default function AdsPage() {
   useEffect(() => {
     if (!isOwner) return;
     let alive = true;
-    getAdLive().then((r) => { if (alive) setLive({ loading: false, ...r }); });
+    const force = forceLive.current;
+    forceLive.current = false;
+    getAdLive({ force }).then((r) => { if (alive) setLive({ loading: false, ...r }); });
     const id = setInterval(() => setTick((t) => t + 1), LIVE_EVERY_MS);
     return () => { alive = false; clearInterval(id); };
   }, [isOwner, tick]);
+
+  // 새로고침 버튼: 실시간은 캐시 없이 다시 받고, 마감 데이터(어제 이전)도 다시 읽는다
+  function refresh() {
+    forceLive.current = true;
+    setLive((s) => ({ ...s, loading: true }));
+    setTick((t) => t + 1);
+    getAdDashboard().then((r) => { if (r.ok) setState({ loading: false, ...r }); });
+  }
 
   const D = state.data;
   const L = live.live;
@@ -183,7 +194,7 @@ export default function AdsPage() {
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }} className="text-muted">
         {view && (view.from === view.to ? `${md(view.from)} (${wd(view.from)})` : `${md(view.from)}~${md(view.to)} · ${view.cur.length}일`)}
         {range === 'today' && <span className="tag tag-accent" style={{ fontSize: 10 }}>실시간 {L ? hm(L.asOf) : ''}</span>}
-        <button type="button" className="btn btn-ghost btn-icon" title="실시간 새로고침" onClick={() => { setLive((s) => ({ ...s, loading: true })); setTick((t) => t + 1); }} style={{ opacity: live.loading ? 0.5 : 1 }}><RefreshCw size={15} /></button>
+        <button type="button" className="btn btn-ghost btn-icon" title="실시간 새로고침" onClick={refresh} disabled={live.loading} style={{ opacity: live.loading ? 0.5 : 1 }}><RefreshCw size={15} /></button>
       </div>
     </section>
   );
