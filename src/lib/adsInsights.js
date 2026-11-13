@@ -182,3 +182,9 @@ export function spendPace(days, ch, n = 7) {
   const m = v.length >> 1;
   return v.length % 2 ? v[m] : (v[m - 1] + v[m]) / 2;
 }
+
+// 예산을 막 바꿔 최근 지출이 새 속도를 아직 반영하지 못할 때 쓰는 보정. hint = { value: 하루 예상 지출, until: 이 마감일까지 적용 }
+// 마감일(closed)이 until 이하인 동안 실제 속도와 hint 중 큰 값을 쓴다. 7일치가 쌓이면 hint 는 저절로 빠진다
+export function paceWithHint(pace, hint, closed) {
+  return hint && hint.value > 0 && closed <= hint.until ? Math.max(pace, hint.value) : pace;
+}
