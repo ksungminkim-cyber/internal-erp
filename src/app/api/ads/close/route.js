@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { getServiceClient } from '@/lib/server/guard';
 import { naver, google, meta, karrot } from '@/lib/server/adsLive';
-import { prepaidBalance } from '@/lib/adsInsights';
+import { prepaidBalance, spendPace } from '@/lib/adsInsights';
 
 // ─────────────────────────────────────────────────────────────────────────
 // 광고 일 마감 자동 채움 — Vercel Cron 이 매일 00:30 UTC(09:30 KST) 호출.
@@ -71,11 +71,11 @@ async function fill(maxDays) {
   // 네이버 잔액 (실시간 값)
   if (naverBal !== null) {
     const f = (D.funding || []).find((x) => x.ch === 'naver');
-    if (f) { const avg = last7.reduce((s, x) => s + (x.naver ? x.naver.cost : 0), 0) / 7; f.balance = naverBal; f.avg = Math.round(avg); f.daysLeft = avg > 0 ? +(naverBal / avg).toFixed(1) : null; f.checked = kst(new Date()); f.note = naverBal <= 0 ? '잔액 소진으로 잠김' : ''; }
+    if (f) { const avg = spendPace(days, 'naver'); f.balance = naverBal; f.avg = Math.round(avg); f.daysLeft = avg > 0 ? +(naverBal / avg).toFixed(1) : null; f.checked = kst(new Date()); f.note = naverBal <= 0 ? '잔액 소진으로 잠김' : ''; }
   }
   // 당근 잔액 (조회 API 없음): 확인한 잔액(base, asOf 끝 기준)에서 그 뒤 지출을 뺀 추정. 충전하면 base·asOf 를 다시 넣어야 한다
   const kf = (D.funding || []).find((x) => x.ch === 'karrot');
-  if (kf && kf.asOf && kf.base !== null && kf.base !== undefined) { const avg = last7.reduce((s, x) => s + (x.karrot ? x.karrot.cost : 0), 0) / 7; kf.balance = prepaidBalance(kf.base, kf.asOf, days, 'karrot'); kf.avg = Math.round(avg); kf.daysLeft = avg > 0 ? +(kf.balance / avg).toFixed(1) : null; }
+  if (kf && kf.asOf && kf.base !== null && kf.base !== undefined) { const avg = spendPace(days, 'karrot'); kf.balance = prepaidBalance(kf.base, kf.asOf, days, 'karrot'); kf.avg = Math.round(avg); kf.daysLeft = avg > 0 ? +(kf.balance / avg).toFixed(1) : null; }
   const data = { ...D, days, closed, built: new Date().toISOString(), autoFilled: [...new Set([...(D.autoFilled || []), ...filled])].filter((d) => d > (D.localClosed || '')).slice(-30) };
   const { error: e2 } = await svc.from('ad_dashboard').upsert({ id: 'nocturne', data, html: null, closed_date: closed, built_at: data.built, updated_at: new Date().toISOString() });
   if (e2) throw new Error(e2.message);

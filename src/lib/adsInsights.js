@@ -174,3 +174,11 @@ export function buildInsights({ cur, prev = [], base = [], D = {}, isToday = fal
 export function prepaidBalance(base, asOf, days, ch) {
   return Math.max(0, base - days.reduce((a, x) => a + (x.d > asOf && x[ch] ? x[ch].cost || 0 : 0), 0));
 }
+
+// 하루 지출 속도: 최근 n일 중 지출이 있었던 날의 중앙값. 0원인 날(잔액 소진·중지)과 중간에 끊긴 날에 덜 흔들린다 (「며칠 남음」 계산용)
+export function spendPace(days, ch, n = 7) {
+  const v = days.slice(-n).map((x) => (x[ch] && x[ch].cost) || 0).filter((c) => c > 0).sort((a, b) => a - b);
+  if (!v.length) return 0;
+  const m = v.length >> 1;
+  return v.length % 2 ? v[m] : (v[m - 1] + v[m]) / 2;
+}

@@ -1,7 +1,7 @@
 // src/lib/adsInsights.test.js
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { stats, bucketize, buildInsights, prepaidBalance } from './adsInsights.js';
+import { stats, bucketize, buildInsights, prepaidBalance, spendPace } from './adsInsights.js';
 
 const day = (d, ch, cost, imp, inn, extra = {}) => ({ d, [ch]: { cost, imp, in: inn, c: [], ...extra } });
 const seq = (from, n, f) => Array.from({ length: n }, (_, i) => { const t = new Date(from + 'T00:00:00Z'); t.setUTCDate(t.getUTCDate() + i); return f(t.toISOString().slice(0, 10), i); });
@@ -66,4 +66,11 @@ test('prepaidBalance: 기준일 뒤 지출만 빼고 0 아래로 내려가지 �
   assert.equal(prepaidBalance(60000, '2026-11-12', days, 'karrot'), 46000);
   assert.equal(prepaidBalance(60000, '2026-11-15', days, 'karrot'), 60000);
   assert.equal(prepaidBalance(5000, '2026-11-12', days, 'karrot'), 0);
+});
+
+test('spendPace: 최근 7일 중 지출한 날의 중앙값 — 0원인 날과 중간에 끊긴 날에 흔들리지 않는다', () => {
+  const mk = (costs) => costs.map((c, i) => ({ d: `2026-11-${String(i + 1).padStart(2, '0')}`, karrot: c === null ? null : { cost: c } }));
+  assert.equal(spendPace(mk([99999, 4009, 0, 0, 6164, 10057, 10001, 9971]), 'karrot'), 9971); // 8일 전 값은 제외
+  assert.equal(spendPace(mk([8000, 10000]), 'karrot'), 9000);
+  assert.equal(spendPace(mk([0, null, 0]), 'karrot'), 0);
 });
