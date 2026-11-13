@@ -61,6 +61,13 @@ const NAVER = {
     await naverCall('PUT', `/ncc/campaigns/${NAVER_CAMPAIGN}`, { query: { fields: 'userLock' }, body: { nccCampaignId: NAVER_CAMPAIGN, userLock: lock } });
     return `플레이스 캠페인을 ${lock ? '중지했습니다' : '재개했습니다'}.`;
   },
+  // 광고그룹 끄기/켜기 (시간대 운영용 — 플레이스 광고는 요일·시간 타겟이 없어 /api/ads/daypart 가 예약으로 켜고 끈다)
+  async groupLock({ groupId, lock = true }) {
+    const g = await naverCall('GET', `/ncc/adgroups/${groupId}`);
+    if (!!g.userLock === lock) return `「${g.name}」 그룹은 이미 ${lock ? '꺼져' : '켜져'} 있습니다.`;
+    await naverCall('PUT', `/ncc/adgroups/${groupId}`, { query: { fields: 'userLock' }, body: { nccAdgroupId: groupId, userLock: lock } });
+    return `「${g.name}」 그룹을 ${lock ? '껐습니다' : '켰습니다'}.`;
+  },
 };
 
 // ── 메타 (광고 세트 단위)
@@ -131,7 +138,7 @@ const GOOGLE = {
   },
 };
 
-const OPS = { 'naver.adLock': NAVER.adLock, 'naver.bid': NAVER.bid, 'naver.budget': NAVER.budget, 'naver.campaignLock': NAVER.campaignLock, 'meta.budget': META.budget, 'meta.status': META.status, 'google.budget': GOOGLE.budget };
+const OPS = { 'naver.adLock': NAVER.adLock, 'naver.bid': NAVER.bid, 'naver.budget': NAVER.budget, 'naver.campaignLock': NAVER.campaignLock, 'naver.groupLock': NAVER.groupLock, 'meta.budget': META.budget, 'meta.status': META.status, 'google.budget': GOOGLE.budget };
 
 // kind: 위 OPS 키. 성공하면 사람이 읽을 결과 문장을 돌려준다.
 export async function runAdOp(kind, args = {}) {
