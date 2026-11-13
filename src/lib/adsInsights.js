@@ -169,3 +169,8 @@ export function buildInsights({ cur, prev = [], base = [], D = {}, isToday = fal
   const plan = F.filter((f) => f.action && f.level !== 'good').slice(0, 6);
   return { findings: F, plan };
 }
+
+// 선불 잔액 추정: 기준일(asOf) 끝의 잔액에서 그 뒤 날짜의 채널 지출을 뺀다. 잔액 조회 API가 없는 당근용
+export function prepaidBalance(base, asOf, days, ch) {
+  return Math.max(0, base - days.reduce((a, x) => a + (x.d > asOf && x[ch] ? x[ch].cost || 0 : 0), 0));
+}

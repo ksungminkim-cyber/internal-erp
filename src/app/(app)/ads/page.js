@@ -220,13 +220,15 @@ export default function AdsPage() {
     if (g <= 1) return [/제한|제약/.test(a.status) ? 'lim' : 'on', /제한|제약/.test(a.status) ? '예산 제약' : '운영 중'];
     return ['off', `${g}일째 0원`];
   };
-  // 채널 잔액: 네이버는 실시간 비즈머니, 나머지는 마감 때 읽은 값
+  // 채널 잔액: 네이버는 실시간 비즈머니, 당근은 확인한 잔액에서 이후 지출(마감분 + 오늘)을 뺀 추정, 나머지는 마감 때 읽은 값
   const funding = (k) => {
     const f = (D.funding || []).find((x) => x.ch === k) || {};
     const liveBal = k === 'naver' && L && L.naver && L.naver.bal !== null && L.naver.bal !== undefined ? L.naver.bal : null;
-    const bal = liveBal ?? f.balance ?? null;
+    const est = k === 'karrot' && !!f.asOf;
+    const todayCost = est && L && L.karrot && L.d > D.closed ? L.karrot.cost : 0;
+    const bal = liveBal ?? (f.balance !== null && f.balance !== undefined ? Math.max(0, f.balance - todayCost) : null);
     const days = bal !== null && f.avg ? bal / f.avg : f.daysLeft ?? null;
-    return { kind: f.kind || (k === 'meta' ? '후불 (카드)' : '—'), bal, days, live: liveBal !== null, note: f.note, checked: f.checked };
+    return { kind: f.kind || (k === 'meta' ? '후불 (카드)' : '—'), bal, days, live: liveBal !== null, est, note: f.note, checked: f.checked };
   };
   const chStatus = (k) => { // 채널 상태 한 단어
     const mine = (D.ads || []).filter((a) => a.ch === k && !/기간종료|일시중지/.test(a.status));
@@ -360,7 +362,7 @@ export default function AdsPage() {
                   {noLive ? `조회 실패: ${liveErrors[c.k] || '알 수 없음'}` : <>노출 {num(sum(cur, c.k, 'imp'))} · {c.inL} {num(ci)} · {ci ? won(cc / ci) : '—'}</>}
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6, fontSize: 12, marginTop: 2 }}>
-                  <span className="num">{f.bal === null ? <span className="text-muted">{f.kind === '후불 (카드)' ? '후불 · 집행분 카드 청구' : `잔액 확인 불가`}</span> : <>잔액 <strong>{won(f.bal)}</strong>{!f.live && f.checked && <span className="text-muted"> ({md(f.checked)})</span>}</>}</span>
+                  <span className="num">{f.bal === null ? <span className="text-muted">{f.kind === '후불 (카드)' ? '후불 · 집행분 카드 청구' : `잔액 확인 불가`}</span> : <>잔액 <strong>{won(f.bal)}</strong>{!f.live && f.checked && <span className="text-muted"> ({f.est ? `${md(f.checked)} 확인 후 추정` : md(f.checked)})</span>}</>}</span>
                   {f.days !== null && <Pill kind={balKind}>{f.days < 1 ? '소진' : `${Math.round(f.days)}일 남음`}</Pill>}
                 </div>
                 <div className="text-muted" style={{ fontSize: 11, display: 'flex', alignItems: 'center', gap: 4 }}><ChevronDown size={12} style={{ transform: isOpen ? 'rotate(180deg)' : 'none' }} />{isOpen ? '닫기' : '캠페인 · 소재 · 해석'}</div>

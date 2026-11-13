@@ -1,7 +1,7 @@
 // src/lib/adsInsights.test.js
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { stats, bucketize, buildInsights } from './adsInsights.js';
+import { stats, bucketize, buildInsights, prepaidBalance } from './adsInsights.js';
 
 const day = (d, ch, cost, imp, inn, extra = {}) => ({ d, [ch]: { cost, imp, in: inn, c: [], ...extra } });
 const seq = (from, n, f) => Array.from({ length: n }, (_, i) => { const t = new Date(from + 'T00:00:00Z'); t.setUTCDate(t.getUTCDate() + i); return f(t.toISOString().slice(0, 10), i); });
@@ -59,4 +59,11 @@ test('buildInsights: 지출 0원은 재개 버튼, 효율 좋음은 예산 +20% 
   const r = buildInsights({ cur, base, D: { alerts: [{ ch: '네이버', level: 'warning', text: '비즈머니 잔액 1,000원' }] } });
   assert.equal(r.findings.find((f) => /지출 0원/.test(f.title)).ops[0].kind, 'naver.campaignLock');
   assert.deepEqual(r.findings.find((f) => /저렴/.test(f.title)).ops[0].args, { pct: 20 });
+});
+
+test('prepaidBalance: 기준일 뒤 지출만 빼고 0 아래로 내려가지 않는다', () => {
+  const days = [{ d: '2026-11-12', karrot: { cost: 9000 } }, { d: '2026-11-13', karrot: { cost: 10000 } }, { d: '2026-11-14', karrot: null }, { d: '2026-11-15', karrot: { cost: 4000 }, naver: { cost: 999 } }];
+  assert.equal(prepaidBalance(60000, '2026-11-12', days, 'karrot'), 46000);
+  assert.equal(prepaidBalance(60000, '2026-11-15', days, 'karrot'), 60000);
+  assert.equal(prepaidBalance(5000, '2026-11-12', days, 'karrot'), 0);
 });
