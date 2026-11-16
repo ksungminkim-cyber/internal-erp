@@ -7,7 +7,7 @@ import PageHeader from '@/components/PageHeader';
 import Avatar from '@/components/Avatar';
 import { formatRelative, formatCurrency } from '@/lib/format';
 import { downloadCsv, fmtDate } from '@/lib/csvExport';
-import { getApprovals } from './actions';
+import { getApprovals } from '@/lib/reads';
 import { Plus, Inbox, Download, Search, X, Building2 } from 'lucide-react';
 
 const STATUS_META = {

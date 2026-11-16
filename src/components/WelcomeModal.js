@@ -6,12 +6,18 @@ import { useApp } from '@/context/AppContext';
 import { isChecklistDueToday, frequencyLabel } from '@/lib/checklist';
 import { todayKey } from '@/lib/date';
 import { markOnboarded } from '@/app/_actions/context';
+import { welcomePlan, dismissRecord } from '@/lib/welcome';
 import {
   X, Megaphone, ListTodo, Sparkles, ChevronRight, Clock,
   FileText, Calendar, Package, TrendingUp, BookOpen, Lock,
 } from 'lucide-react';
 
-const SESSION_KEY = 'counter:welcome:dismissed';
+// 닫은 기록 { d: 'YYYY-MM-DD', anns: [본 공지 id] } — 기기에 저장해 하루 한 번만 뜨게 한다.
+// (예전엔 sessionStorage 라 앱을 열 때마다 새 세션으로 취급돼 매번 다시 떴다)
+const DISMISS_KEY = 'counter:welcome:day';
+function readDismissed() {
+  try { return JSON.parse(localStorage.getItem(DISMISS_KEY) || 'null'); } catch { return null; }
+}
 
 /**
  * 홈 진입 시 보여줄 통합 모달:
@@ -19,6 +25,7 @@ const SESSION_KEY = 'counter:welcome:dismissed';
  *  2) 안 읽은 공지가 있으면 표시
  *  3) 오늘 해야 할 체크리스트 (안 완료된 것)
  *  세 가지 다 없으면 표시 안 함.
+ *  하루에 한 번만: 닫으면 그날은 다시 안 뜨고, 닫은 뒤 새 공지가 올라왔을 때만 그 공지로 다시 뜬다.
  */
 export default function WelcomeModal() {
   const { user, profile, currentWorkplaceId, supabase, refresh } = useApp();
@@ -29,12 +36,10 @@ export default function WelcomeModal() {
   const [onboarding, setOnboarding] = useState(false);
   const [loaded, setLoaded] = useState(false);
 
-  // 세션당 한 번만
+  // 하루 한 번만 (닫은 뒤에는 새 공지가 있을 때만)
   useEffect(() => {
     if (!user || !currentWorkplaceId) return;
     if (typeof window === 'undefined') return;
-    const dismissedDate = sessionStorage.getItem(SESSION_KEY);
-    if (dismissedDate === todayKey()) return; // 오늘 이미 닫음
 
     (async () => {
       // 1) 안 읽은 공지
@@ -75,21 +80,26 @@ export default function WelcomeModal() {
         .filter((t) => !t.complete);
 
       const isOnboarding = !profile?.onboarded_at;
+      const plan = welcomePlan({
+        today: todayKey(), dismissed: readDismissed(),
+        unreadAnnIds: ann.map((a) => a.id), dueChecklistCount: due.length, onboarding: isOnboarding,
+      });
+      const shownAnns = ann.filter((a) => plan.annIds.includes(a.id));
 
-      setUnreadAnns(ann);
-      setTodayChecklists(due);
+      setUnreadAnns(shownAnns);
+      setTodayChecklists(plan.showChecklists ? due : []);
       setOnboarding(isOnboarding);
-      setOpen(isOnboarding || ann.length > 0 || due.length > 0);
-      setStep(isOnboarding ? 0 : ann.length > 0 ? 1 : 2);
+      setOpen(plan.open);
+      setStep(isOnboarding ? 0 : shownAnns.length > 0 ? 1 : 2);
       setLoaded(true);
     })();
   }, [user, profile, currentWorkplaceId, supabase]);
 
   async function close() {
     setOpen(false);
-    if (typeof window !== 'undefined') {
-      sessionStorage.setItem(SESSION_KEY, todayKey());
-    }
+    try {
+      localStorage.setItem(DISMISS_KEY, JSON.stringify(dismissRecord({ today: todayKey(), dismissed: readDismissed(), unreadAnnIds: unreadAnns.map((a) => a.id) })));
+    } catch { /* 저장 불가(사생활 보호 모드 등)면 이번 화면에서만 닫힘 */ }
     if (onboarding && profile && !profile.onboarded_at) {
       try {
         await markOnboarded();
@@ -160,6 +170,9 @@ export default function WelcomeModal() {
             {isLast ? '시작하기' : '다음'} <ChevronRight size={16} />
           </button>
         </div>
+        <p className="text-muted" style={{ fontSize: 11, textAlign: 'center', marginTop: 10 }}>
+          닫으면 오늘은 다시 뜨지 않아요. 체크리스트는 홈 &ldquo;오늘 할 일&rdquo;에서 언제든 볼 수 있어요.
+        </p>
       </div>
     </div>
   );

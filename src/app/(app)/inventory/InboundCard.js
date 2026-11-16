@@ -4,7 +4,8 @@ import { useEffect, useState } from 'react';
 import { PackageCheck, ChevronDown } from 'lucide-react';
 import { useFeedback } from '@/context/FeedbackContext';
 import { formatDate } from '@/lib/format';
-import { getPendingInbound, confirmInbound, dismissInbound } from './actions';
+import { confirmInbound, dismissInbound } from './actions';
+import { getPendingInbound } from '@/lib/reads';
 
 /**
  * 입고 대기 — 최종 승인된 지출결의서 중 아직 입고 확인하지 않은 것.

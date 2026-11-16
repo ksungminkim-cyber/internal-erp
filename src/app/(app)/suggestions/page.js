@@ -7,7 +7,7 @@ import PageHeader from '@/components/PageHeader';
 import Avatar from '@/components/Avatar';
 import BottomSheet from '@/components/BottomSheet';
 import { formatRelative } from '@/lib/format';
-import { getProfileNames } from '@/app/_actions/names';
+import { getProfileNames } from '@/lib/reads';
 import { createSuggestion, respondSuggestion } from './actions';
 import {
   ChevronLeft, Plus, X, MessageSquare, Lock, EyeOff, Send, CheckCircle2, Clock, XCircle,

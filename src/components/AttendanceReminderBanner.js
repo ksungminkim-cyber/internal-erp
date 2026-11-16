@@ -4,8 +4,9 @@ import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useApp } from '@/context/AppContext';
 import { shiftRecordStatus, LOG_WINDOW_MS } from '@/lib/attendanceMatch';
-import { getMyShiftReminders, recordAttendance } from '@/app/(app)/attendance/actions';
+import { recordAttendance } from '@/app/(app)/attendance/actions';
 import { AlarmClock, LogIn, LogOut, X } from 'lucide-react';
+import { getMyShiftReminders } from '@/lib/reads';
 
 const DISMISS_KEY = 'att_reminder_dismissed';
 const DISMISS_TTL_MS = 7 * 24 * 3600000;

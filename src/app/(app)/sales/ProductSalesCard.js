@@ -7,7 +7,7 @@ import { formatCurrency, formatTime, formatDateTime } from '@/lib/format';
 import { ymd } from '@/lib/date';
 import { RANGES, rangeDates } from '@/lib/salesRanges';
 import { getPageCache, setPageCache } from '@/lib/pageCache';
-import { getProductSales } from './actions';
+import { getProductSales } from '@/lib/reads';
 
 const TOP_N = 8;
 

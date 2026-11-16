@@ -15,8 +15,9 @@ import OrderSuggestionsCard from '@/components/OrderSuggestionsCard';
 import { formatDaysLeft } from '@/lib/orderDraft';
 import { formatRelative } from '@/lib/format';
 import { getPageCache, setPageCache } from '@/lib/pageCache';
-import { closeInventoryMonth, deleteInventoryClosing, saveInventoryItem, archiveInventoryItem, recordInventoryTransaction, getInventoryItemHistory, getIdleItems } from './actions';
+import { closeInventoryMonth, deleteInventoryClosing, saveInventoryItem, archiveInventoryItem, recordInventoryTransaction } from './actions';
 import { ChevronLeft, Plus, X, Package, TrendingUp, TrendingDown, Edit3, Trash2, Search, Lock, ClipboardList, Link2, ClipboardCheck } from 'lucide-react';
+import { getInventoryItemHistory, getIdleItems } from '@/lib/reads';
 
 const CATEGORY_OPTIONS = ['식자재', '음료/시럽', '주류', '컵·뚜껑', '비품', '청소·세제', '포장', '기타'];
 export default function InventoryPage() {

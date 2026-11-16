@@ -3,7 +3,7 @@
 
 import { useEffect, useState } from 'react';
 import { Sparkles, ChevronDown, Coffee, Wine, TrendingUp, TrendingDown } from 'lucide-react';
-import { getTrendPicks } from '@/app/(app)/home/actions';
+import { getTrendPicks } from '@/lib/reads';
 
 // 기준 주(월요일 시작)를 날짜로 — "10.5~10.11 기준"
 function fmtWeek(weekStart) {

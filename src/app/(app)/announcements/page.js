@@ -8,7 +8,7 @@ import PageHeader from '@/components/PageHeader';
 import Avatar from '@/components/Avatar';
 import BottomSheet from '@/components/BottomSheet';
 import { formatRelative } from '@/lib/format';
-import { getProfileNames } from '@/app/_actions/names';
+import { getProfileNames } from '@/lib/reads';
 import { createAnnouncement, updateAnnouncement, deleteAnnouncement as deleteAnnouncementAction, markAnnouncementRead } from './actions';
 import { Plus, Pin, Megaphone, X, MoreVertical, Edit3, Trash2 } from 'lucide-react';
 

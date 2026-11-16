@@ -13,8 +13,8 @@ import { isHoliday } from '@/lib/holidays';
 import { matchAttendance } from '@/lib/attendanceMatch';
 import { getPageCache, setPageCache } from '@/lib/pageCache';
 import { buildWeekdayCopyMap, formatShiftRange, formatShiftRangeCompact } from '@/lib/shiftCopy';
-import { getScheduleData, saveShift, deleteShift, submitScheduleApproval, copyPreviousShifts } from './actions';
-import { getApproverCandidates } from '../approvals/actions';
+import { saveShift, deleteShift, submitScheduleApproval, copyPreviousShifts } from './actions';
+import { getScheduleData, getApproverCandidates } from '@/lib/reads';
 
 const DOW = ['일', '월', '화', '수', '목', '금', '토'];
 

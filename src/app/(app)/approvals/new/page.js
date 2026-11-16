@@ -3,11 +3,12 @@
 import { useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useApp } from '@/context/AppContext';
-import { getApproverCandidates, submitApproval, updateApproval, getApprovalDetail } from '../actions';
+import { submitApproval, updateApproval } from '../actions';
 import PageHeader from '@/components/PageHeader';
 import { formatCurrency } from '@/lib/format';
 import { safeMutate } from '@/lib/safeMutate';
 import { Plus, Trash2, X, ChevronDown, ChevronLeft } from 'lucide-react';
+import { getApproverCandidates, getApprovalDetail } from '@/lib/reads';
 
 // 카테고리 → 회계 분류 (kind) 자동 매핑
 const EXPENSE_CATEGORIES = [

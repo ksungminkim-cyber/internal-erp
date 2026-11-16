@@ -6,7 +6,8 @@ import { X, Search, Link2 } from 'lucide-react';
 import { useFeedback } from '@/context/FeedbackContext';
 import BottomSheet from '@/components/BottomSheet';
 import { suggestQty } from '@/lib/usageSuggest';
-import { getProductUsage, saveProductUsage } from './actions';
+import { saveProductUsage } from './actions';
+import { getProductUsage } from '@/lib/reads';
 
 // 재고 품목 ↔ 토스 상품 소요량 연결 편집. 상품 1개당 이 품목이 얼마나 들어가는지(품목 단위).
 export default function UsageEditor({ item, workplaceId, onClose, onSaved }) {

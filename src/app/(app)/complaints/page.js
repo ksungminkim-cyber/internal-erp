@@ -7,7 +7,7 @@ import PageHeader from '@/components/PageHeader';
 import Avatar from '@/components/Avatar';
 import BottomSheet from '@/components/BottomSheet';
 import { formatDateTime, formatRelative } from '@/lib/format';
-import { getProfileNames } from '@/app/_actions/names';
+import { getProfileNames } from '@/lib/reads';
 import { createComplaint, updateComplaint } from './actions';
 import {
   ChevronLeft, Plus, X, MessageCircle, Phone, MessageSquare, Star,

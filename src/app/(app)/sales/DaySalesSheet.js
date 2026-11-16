@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 import { X, CreditCard, Banknote, Smartphone } from 'lucide-react';
 import BottomSheet from '@/components/BottomSheet';
 import { formatCurrency } from '@/lib/format';
-import { getDaySalesDetail } from './actions';
+import { getDaySalesDetail } from '@/lib/reads';
 
 // 매출 페이지에서 날짜를 눌렀을 때 — 그날의 합계(총액·건수·카드·현금·기타)와 상품별 판매
 export default function DaySalesSheet({ workplaceId, date, onClose }) {

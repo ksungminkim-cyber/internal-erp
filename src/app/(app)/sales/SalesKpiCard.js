@@ -6,7 +6,8 @@ import { Target, Pencil, Coffee, Wine, X } from 'lucide-react';
 import BottomSheet from '@/components/BottomSheet';
 import { formatCurrency } from '@/lib/format';
 import { computeKpi, isBarCategory, unitsToTarget, perDayUnits } from '@/lib/salesKpi';
-import { getSalesKpi, updateSalesTarget } from './actions';
+import { updateSalesTarget } from './actions';
+import { getSalesKpi } from '@/lib/reads';
 
 function fmtMan(n) {
   // 2,000만원 식 축약 — 카드 제목용

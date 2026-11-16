@@ -7,9 +7,10 @@ import PageHeader from '@/components/PageHeader';
 import { formatCurrency } from '@/lib/format';
 import { ymd } from '@/lib/date';
 import { ChevronLeft, ChevronDown, Shield, BarChart3, AlertTriangle, RefreshCw, FlaskConical, ExternalLink, Check } from 'lucide-react';
-import { getAdDashboard, getAdLive, runAdAction, getAdActions, getAdSales } from './actions';
+import { runAdAction } from './actions';
 import { buildInsights, bucketize, stats, customRange } from '@/lib/adsInsights';
 import { monthly, dailyCorrelation, changePoints, verdict, BREAK_EVEN } from '@/lib/adsSales';
+import { getAdDashboard, getAdLive, getAdActions, getAdSales } from '@/lib/reads';
 
 // 광고 현황 — 한 화면: 기간 선택 → 합계 한 줄 → 채널 카드 4개(잔액 포함, 누르면 그 채널의 캠페인·소재·해석·버튼) → 추이(차트/일/주/월) → 할 일.
 // 오늘은 광고 API 실시간(5분 캐시), 어제 이전은 매일 09:30 마감 데이터(ad_dashboard.data).

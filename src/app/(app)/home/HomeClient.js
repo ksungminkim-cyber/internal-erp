@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useApp } from '@/context/AppContext';
 import PageHeader from '@/components/PageHeader';
 import { formatRelative, formatCurrency, todayBoundary } from '@/lib/format';
-import { getProfileNames } from '@/app/_actions/names';
+import { getProfileNames } from '@/lib/reads';
 import OrderSuggestionsCard from '@/components/OrderSuggestionsCard';
 import TrendPicksCard from '@/components/TrendPicksCard';
 import TodayTodoCard from '@/components/TodayTodoCard';
