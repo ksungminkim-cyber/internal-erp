@@ -9,6 +9,7 @@ import * as approvals from '@/app/(app)/approvals/actions';
 import * as handover from '@/app/(app)/handover/actions';
 import * as closing from '@/app/(app)/closing/actions';
 import * as ads from '@/app/(app)/ads/actions';
+import * as staffing from '@/app/(app)/staffing/actions';
 import * as push from '@/app/_actions/push';
 import * as names from '@/app/_actions/names';
 
@@ -51,6 +52,7 @@ const READS = {
   getAdLive: ads.getAdLive,
   getAdActions: ads.getAdActions,
   getAdSales: ads.getAdSales,
+  getStaffingData: staffing.getStaffingData,
 };
 
 export async function POST(request) {

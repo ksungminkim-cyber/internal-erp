@@ -7,7 +7,7 @@ import {
   Home, Clock, FileText, User, Building2, Calendar, ClipboardCheck,
   ListTodo, Package, TrendingUp, Megaphone, Wrench, BookOpen,
   MessageCircle, BarChart3, LogOut, Crown, Shield, ChevronDown, Lock,
-  Target, MessageSquare, HelpCircle, UserCheck, FileSearch,
+  Target, MessageSquare, HelpCircle, UserCheck, FileSearch, Users,
 } from 'lucide-react';
 import { useState } from 'react';
 
@@ -41,6 +41,11 @@ const ADMIN_LINKS = [
   { href: '/audit', label: '감사 로그', icon: FileSearch },
 ];
 
+// 본사 소속(임원·super_admin 포함) 전용 — 시급·인건비가 드러나는 화면
+const HQ_LINKS = [
+  { href: '/staffing', label: '인력 배치', icon: Users },
+];
+
 // 대표(owner)·임원·super_admin 전용 — 본사 매니저·직원에게는 보이지 않는다
 const OWNER_LINKS = [
   { href: '/ads', label: '광고 현황', icon: Megaphone },
@@ -65,9 +70,9 @@ export default function Sidebar() {
   const isHQMember = memberships.some((m) => m.workplaces?.name === '본사');
   const isAdmin = profile?.is_super_admin === true || isHQMember || memberships.some((m) => m.role === 'owner');
   const isOwner = profile?.is_super_admin === true || profile?.is_executive === true || memberships.some((m) => m.role === 'owner');
-  const adminLinks = isOwner ? [...ADMIN_LINKS, ...OWNER_LINKS] : ADMIN_LINKS;
-  // 월별 리포트: 본사 소속(임원·super_admin 포함)만
+  // 월별 리포트·인력 배치: 본사 소속(임원·super_admin 포함)만
   const canViewReports = profile?.is_super_admin === true || profile?.is_executive === true || isHQMember;
+  const adminLinks = [...ADMIN_LINKS, ...(canViewReports ? HQ_LINKS : []), ...(isOwner ? OWNER_LINKS : [])];
   const mainLinks = MAIN_LINKS.filter((l) => l.href !== '/reports' || canViewReports);
 
   const isActive = (href) => pathname === href || pathname.startsWith(href + '/');

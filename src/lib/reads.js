@@ -54,3 +54,5 @@ export const getAdDashboard = mk('getAdDashboard');
 export const getAdLive = mk('getAdLive');
 export const getAdActions = mk('getAdActions');
 export const getAdSales = mk('getAdSales');
+// 인력 배치 (본사)
+export const getStaffingData = mk('getStaffingData');
