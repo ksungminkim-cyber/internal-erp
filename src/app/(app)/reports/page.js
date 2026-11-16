@@ -7,7 +7,7 @@ import PageHeader from '@/components/PageHeader';
 import Avatar from '@/components/Avatar';
 import { formatCurrency } from '@/lib/format';
 import { calcLaborBreakdown, MIN_HOURLY_WAGE } from '@/lib/laborCalc';
-import { getClosingSourceData } from '@/app/(app)/closing/actions';
+import { getClosingSourceData } from '@/lib/reads';
 import { ymd } from '@/lib/date';
 import { getPageCache, setPageCache } from '@/lib/pageCache';
 import {

@@ -7,7 +7,7 @@ import Link from 'next/link';
 import { ShoppingCart, ChefHat, ClipboardList, ChevronRight, ChevronDown } from 'lucide-react';
 import { ymd } from '@/lib/date';
 import { buildOrderDraft, formatDaysLeft, formatUsageQty, vendorsOf, effectiveVendor } from '@/lib/orderDraft';
-import { getOrderSuggestions } from '@/app/(app)/inventory/actions';
+import { getOrderSuggestions } from '@/lib/reads';
 
 export const ORDER_DRAFT_KEY = 'approvalPrefill';
 

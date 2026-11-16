@@ -9,11 +9,12 @@ import { formatCurrency } from '@/lib/format';
 import { downloadCsv } from '@/lib/csvExport';
 import { ymd } from '@/lib/date';
 import { getPageCache, setPageCache } from '@/lib/pageCache';
-import { saveSales, getSalesSummary, getSalesTips, saveSalesTip, deleteSalesTip } from './actions';
+import { saveSales, saveSalesTip, deleteSalesTip } from './actions';
 import ProductSalesCard from './ProductSalesCard';
 import SalesKpiCard from './SalesKpiCard';
 import DaySalesSheet from './DaySalesSheet';
 import { ChevronLeft, ChevronRight, TrendingUp, Plus, X, Info, Calendar, CreditCard, Banknote, Download, Lightbulb, Sparkles, Pencil, Trash2 } from 'lucide-react';
+import { getSalesSummary, getSalesTips } from '@/lib/reads';
 
 function addDays(d, n) { const x = new Date(d); x.setDate(x.getDate() + n); return x; }
 

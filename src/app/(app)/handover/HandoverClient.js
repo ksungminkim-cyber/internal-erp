@@ -9,7 +9,8 @@ import Avatar from '@/components/Avatar';
 import BottomSheet from '@/components/BottomSheet';
 import { formatRelative } from '@/lib/format';
 import { Plus, ChevronLeft, X, CheckCircle2, Package, Wrench, Users, Coins, Sparkles, ClipboardCheck, Edit3, Trash2 } from 'lucide-react';
-import { getHandoverNotes, toggleHandoverResolved, createHandoverNote, updateHandoverNote, deleteHandoverNote } from './actions';
+import { toggleHandoverResolved, createHandoverNote, updateHandoverNote, deleteHandoverNote } from './actions';
+import { getHandoverNotes } from '@/lib/reads';
 
 const SHIFT_LABEL = { open: '오픈', mid: '미들', close: '마감' };
 const SHIFT_TAG   = { open: 'tag-mint', mid: 'tag-accent', close: 'tag-violet' };

@@ -11,14 +11,8 @@ import { formatTime } from '@/lib/format';
 import { downloadCsv, fmtDateTime } from '@/lib/csvExport';
 import { shiftRecordStatus } from '@/lib/attendanceMatch';
 import { ChevronLeft, Download, Calendar, Users, Plus, Pencil, Trash2, X, AlertTriangle } from 'lucide-react';
-import {
-  getAttendanceHistory,
-  correctAttendanceLog,
-  addAttendanceLog,
-  deleteAttendanceLog,
-  getWorkplaceMembers,
-  getMissingAttendance,
-} from '../actions';
+import { getAttendanceHistory, correctAttendanceLog, addAttendanceLog, deleteAttendanceLog, getWorkplaceMembers } from '../actions';
+import { getMissingAttendance } from '@/lib/reads';
 
 const EVENT_LABEL = {
   clock_in: '출근',

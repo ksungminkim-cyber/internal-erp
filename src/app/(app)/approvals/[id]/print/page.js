@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback, use } from 'react';
 import { useRouter } from 'next/navigation';
 import { useApp } from '@/context/AppContext';
 import { formatCurrency } from '@/lib/format';
-import { getApprovalDetail } from '../../actions';
+import { getApprovalDetail } from '@/lib/reads';
 import { Printer, ChevronLeft } from 'lucide-react';
 
 function ymd(iso) {

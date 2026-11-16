@@ -7,7 +7,7 @@ import PageHeader from '@/components/PageHeader';
 import Avatar from '@/components/Avatar';
 import BottomSheet from '@/components/BottomSheet';
 import { formatDateTime, formatCurrency, formatRelative } from '@/lib/format';
-import { getProfileNames } from '@/app/_actions/names';
+import { getProfileNames } from '@/lib/reads';
 import { addEquipmentLog } from '../actions';
 import { ChevronLeft, Plus, X, Wrench, AlertTriangle, CheckCircle2, ScanLine, Sparkles } from 'lucide-react';
 

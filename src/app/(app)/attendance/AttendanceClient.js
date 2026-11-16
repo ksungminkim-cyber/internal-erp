@@ -8,7 +8,8 @@ import Avatar from '@/components/Avatar';
 import { formatTime, formatRelative, todayBoundary } from '@/lib/format';
 import { shiftRecordStatus } from '@/lib/attendanceMatch';
 import { LogIn, LogOut, Coffee, Play, Sparkles, Users, History, AlertTriangle, ChevronRight } from 'lucide-react';
-import { recordAttendance, getTodayAttendance, getMissingAttendance } from './actions';
+import { recordAttendance } from './actions';
+import { getTodayAttendance, getMissingAttendance } from '@/lib/reads';
 
 const EVENT_LABEL = {
   clock_in: '출근',

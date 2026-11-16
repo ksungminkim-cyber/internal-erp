@@ -10,9 +10,9 @@ import BottomSheet from '@/components/BottomSheet';
 import { formatCurrency } from '@/lib/format';
 import { downloadCsv, fmtDate } from '@/lib/csvExport';
 import { calcLaborBreakdown, formatMinutes, MIN_HOURLY_WAGE } from '@/lib/laborCalc';
-import { getProfileNames } from '@/app/_actions/names';
+import { getProfileNames, getClosingSourceData } from '@/lib/reads';
 import { ymd } from '@/lib/date';
-import { confirmMonthClosing, unlockMonthClosing, linkClosingApproval, submitClosingApproval, getClosingSourceData } from './actions';
+import { confirmMonthClosing, unlockMonthClosing, linkClosingApproval, submitClosingApproval } from './actions';
 import {
   ChevronLeft, ChevronRight, Lock, Unlock, Download, Check, AlertCircle,
   Send, Printer, X, Plus, Clock, FileCheck,

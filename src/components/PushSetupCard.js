@@ -6,7 +6,8 @@ import Link from 'next/link';
 import { BellRing, BellOff, Share, SquarePlus, Smartphone, X, Check } from 'lucide-react';
 import { useFeedback } from '@/context/FeedbackContext';
 import { pushState, isIOS, urlBase64ToUint8Array } from '@/lib/pushSupport';
-import { getPushConfig, savePushSubscription, removePushSubscription, sendTestPush } from '@/app/_actions/push';
+import { savePushSubscription, removePushSubscription, sendTestPush } from '@/app/_actions/push';
+import { getPushConfig } from '@/lib/reads';
 
 const DISMISS_KEY = 'push:bannerDismissed';
 

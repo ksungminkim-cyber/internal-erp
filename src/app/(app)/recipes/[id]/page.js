@@ -6,7 +6,7 @@ import { useApp } from '@/context/AppContext';
 import { useFeedback } from '@/context/FeedbackContext';
 import PageHeader from '@/components/PageHeader';
 import { formatCurrency, formatRelative } from '@/lib/format';
-import { getProfileNames } from '@/app/_actions/names';
+import { getProfileNames } from '@/lib/reads';
 import { saveRecipe, archiveRecipe } from '../actions';
 import { ChevronLeft, Edit3, BookOpen, Plus, Trash2 } from 'lucide-react';
 

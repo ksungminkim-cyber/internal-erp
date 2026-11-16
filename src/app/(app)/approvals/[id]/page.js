@@ -8,8 +8,9 @@ import { useFeedback } from '@/context/FeedbackContext';
 import PageHeader from '@/components/PageHeader';
 import Avatar from '@/components/Avatar';
 import { formatDateTime, formatCurrency } from '@/lib/format';
-import { getApprovalDetail, decideApprovalStep, cancelApprovalRequest } from '../actions';
+import { decideApprovalStep, cancelApprovalRequest } from '../actions';
 import { CheckCircle2, XCircle, Clock, ChevronLeft, Paperclip, Download, Sparkles, Printer } from 'lucide-react';
+import { getApprovalDetail } from '@/lib/reads';
 
 const STATUS_META = {
   pending:   { label: '진행 중',   tag: 'tag-warning',  icon: Clock },

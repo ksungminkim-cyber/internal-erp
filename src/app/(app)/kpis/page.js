@@ -8,7 +8,7 @@ import { useFeedback } from '@/context/FeedbackContext';
 import PageHeader from '@/components/PageHeader';
 import BottomSheet from '@/components/BottomSheet';
 import { formatCurrency } from '@/lib/format';
-import { getProfileNames } from '@/app/_actions/names';
+import { getProfileNames } from '@/lib/reads';
 import { todayKey } from '@/lib/date';
 import { saveKpi, archiveKpi, recordKpi } from './actions';
 import {
