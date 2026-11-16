@@ -1,7 +1,7 @@
 // src/lib/adsInsights.test.js
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { stats, bucketize, buildInsights, prepaidBalance, spendPace, paceWithHint } from './adsInsights.js';
+import { stats, bucketize, buildInsights, prepaidBalance, spendPace, paceWithHint, customRange } from './adsInsights.js';
 
 const day = (d, ch, cost, imp, inn, extra = {}) => ({ d, [ch]: { cost, imp, in: inn, c: [], ...extra } });
 const seq = (from, n, f) => Array.from({ length: n }, (_, i) => { const t = new Date(from + 'T00:00:00Z'); t.setUTCDate(t.getUTCDate() + i); return f(t.toISOString().slice(0, 10), i); });
@@ -82,4 +82,16 @@ test('paceWithHint: 예산을 바꾼 직후에는 새 예산 속도를 쓰고, �
   assert.equal(paceWithHint(9971, hint, '2026-11-19'), 9971);
   assert.equal(paceWithHint(23000, hint, '2026-11-13'), 23000); // 실제가 더 빠르면 실제를 쓴다
   assert.equal(paceWithHint(9971, undefined, '2026-11-13'), 9971);
+});
+
+test('customRange: 프리셋에서 처음 고르면 그날 하루, 직접 지정 중이면 시작·끝을 따로 바꾸고 데이터 범위로 자른다', () => {
+  const F = '2026-09-06', C = '2026-11-15';
+  assert.deepEqual(customRange(null, 'from', '2026-11-05', F, C), { from: '2026-11-05', to: '2026-11-05' });
+  assert.deepEqual(customRange(null, 'to', '2026-11-05', F, C), { from: '2026-11-05', to: '2026-11-05' });
+  const one = { from: '2026-11-05', to: '2026-11-05' };
+  assert.deepEqual(customRange(one, 'to', '2026-11-09', F, C), { from: '2026-11-05', to: '2026-11-09' });
+  assert.deepEqual(customRange(one, 'from', '2026-11-01', F, C), { from: '2026-11-01', to: '2026-11-05' });
+  assert.deepEqual(customRange(one, 'from', '2026-11-10', F, C), { from: '2026-11-10', to: '2026-11-10' }); // 시작이 끝을 넘으면 그날 하루
+  assert.deepEqual(customRange(one, 'to', '2026-12-25', F, C), { from: '2026-11-05', to: C }); // 마감일 뒤는 마감일로
+  assert.deepEqual(customRange(null, 'from', '2026-01-01', F, C), { from: F, to: F }); // 데이터 시작 전은 첫날로
 });

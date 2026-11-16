@@ -188,3 +188,12 @@ export function spendPace(days, ch, n = 7) {
 export function paceWithHint(pace, hint, closed) {
   return hint && hint.value > 0 && closed <= hint.until ? Math.max(pace, hint.value) : pace;
 }
+
+// 날짜 직접 지정: 프리셋(오늘·이번 주 …)에서 처음 고르면 그날 하루를 본다. 이미 직접 지정 중이면 시작·끝을 따로 바꾼다.
+// 값은 데이터가 있는 범위 [first, closed] 로 자르고, 시작이 끝을 넘으면 방금 고른 그날 하루로 맞춘다
+export function customRange(cur, key, value, first, closed) {
+  const v = value < first ? first : value > closed ? closed : value;
+  if (!cur) return { from: v, to: v };
+  const next = { ...cur, [key]: v };
+  return next.from > next.to ? { from: v, to: v } : next;
+}

@@ -8,7 +8,7 @@ import { formatCurrency } from '@/lib/format';
 import { ymd } from '@/lib/date';
 import { ChevronLeft, ChevronDown, Shield, BarChart3, AlertTriangle, RefreshCw, FlaskConical, ExternalLink, Check } from 'lucide-react';
 import { getAdDashboard, getAdLive, runAdAction, getAdActions, getAdSales } from './actions';
-import { buildInsights, bucketize, stats } from '@/lib/adsInsights';
+import { buildInsights, bucketize, stats, customRange } from '@/lib/adsInsights';
 import { monthly, dailyCorrelation, changePoints, verdict, BREAK_EVEN } from '@/lib/adsSales';
 
 // 광고 현황 — 한 화면: 기간 선택 → 합계 한 줄 → 채널 카드 4개(잔액 포함, 누르면 그 채널의 캠페인·소재·해석·버튼) → 추이(차트/일/주/월) → 할 일.
@@ -117,6 +117,7 @@ export default function AdsPage() {
   const [state, setState] = useState({ loading: true });
   const [live, setLive] = useState({ loading: true });
   const [range, setRange] = useState('today');
+  const [custom, setCustom] = useState(null); // 날짜 직접 지정 { from, to } (range === 'custom' 일 때)
   const [open, setOpen] = useState(null); // 펼친 채널
   const [hover, setHover] = useState(null);
   const [tick, setTick] = useState(0);
@@ -166,14 +167,14 @@ export default function AdsPage() {
       if (!day) return null;
       return { from: day.d, to: day.d, cur: [day], prev: D.days.slice(-1), hasPrev: true, chartDays: [...D.days.slice(-13), day], deltaLabel: '어제 대비' };
     }
-    const { from, to } = rangeDates(range, D.closed);
+    const { from, to } = range === 'custom' && custom ? custom : rangeDates(range, D.closed);
     const cur = D.days.filter((x) => x.d >= from && x.d <= to);
     const len = cur.length;
     const idx = D.days.findIndex((x) => x.d === from);
     const prev = idx > 0 && len ? D.days.slice(Math.max(0, idx - len), idx) : [];
     const hist = D.days.slice(-Math.max(len, 13));
     return { from, to, cur, prev, hasPrev: prev.length === len && len > 0, chartDays: L ? [...hist, liveDay(L)] : hist, deltaLabel: '직전 기간 대비' };
-  }, [D, L, range]);
+  }, [D, L, range, custom]);
 
   if (!isOwner) {
     return (<><PageHeader title="광고 현황" hideSwitcher /><main className="page-main"><div className="card empty"><div className="empty-icon"><Shield size={26} /></div><div className="empty-title">접근 권한 없음</div><div className="empty-desc">대표만 이용 가능</div></div></main></>);
@@ -186,13 +187,19 @@ export default function AdsPage() {
     return (<>{header}<main className="page-main"><div className="card empty"><div className="empty-icon">{state.loading ? <BarChart3 size={26} /> : <Shield size={26} />}</div><div className="empty-title">{state.loading ? '불러오는 중…' : state.ok ? '아직 올라온 마감이 없어요' : state.forbidden ? '접근 권한 없음' : '불러오지 못했어요'}</div><div className="empty-desc">{state.loading ? '' : state.ok ? '광고 모니터링 일 마감이 돌면 여기에 표시됩니다.' : state.error}</div></div></main></>);
   }
 
+  // 날짜 직접 지정: 마감이 있는 날만 고를 수 있다 (오늘은 「오늘」 버튼)
+  const pick = (k) => (e) => { const v = e.target.value; if (!v) return; setCustom(customRange(range === 'custom' ? custom : null, k, v, D.days[0].d, D.closed)); setRange('custom'); };
+  const dateStyle = { width: 'auto', padding: '5px 8px', fontSize: 12, borderColor: range === 'custom' ? 'var(--accent)' : undefined };
   const rangeBar = (
     <section style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
       <div className="segment" style={{ overflowX: 'auto', maxWidth: '100%' }}>
         {RANGES.map((r) => <button key={r.key} type="button" className={`segment-item ${range === r.key ? 'is-active' : ''}`} onClick={() => setRange(r.key)} style={{ padding: '6px 11px' }}>{r.label}</button>)}
       </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }} className="text-muted">
-        {view && (view.from === view.to ? `${md(view.from)} (${wd(view.from)})` : `${md(view.from)}~${md(view.to)} · ${view.cur.length}일`)}
+      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6, fontSize: 12 }} className="text-muted">
+        <input type="date" aria-label="시작일" title="시작일 — 날짜를 고르면 그날 하루를 봅니다" className="input" value={view ? view.from : ''} min={D.days[0].d} max={D.closed} onChange={pick('from')} style={dateStyle} />
+        <span>~</span>
+        <input type="date" aria-label="종료일" title="종료일 — 기간으로 보려면 끝 날짜를 고르세요" className="input" value={view ? view.to : ''} min={D.days[0].d} max={D.closed} onChange={pick('to')} style={dateStyle} />
+        {view && (view.from === view.to ? `(${wd(view.from)})` : `${view.cur.length}일`)}
         {range === 'today' && <span className="tag tag-accent" style={{ fontSize: 10 }}>실시간 {L ? hm(L.asOf) : ''}</span>}
         <button type="button" className="btn btn-ghost btn-icon" title="실시간 새로고침" onClick={refresh} disabled={live.loading} style={{ opacity: live.loading ? 0.5 : 1 }}><RefreshCw size={15} /></button>
       </div>
