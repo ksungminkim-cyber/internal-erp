@@ -47,8 +47,8 @@ function IosSteps() {
   return (
     <ol style={{ listStyle: 'none', margin: '10px 0 0', padding: 0, display: 'grid', gap: 8 }}>
       <li style={step}><span style={num}>1</span><span><strong>Safari</strong> 로 counter.mclean21.com 을 엽니다. (카카오톡·네이버 앱 안에서는 안 돼요)</span></li>
-      <li style={step}><span style={num}>2</span><span>화면 아래 <strong>공유 버튼</strong> <Share size={14} style={{ verticalAlign: -2 }} /> 을 누릅니다.</span></li>
-      <li style={step}><span style={num}>3</span><span><strong>홈 화면에 추가</strong> <SquarePlus size={14} style={{ verticalAlign: -2 }} /> 를 고르고 &ldquo;추가&rdquo;를 누릅니다.</span></li>
+      <li style={step}><span style={num}>2</span><span>화면 아래 <strong>공유 버튼</strong> <Share size={14} style={{ display: 'inline', verticalAlign: -2 }} /> 을 누릅니다.</span></li>
+      <li style={step}><span style={num}>3</span><span><strong>홈 화면에 추가</strong> <SquarePlus size={14} style={{ display: 'inline', verticalAlign: -2 }} /> 를 고르고 &ldquo;추가&rdquo;를 누릅니다.</span></li>
       <li style={step}><span style={num}>4</span><span>홈 화면에 생긴 <strong>Counter 아이콘</strong>으로 열어 로그인합니다.</span></li>
       <li style={step}><span style={num}>5</span><span>이 화면의 <strong>알림 켜기</strong>를 누르고 &ldquo;허용&rdquo;을 고릅니다.</span></li>
     </ol>
@@ -144,7 +144,7 @@ export default function PushSetupCard({ variant = 'settings' }) {
         {on && <span className="tag tag-success" style={{ fontSize: 10 }}><Check size={10} /> 켜짐</span>}
       </div>
       <p className="text-secondary" style={{ fontSize: 13, lineHeight: 1.55, marginTop: 6 }}>
-        Counter 를 닫아 놔도 결재 요청·결재 결과·새 공지가 {ios ? '아이폰 잠금화면' : '이 기기'}으로 바로 옵니다. 알림을 누르면 해당 화면이 열려요.
+        Counter 를 닫아 놔도 결재 요청·결재 결과·새 공지가 {ios ? '아이폰 잠금화면으로' : '이 기기로'} 바로 옵니다. 알림을 누르면 해당 화면이 열려요.
         {banner && <> 기기마다 한 번만 켜면 됩니다.</>}
       </p>
 
@@ -168,7 +168,7 @@ export default function PushSetupCard({ variant = 'settings' }) {
       )}
       {state === 'denied' && (
         <div style={{ marginTop: 12, padding: 12, borderRadius: 12, background: 'var(--warning-soft)', fontSize: 13, lineHeight: 1.55 }}>
-          <BellOff size={14} style={{ verticalAlign: -2, marginRight: 4 }} />
+          <BellOff size={14} style={{ display: 'inline', verticalAlign: -2, marginRight: 4 }} />
           이 기기에서 Counter 알림이 차단돼 있어요. {ios
             ? <>아이폰 <strong>설정 → 알림 → Counter</strong> 에서 &ldquo;알림 허용&rdquo;을 켜 주세요.</>
             : <>주소창 왼쪽 <strong>자물쇠(사이트 설정) → 알림 → 허용</strong>으로 바꾼 뒤 새로고침해 주세요.</>}
