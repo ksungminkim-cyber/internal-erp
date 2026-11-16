@@ -6,7 +6,7 @@ import { useApp } from '@/context/AppContext';
 import PageHeader from '@/components/PageHeader';
 import {
   Calendar, ClipboardCheck, ListTodo, Package, TrendingUp, Megaphone,
-  AlertCircle, Sparkles, BookOpen, BarChart3, UserCog, Lock,
+  AlertCircle, Sparkles, BookOpen, BarChart3, UserCog, Lock, Users,
   Target, HelpCircle,
 } from 'lucide-react';
 
@@ -136,6 +136,9 @@ export default function OperationsMenu() {
             <OpsCard href="/kpis"           icon={Target}     label="KPI"        desc="월별 목표·결재"  accent="violet" />
             {canViewReports && (
               <OpsCard href="/reports"      icon={BarChart3}  label="월별 리포트" desc="손익·인건비 대시보드" accent="accent" />
+            )}
+            {canViewReports && (
+              <OpsCard href="/staffing"     icon={Users}      label="인력 배치"   desc="매출 대비 근무 인원" accent="success" />
             )}
             <OpsCard href="/announcements"  icon={Megaphone}  label="공지사항"   desc="전직원 공지"
               accent="neutral" badge={stats.unreadAnn > 0 ? `${stats.unreadAnn} 신규` : null} urgent={stats.unreadAnn > 0} />
