@@ -13,6 +13,9 @@ export const metadata = {
   title: 'Counter',
   description: '맥클린 사업장 운영 ERP',
   manifest: '/manifest.json',
+  // 아이폰 "홈 화면에 추가" — 앱처럼 열려야 웹 푸시를 받을 수 있다
+  appleWebApp: { capable: true, title: 'Counter', statusBarStyle: 'default' },
+  icons: { apple: '/apple-touch-icon.png' },
 };
 
 export const viewport = {

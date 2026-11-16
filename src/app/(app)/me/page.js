@@ -8,6 +8,7 @@ import Avatar from '@/components/Avatar';
 import { formatCurrency } from '@/lib/format';
 import { safeMutate } from '@/lib/safeMutate';
 import { updateMyProfile } from './actions';
+import PushSetupCard from '@/components/PushSetupCard';
 import { LogOut, Save, Building2, Crown, User as UserIcon, Shield, Wallet, KeyRound, Eye, EyeOff } from 'lucide-react';
 
 const ROLE_META = {
@@ -210,6 +211,9 @@ export default function MePage() {
             <KeyRound size={14} /> {pwSaving ? '변경 중...' : '비밀번호 변경'}
           </button>
         </form>
+
+        {/* 휴대폰·PC 푸시 알림 — 기기별 켜기/끄기, 아이폰 홈 화면 추가 안내 */}
+        <PushSetupCard variant="settings" />
 
         {/* 소속 */}
         <section className="card">

@@ -9,6 +9,7 @@ import { getProfileNames } from '@/app/_actions/names';
 import OrderSuggestionsCard from '@/components/OrderSuggestionsCard';
 import TrendPicksCard from '@/components/TrendPicksCard';
 import TodayTodoCard from '@/components/TodayTodoCard';
+import PushSetupCard from '@/components/PushSetupCard';
 import { todayKey, ymd } from '@/lib/date';
 import {
   Clock, FileText, Megaphone, Users, ChevronRight, Plus, Sparkles,
@@ -323,6 +324,9 @@ export default function HomeClient({
             </div>
           </section>
         )}
+
+        {/* 푸시 알림 안내 — 이 기기에서 아직 안 켠 사람에게만 (닫으면 다시 안 뜸) */}
+        <PushSetupCard variant="banner" />
 
         {/* 오늘 할 일 — 체크리스트·결재·인수인계·입고 대기·재고 알림을 한 카드에 */}
         <TodayTodoCard
