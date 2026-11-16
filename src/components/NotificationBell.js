@@ -3,9 +3,10 @@
 import { useEffect, useState, useCallback, useRef, useId } from 'react';
 import Link from 'next/link';
 import { useApp } from '@/context/AppContext';
+import { useFeedback } from '@/context/FeedbackContext';
 import { formatRelative } from '@/lib/format';
 import { safeMutate } from '@/lib/safeMutate';
-import { Bell, Check, CheckCheck } from 'lucide-react';
+import { Bell, Check, CheckCheck, Smartphone } from 'lucide-react';
 
 const TYPE_LABEL = {
   approval_decided: '결재 결과',
@@ -13,10 +14,17 @@ const TYPE_LABEL = {
   approval_reminder: '결재 지연',
   suggestion_response: '건의 응답',
   announcement_new: '새 공지',
+  monitor_sync_stale: '포스 동기화',
+  monitor_quiet_hours: '주문 끊김',
+  monitor_sales_drop: '매출 급감',
 };
+
+// 종이 화면에 두 개(모바일·데스크톱) 떠 있어도 새 알림 팝업은 한 번만
+const poppedIds = new Set();
 
 export default function NotificationBell({ inline = false }) {
   const { user, supabase } = useApp();
+  const { toast } = useFeedback();
   const [items, setItems] = useState([]);
   const [open, setOpen] = useState(false);
   const dropdownRef = useRef(null);
@@ -43,11 +51,19 @@ export default function NotificationBell({ inline = false }) {
       .channel(channelName)
       .on('postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${user.id}` },
-        () => load()
+        (payload) => {
+          load();
+          // Counter 를 보고 있는 중이면 화면 안에 바로 띄운다 (누르면 해당 화면으로)
+          const n = payload?.new;
+          if (n?.id && !poppedIds.has(n.id) && document.visibilityState === 'visible') {
+            poppedIds.add(n.id);
+            toast(`${n.title}${n.body ? ` · ${n.body}` : ''}`, 'info', { href: n.link || '/home', duration: 8000 });
+          }
+        }
       )
       .subscribe();
     return () => { supabase.removeChannel(ch); };
-  }, [supabase, user, load, instanceId]);
+  }, [supabase, user, load, instanceId, toast]);
 
   useEffect(() => {
     function onDocClick(e) {
@@ -197,6 +213,13 @@ export default function NotificationBell({ inline = false }) {
               ))}
             </div>
           )}
+          <Link
+            href="/me#push"
+            onClick={() => setOpen(false)}
+            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '10px 14px', fontSize: 12, fontWeight: 600, color: 'var(--accent)', textDecoration: 'none', borderTop: '1px solid var(--border)', position: 'sticky', bottom: 0, background: 'var(--surface)' }}
+          >
+            <Smartphone size={13} /> 휴대폰·PC 푸시 알림 설정
+          </Link>
         </div>
       )}
     </div>

@@ -567,6 +567,9 @@ input[type="password"], input[type="date"], input[type="time"], textarea, select
   max-width: 100%;
 }
 .toast span { overflow-wrap: anywhere; }
+/* 눌러서 이동하는 토스트 (새 알림 팝업) — 스택은 클릭을 통과시키므로 이것만 클릭 가능 */
+.toast-link { pointer-events: auto; cursor: pointer; text-decoration: none; border-radius: 16px; padding: 12px 16px; }
+.toast-link:hover { filter: brightness(1.08); }
 .toast-success svg { color: var(--success); flex-shrink: 0; }
 .toast-error svg { color: var(--danger); flex-shrink: 0; }
 .toast-info svg { color: #7cb3ff; flex-shrink: 0; }
@@ -622,5 +625,6 @@ input[type="password"], input[type="date"], input[type="time"], textarea, select
   gap: 8px;
 }
 .dialog-actions .btn { flex: 1; }
+
 
 

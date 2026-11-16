@@ -1,6 +1,7 @@
 'use client';
 
 import { createContext, useContext, useState, useCallback, useRef } from 'react';
+import Link from 'next/link';
 import { CheckCircle2, XCircle, Info, AlertTriangle } from 'lucide-react';
 
 // 네이티브 alert()/confirm() 대체 — 앱 톤에 맞는 토스트 + 확인 다이얼로그
@@ -17,13 +18,15 @@ export function FeedbackProvider({ children }) {
   const [confirmState, setConfirmState] = useState(null);
   const idRef = useRef(0);
 
-  const toast = useCallback((message, type = 'info') => {
+  // toast(메시지, 'info'|'success'|'error', { href: 누르면 이동할 경로, duration: 표시 ms })
+  const toast = useCallback((message, type = 'info', opts = {}) => {
     const id = ++idRef.current;
-    setToasts((prev) => [...prev, { id, message, type }]);
+    setToasts((prev) => [...prev, { id, message, type, href: opts.href ?? null }]);
     setTimeout(() => {
       setToasts((prev) => prev.filter((t) => t.id !== id));
-    }, 3200);
+    }, opts.duration ?? 3200);
   }, []);
+  const dropToast = (id) => setToasts((prev) => prev.filter((t) => t.id !== id));
 
   // confirmDialog('메시지') 또는 confirmDialog({ title, message, confirmLabel, danger })
   const confirmDialog = useCallback((opts) => {
@@ -46,6 +49,14 @@ export function FeedbackProvider({ children }) {
       <div className="toast-stack" aria-live="polite">
         {toasts.map((t) => {
           const Icon = TOAST_ICON[t.type] ?? Info;
+          if (t.href) {
+            return (
+              <Link key={t.id} href={t.href} onClick={() => dropToast(t.id)} className={`toast toast-${t.type} toast-link`}>
+                <Icon size={16} />
+                <span>{t.message}</span>
+              </Link>
+            );
+          }
           return (
             <div key={t.id} className={`toast toast-${t.type}`}>
               <Icon size={16} />

@@ -299,9 +299,16 @@ export default function GuidePage() {
               <li>나에게 결재가 도착했을 때 (관리자만)</li>
             </ul>
 
+            <p><strong>휴대폰·PC 로 바로 받기</strong> — Counter 를 닫아 놔도 알림이 기기로 옵니다. <strong>내정보 → 휴대폰·PC 알림 → 이 기기에서 알림 켜기</strong> 를 기기마다 한 번 누르면 됩니다.</p>
+            <ul>
+              <li><strong>아이폰</strong>: Safari 로 열기 → 공유 버튼 → <strong>홈 화면에 추가</strong> → 홈 화면의 Counter 아이콘으로 열고 알림 켜기 (iOS 16.4 이상)</li>
+              <li><strong>안드로이드 · PC</strong>: 크롬(또는 엣지)에서 알림 켜기 → 허용</li>
+              <li>Counter 를 보고 있는 중에는 화면 위쪽에 새 알림이 바로 뜹니다. 누르면 해당 화면으로 이동해요.</li>
+            </ul>
+
             <div className="tip-box">
               <strong><Lightbulb size={13} style={{ verticalAlign: 'middle' }} /> 활용 팁</strong><br />
-              아침 출근 후 → 종 아이콘 한 번 확인하는 게 가장 빠른 시작입니다.
+              아침 출근 후 → 종 아이콘 한 번 확인하는 게 가장 빠른 시작입니다. 푸시 알림을 켜 두면 결재 요청을 놓치지 않아요.
             </div>
           </section>
 
