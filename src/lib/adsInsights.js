@@ -197,3 +197,54 @@ export function customRange(cur, key, value, first, closed) {
   const next = { ...cur, [key]: v };
   return next.from > next.to ? { from: v, to: v } : next;
 }
+
+/**
+ * 서버 자동 마감이 광고 API에서 방금 읽은 상태(S)를 마감 자료(D)에 반영한 새 객체를 돌려준다.
+ * 네이버 소재별 성과·캠페인 일예산, 구글·당근 캠페인 유형·상태·일예산, 메타 캠페인 상태.
+ * 조회에 실패한 채널은 S 에서 null → 그 채널은 그대로 둔다. API로 못 읽는 값(구글 잔액 경고, 당근 잔액 기준)도 그대로.
+ * S: { naver: { campaign: { name, status, dailyBudget }, ads: [{ name, status, imp, clicks, cost }] },
+ *      google: { campaigns: [{ name, type, status, budget }] }, karrot: { campaigns: [같은 모양] },
+ *      meta: { activeCampaigns, campaigns: [{ name, status, budget }] } }
+ */
+export function applyAdStatus(D, S, { today, now }) {
+  const out = { ...D, ads: (D.ads || []).map((a) => ({ ...a })) };
+  const row = (ch, name) => out.ads.find((a) => a.ch === ch && a.name === name);
+  const upsert = (ch, c) => {
+    const a = row(ch, c.name);
+    if (a) Object.assign(a, { type: c.type, status: c.status, budget: c.budget });
+    else out.ads.push({ ch, name: c.name, type: c.type, status: c.status, budget: c.budget, cost: 0, in: 0, lastSpend: null });
+  };
+  const status = (ch, extra) => ({ ...D[ch], status: { ...(D[ch] && D[ch].status), ...extra, checked: today }, updated: now });
+  if (S.naver) {
+    out.naver = { ...D.naver, ads: S.naver.ads, campaign: S.naver.campaign, updated: now };
+    const a = row('naver', S.naver.campaign.name);
+    if (a) { a.status = S.naver.campaign.status === 'ELIGIBLE' ? '운영 중' : S.naver.campaign.status; a.budget = S.naver.campaign.dailyBudget; }
+  }
+  if (S.google) {
+    out.google = status('google', { campaigns: S.google.campaigns });
+    S.google.campaigns.forEach((c) => upsert('google', c));
+  }
+  if (S.karrot) {
+    // API(전문가모드)에 없는 간편모드 캠페인 기록은 남긴다
+    const mine = new Set(S.karrot.campaigns.map((c) => c.name));
+    const others = ((D.karrot && D.karrot.status && D.karrot.status.campaigns) || []).filter((c) => !mine.has(c.name));
+    out.karrot = status('karrot', { campaigns: others.concat(S.karrot.campaigns) });
+    S.karrot.campaigns.forEach((c) => upsert('karrot', c));
+  }
+  if (S.meta) {
+    out.meta = status('meta', { activeCampaigns: S.meta.activeCampaigns });
+    // 메타는 지출이 있었던 캠페인만 표에 올린다 (자동 마감이 추가) — 여기서는 있는 행의 상태만
+    for (const c of S.meta.campaigns) { const a = row('meta', c.name); if (a) { a.status = c.status; if (c.budget) a.budget = c.budget; } }
+  }
+  return out;
+}
+
+// 「마감일에 지출 0원」 경고를 지금 마감 자료 기준으로 다시 만든다 (지난 마감일 것은 지운다). 나머지 경고는 그대로.
+export function refreshSpendAlerts(alerts, days) {
+  const out = (alerts || []).filter((a) => !a.text.startsWith('마감일('));
+  const y = days[days.length - 1];
+  if (!y) return out;
+  for (const [k, label] of [['naver', '네이버'], ['google', '구글'], ['karrot', '당근']])
+    if (y[k] && y[k].cost === 0) out.push({ level: 'warning', ch: label, text: `마감일(${y.d})에 지출이 0원입니다. 광고가 멈췄는지 확인하세요.` });
+  return out;
+}
