@@ -265,7 +265,7 @@ export default function HomeClient({
   }
 
   const greeting = (() => {
-    const h = new Date().getHours();
+    const h = (new Date().getUTCHours() + 9) % 24; // 한국 시간 — 서버(UTC)와 브라우저가 같은 인사말을 그려야 한다
     if (h < 6)  return '깊은 밤이에요';
     if (h < 12) return '좋은 아침이에요';
     if (h < 14) return '점심 잘 챙기세요';
@@ -274,7 +274,7 @@ export default function HomeClient({
     return '오늘도 수고하셨어요';
   })();
 
-  const today       = new Date().toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', weekday: 'long' });
+  const today       = new Date().toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', weekday: 'long', timeZone: 'Asia/Seoul' });
   const s           = stats ?? { working: 0, inbox: 0, unread: 0, todayCheckins: 0, todaySales: 0, todayShifts: 0, handoverUnresolved: 0 };
 
   return (

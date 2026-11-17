@@ -1,12 +1,13 @@
 // 시즌 한정 꾸미기 — 날짜에 맞춰 저절로 켜지고 꺼진다.
 // 켜는 방식: <html data-season="xmas | newyear">. 색·장식은 전부 globals.css 의 "시즌 테마" 블록들에 있다.
 // 미리 보기: 주소 끝에 ?season=newyear (또는 xmas, off) 를 붙이면 날짜와 상관없이 그 화면으로 열린다.
-// 걷어낼 때: 이 파일, layout.js 의 <SeasonalDecor />, globals.css 의 "시즌 테마" 블록들, brand-mark 클래스 두 곳.
+// 기간은 src/lib/season.js. 걷어낼 때: 이 파일, SeasonKeeper.js, lib/season.js, layout.js 의 <SeasonalDecor />,
+// globals.css 의 "시즌 테마" 블록들, brand-mark 클래스 두 곳, HomeClient 의 .season-greeting 한 줄.
 
-const XMAS_END = Date.UTC(2026, 11, 31, 15);   // 크리스마스: 2026-12-31 까지 (KST)
-const NEWYEAR_END = Date.UTC(2027, 0, 15, 15); // 새해: 2027-01-01 ~ 01-15 (KST)
+import { pickSeason, XMAS_END, NEWYEAR_END } from '@/lib/season';
+import SeasonKeeper from './SeasonKeeper';
 
-const PICK = `(function(){var m=location.search.match(/[?&]season=(xmas|newyear|off)/),t=Date.now(),s=m?m[1]:t<${XMAS_END}?'xmas':t<${NEWYEAR_END}?'newyear':'off';if(s!=='off')document.documentElement.setAttribute('data-season',s)})()`;
+const PICK = `(function(){var s=(${pickSeason.toString()})(location.search,Date.now(),${XMAS_END},${NEWYEAR_END});if(s!=='off')document.documentElement.setAttribute('data-season',s)})()`;
 
 // 떠다니는 장식 배치 (왼쪽 %, 크기 px, 움직이는 시간 s, 시작 지연 s, 옆으로 흐르는 정도 px) — 매번 같은 모양이 되도록 고정값.
 // 크리스마스: 눈 (10px 이상은 눈꽃 모양, 그보다 작으면 흰 점). 새해: 제자리에서 반짝이는 금빛
@@ -19,8 +20,9 @@ const BITS = [
 export default function SeasonalDecor() {
   return (
     <>
-      {/* 첫 화면이 그려지기 전에 켜야 색이 깜빡이지 않는다 */}
+      {/* 첫 화면이 그려지기 전에 켜야 색이 깜빡이지 않는다. SeasonKeeper 는 React 가 문서를 다시 그려 속성이 지워졌을 때 다시 건다 */}
       <script dangerouslySetInnerHTML={{ __html: PICK }} />
+      <SeasonKeeper />
       <div className="season-fx" aria-hidden="true">
         {BITS.map(([left, size, dur, delay, drift], i) => (
           <i key={left} className={size >= 10 ? 'is-flake' : undefined}
