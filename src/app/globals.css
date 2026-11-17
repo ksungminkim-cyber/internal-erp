@@ -651,6 +651,13 @@ input[type="password"], input[type="date"], input[type="time"], textarea, select
 .stf-details summary { cursor: pointer; font-weight: 600; color: var(--text-muted); padding: 4px 0; width: fit-content; }
 .stf-details ul { list-style: disc; margin: 8px 0 0; padding-left: 18px; display: grid; gap: 4px; line-height: 1.6; max-width: 72ch; }
 
+/* ─── 전체(본사) 홈: 매장별 현황 ─── */
+.store-overview-hero, .store-overview-row { display: block; text-decoration: none; color: var(--text); transition: background var(--t-sm) var(--ease); }
+.store-overview-hero { padding: 20px; }
+.store-overview-row { display: flex; align-items: center; gap: 8px; padding: 13px 20px; border-top: 1px solid var(--border); }
+.store-overview-hero:hover, .store-overview-row:hover { background: var(--surface-soft); }
+@media (max-width: 640px) { .store-overview { grid-template-columns: 1fr; } }
+
 /* ─── 시즌 테마: 크리스마스 (임시) ───
    <html data-season="xmas"> 일 때만 적용 — SeasonalDecor 가 기간 안에서만 켠다. 이 블록을 지우면 원래대로 돌아간다.
    색 조합: 크림 바탕 + 솔잎 초록(버튼·선택 표시) + 크랜베리 빨강(리본·방울·모자·추가 버튼) + 금색(불빛) */
