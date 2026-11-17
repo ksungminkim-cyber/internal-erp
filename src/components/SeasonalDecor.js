@@ -4,7 +4,7 @@
 // 걷어낼 때: 이 파일, layout.js 의 <SeasonalDecor />, globals.css 의 "시즌 테마" 블록들, brand-mark 클래스 두 곳.
 
 const XMAS_END = Date.UTC(2026, 11, 31, 15);   // 크리스마스: 2026-12-31 까지 (KST)
-const NEWYEAR_END = Date.UTC(2027, 0, 10, 15); // 새해: 2027-01-01 ~ 01-10 (KST)
+const NEWYEAR_END = Date.UTC(2027, 0, 15, 15); // 새해: 2027-01-01 ~ 01-15 (KST)
 
 const PICK = `(function(){var m=location.search.match(/[?&]season=(xmas|newyear|off)/),t=Date.now(),s=m?m[1]:t<${XMAS_END}?'xmas':t<${NEWYEAR_END}?'newyear':'off';if(s!=='off')document.documentElement.setAttribute('data-season',s)})()`;
 
