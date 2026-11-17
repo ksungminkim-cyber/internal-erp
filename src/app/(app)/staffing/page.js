@@ -8,25 +8,67 @@ import { formatCurrency } from '@/lib/format';
 import { calcLabor } from '@/lib/laborCalc';
 import { staffByDateHour, buildStaffing, shiftsToLogs, monthSalesForecast, groupRecs, coveredDates } from '@/lib/staffing';
 import { getStaffingData } from '@/lib/reads';
-import { ChevronLeft, Shield, Users, TrendingDown, TrendingUp, CalendarRange, Info } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Shield, Users, CalendarRange } from 'lucide-react';
 
 const DOW = ['일', '월', '화', '수', '목', '금', '토'];
 const DOW_ORDER = [1, 2, 3, 4, 5, 6, 0]; // 월 → 일
 const WEEKS_PER_MONTH = 52 / 12;
 const MIN_WEEKS = 3; // 근무표가 있는 주가 이보다 적으면 진단하지 않는다
+const LIST_LIMIT = 5; // 조정 제안은 종류별로 이만큼만 먼저 보여준다
+const TEXT = { over: '#00876c', under: '#c2410c', danger: '#c52f3e' }; // 옅은 배경 위에서 읽히는 글자색
 
 const pct = (r) => (r == null ? '—' : `${(r * 100).toFixed(1)}%`);
 const man = (n) => `${formatCurrency(Math.round(n / 10000))}만원`;
 const staffTxt = (n) => { const v = Math.round(n * 10) / 10; return Number.isInteger(v) ? String(v) : v.toFixed(1); };
 const md = (key) => `${Number(key.slice(5, 7))}/${Number(key.slice(8, 10))}`;
 
+// 요일 묶음을 짧게: 매일·평일·주말, 사흘 이상 이어지면 "월~목"
 function daysLabel(days) {
-  const set = new Set(days);
-  const has = (arr) => arr.length === set.size && arr.every((d) => set.has(d));
-  if (has([0, 1, 2, 3, 4, 5, 6])) return '매일';
-  if (has([1, 2, 3, 4, 5])) return '평일';
-  if (has([0, 6])) return '주말';
-  return DOW_ORDER.filter((d) => set.has(d)).map((d) => DOW[d]).join('·');
+  const pos = DOW_ORDER.map((d, i) => (days.includes(d) ? i : -1)).filter((i) => i >= 0);
+  const k = pos.join('');
+  if (k === '0123456') return '매일';
+  if (k === '01234') return '평일';
+  if (k === '56') return '주말';
+  const name = (i) => DOW[DOW_ORDER[i]];
+  const runs = [];
+  for (const i of pos) { const last = runs[runs.length - 1]; if (last && last[1] === i - 1) last[1] = i; else runs.push([i, i]); }
+  return runs.map(([a, b]) => (a === b ? name(a) : b - a >= 2 ? `${name(a)}~${name(b)}` : `${name(a)}·${name(b)}`)).join('·');
+}
+
+function Step({ label, value, color, sub }) {
+  return (
+    <div style={{ minWidth: 0 }}>
+      <div className="text-secondary" style={{ fontSize: 12, fontWeight: 600 }}>{label}</div>
+      <div className="num stf-big" style={{ color }}>{value}</div>
+      {sub && <div className="num" style={{ fontSize: 12, fontWeight: 700, color }}>{sub}</div>}
+    </div>
+  );
+}
+
+// 조정 제안 한 묶음 (줄이기 / 보강). 금액은 월 기준
+function RecGroup({ kind, title, groups, expanded }) {
+  const color = TEXT[kind];
+  const sign = kind === 'over' ? '−' : '+';
+  const monthly = (g) => man(Math.abs(g.weeklyDelta) * WEEKS_PER_MONTH);
+  return (
+    <div style={{ marginTop: 14 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 700, paddingBottom: 6 }}>
+        <span style={{ width: 8, height: 8, borderRadius: 3, background: color }} aria-hidden="true" />
+        <span style={{ flex: 1 }}>{title}</span>
+        <span className="num" style={{ color }}>월 {sign}{man(groups.reduce((t, g) => t + Math.abs(g.weeklyDelta), 0) * WEEKS_PER_MONTH)}</span>
+      </div>
+      <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
+        {(expanded ? groups : groups.slice(0, LIST_LIMIT)).map((g) => (
+          <li key={`${g.days.join('')}|${g.fromHour}|${g.to}`} style={{ display: 'flex', alignItems: 'baseline', gap: 8, padding: '9px 0', borderTop: '1px solid var(--border)', fontSize: 13 }}>
+            <strong style={{ minWidth: 44 }}>{daysLabel(g.days)}</strong>
+            <span className="num" style={{ flex: 1 }}>{g.fromHour}~{g.toHour}시</span>
+            <span className="text-muted" style={{ fontSize: 12 }}>{g.to}명으로</span>
+            <span className="num" style={{ minWidth: 62, textAlign: 'right', fontWeight: 700, color }}>{sign}{monthly(g)}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
 }
 
 // 한 사람의 시프트 묶음 → 주휴·야간·연장 포함 인건비 (브라우저 = KST 기준)
@@ -51,6 +93,7 @@ export default function StaffingPage() {
   const wpId = picked ?? (stores.some((s) => s.id === currentWorkplaceId) ? currentWorkplaceId : stores[0]?.id ?? null);
   const [res, setRes] = useState({ key: null, data: null, error: null });
   const [sel, setSel] = useState(null); // 선택한 칸 'dow|hour'
+  const [expanded, setExpanded] = useState(false); // 조정 제안 전체 보기
 
   useEffect(() => {
     if (!canView || !wpId) return undefined;
@@ -104,11 +147,12 @@ export default function StaffingPage() {
   const S = r?.summary;
   const hours = r ? [...new Set(r.slots.map((s) => s.hour))].sort((a, b) => a - b) : [];
   const slotOf = (dow, hour) => r?.slots.find((s) => s.dow === dow && s.hour === hour);
-  const maxItems = r ? Math.max(1, ...r.slots.map((s) => s.p75Items)) : 1;
   const groups = r ? groupRecs(r.recs) : [];
   const overs = groups.filter((g) => g.kind === 'over'), unders = groups.filter((g) => g.kind === 'under');
+  const hiddenCount = Math.max(0, overs.length - LIST_LIMIT) + Math.max(0, unders.length - LIST_LIMIT);
   const selSlot = sel ? slotOf(Number(sel.split('|')[0]), Number(sel.split('|')[1])) : null;
-  const overTarget = S && S.ratio != null && S.ratio > S.targetRatio;
+  const target = S ? `${Math.round(S.targetRatio * 1000) / 10}%` : '';
+  const barMax = r ? Math.max(0.5, ...r.byDow.map((x) => x.ratio ?? 0)) : 0.5; // 요일별 막대의 오른쪽 끝
 
   return (
     <>
@@ -116,7 +160,7 @@ export default function StaffingPage() {
       <main className="fade-in page-main" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
         <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
           <div className="segment">
-            {stores.map((s) => <button key={s.id} type="button" className={`segment-item ${wpId === s.id ? 'is-active' : ''}`} onClick={() => { setPicked(s.id); setSel(null); }}>{s.name}</button>)}
+            {stores.map((s) => <button key={s.id} type="button" className={`segment-item ${wpId === s.id ? 'is-active' : ''}`} onClick={() => { setPicked(s.id); setSel(null); setExpanded(false); }}>{s.name}</button>)}
           </div>
           {D && <span className="text-muted" style={{ fontSize: 12 }}>최근 {D.dates.length / 7}주 · {md(D.dates[0])}~{md(D.dates[D.dates.length - 1])}{calc && !calc.insufficient && calc.cover.weeksCovered < calc.cover.weeksTotal ? ` 중 근무표 있는 ${calc.cover.weeksCovered}주` : ''}</span>}
         </div>
@@ -136,171 +180,149 @@ export default function StaffingPage() {
 
         {!loading && D && !calc.insufficient && (
           <>
-            {/* 요약 */}
+            {/* 요약: 지금 → 줄이면 → 목표 */}
             <section className="card">
-              <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
-                <div className="text-secondary" style={{ fontSize: 13, fontWeight: 700 }}>인건비율</div>
-                <div className="num" style={{ fontSize: 32, fontWeight: 800, color: overTarget ? 'var(--danger)' : 'var(--text)' }}>{pct(S.ratio)}</div>
-                <span className="tag" style={{ fontSize: 11 }}>목표 {pct(S.targetRatio)}</span>
-              </div>
-              <div className="text-muted" style={{ fontSize: 12, marginTop: 4 }}>
-                주 평균 매출 {man(S.weeklySales)} · 인건비 {man(S.weeklyLabor)} (주휴{D.premiumExempt ? '' : '·야간'} 포함, 근무표 기준)
-              </div>
-              <div style={{ display: 'grid', gap: 8, marginTop: 14 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 12, background: 'var(--success-soft)' }}>
-                  <TrendingDown size={18} color="#00876c" />
-                  <div style={{ flex: 1, fontSize: 13, lineHeight: 1.5 }}>
-                    <strong>겹치는 시간만 줄이면 {pct(S.ratioIfTrimmed)}</strong>
-                    <div className="text-secondary" style={{ fontSize: 12 }}>주 {man(S.weeklySaving)} · 월 약 {man(S.weeklySaving * WEEKS_PER_MONTH)} 절감</div>
-                  </div>
-                </div>
-                {S.weeklyAdd > 0 && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 12, background: 'var(--surface-soft)' }}>
-                    <TrendingUp size={18} color="var(--text-secondary)" />
-                    <div style={{ flex: 1, fontSize: 13, lineHeight: 1.5 }}>
-                      <strong>붐비는 시간까지 보강하면 {pct(S.ratioIfApplied)}</strong>
-                      <div className="text-secondary" style={{ fontSize: 12 }}>보강에 주 {man(S.weeklyAdd)} · 순 변화 월 약 {S.weeklyAdd - S.weeklySaving <= 0 ? '−' : '+'}{man(Math.abs(S.weeklyAdd - S.weeklySaving) * WEEKS_PER_MONTH)}</div>
-                    </div>
-                  </div>
+              <div className="stf-flow">
+                <Step label="지금 인건비율" value={pct(S.ratio)} color={S.ratio > S.targetRatio ? TEXT.danger : 'var(--text)'} />
+                {S.weeklySaving > 0 && (
+                  <>
+                    <ChevronRight size={18} className="stf-flow-arrow" aria-hidden="true" />
+                    <Step label="겹침 줄이면" value={pct(S.ratioIfTrimmed)} color={TEXT.over} sub={`월 −${man(S.weeklySaving * WEEKS_PER_MONTH)}`} />
+                  </>
                 )}
+                <ChevronRight size={18} className="stf-flow-arrow" aria-hidden="true" />
+                <Step label="목표" value={target} color="var(--text-muted)" />
               </div>
+              <p style={{ fontSize: 13, marginTop: 14, fontWeight: 600 }}>
+                {S.ratio <= S.targetRatio ? '지금 목표 안이에요.'
+                  : S.ratioIfTrimmed <= S.targetRatio ? '겹치는 시간만 줄여도 목표 안으로 들어와요.'
+                  : `겹치는 시간을 다 줄여도 목표까지 ${((S.ratioIfTrimmed - S.targetRatio) * 100).toFixed(1)}%p 남아요.`}
+              </p>
+              <p className="text-muted num" style={{ fontSize: 12, marginTop: 2 }}>
+                주 평균 매출 {man(S.weeklySales)} · 인건비 {man(S.weeklyLabor)} (주휴{D.premiumExempt ? '' : '·야간'} 포함){S.weeklyAdd > 0 ? ` · 붐비는 시간까지 보강하면 ${pct(S.ratioIfApplied)}` : ''}
+              </p>
             </section>
 
-            {/* 조정 제안 */}
-            <section className="card">
-              <h2 className="h3">조정 제안</h2>
-              <p className="text-muted" style={{ fontSize: 12, marginTop: 2 }}>평균 배치 인원과 권장 인원이 0.5명 이상 다른 시간대만 묶었어요.</p>
-              {overs.length === 0 && unders.length === 0 && <p style={{ fontSize: 13, marginTop: 10 }}>지금 근무표가 수요와 잘 맞습니다. 조정할 곳이 없어요.</p>}
-              {overs.length > 0 && (
-                <div style={{ marginTop: 12 }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: '#00876c', marginBottom: 2 }}>줄일 수 있는 시간</div>
-                  <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
-                    {overs.map((g) => (
-                      <li key={`o${g.days.join('')}${g.fromHour}`} style={{ display: 'flex', alignItems: 'baseline', gap: 8, padding: '8px 0', borderTop: '1px solid var(--border)', fontSize: 13 }}>
-                        <span style={{ flex: 1 }}><strong>{daysLabel(g.days)}</strong> {g.fromHour}~{g.toHour}시 → {g.to}명이면 충분</span>
-                        <span className="num" style={{ fontWeight: 800, color: '#00876c', whiteSpace: 'nowrap' }}>월 −{man(-g.weeklyDelta * WEEKS_PER_MONTH)}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-              {unders.length > 0 && (
-                <div style={{ marginTop: 14 }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: '#c2410c', marginBottom: 2 }}>붐비는 시간 (보강 검토)</div>
-                  <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
-                    {unders.map((g) => (
-                      <li key={`u${g.days.join('')}${g.fromHour}`} style={{ display: 'flex', alignItems: 'baseline', gap: 8, padding: '8px 0', borderTop: '1px solid var(--border)', fontSize: 13 }}>
-                        <span style={{ flex: 1 }}><strong>{daysLabel(g.days)}</strong> {g.fromHour}~{g.toHour}시 → {g.to}명 권장</span>
-                        <span className="num text-secondary" style={{ fontWeight: 700, whiteSpace: 'nowrap' }}>월 +{man(g.weeklyDelta * WEEKS_PER_MONTH)}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </section>
-
-            {/* 시간대 표 */}
-            <section className="card" style={{ padding: 0, overflow: 'hidden' }}>
-              <div style={{ padding: '14px 16px 10px' }}>
-                <h2 className="h3">요일·시간대별 인원</h2>
-                <p className="text-muted" style={{ fontSize: 12, marginTop: 2 }}>숫자는 권장 인원. 지금 배치와 다르면 &ldquo;지금→권장&rdquo;으로 표시해요. 아래 막대는 그 시간의 주문량.</p>
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '34px repeat(7, minmax(0, 1fr))', fontSize: 12 }}>
-                <div />
-                {DOW_ORDER.map((d) => <div key={d} style={{ textAlign: 'center', fontWeight: 700, padding: '6px 0', color: d === 0 ? 'var(--danger)' : d === 6 ? 'var(--accent)' : 'var(--text-secondary)' }}>{DOW[d]}</div>)}
-                {hours.map((h) => (
-                  <div key={h} style={{ display: 'contents' }}>
-                    <div className="num text-muted" style={{ textAlign: 'right', padding: '8px 6px 0 0', fontSize: 11, borderTop: h === D.rules.barStartHour ? '2px solid var(--border-strong)' : '1px solid var(--border)' }}>{h}시</div>
-                    {DOW_ORDER.map((d) => {
-                      const s = slotOf(d, h);
-                      const k = `${d}|${h}`;
-                      const bg = !s ? 'var(--surface-soft)' : s.kind === 'over' ? 'var(--success-soft)' : s.kind === 'under' ? 'var(--warning-soft)' : 'transparent';
-                      return (
-                        <button key={k} type="button" disabled={!s} onClick={() => setSel(sel === k ? null : k)}
-                          aria-label={s ? `${DOW[d]} ${h}시 현재 ${staffTxt(s.avgStaff)}명 권장 ${s.rec}명` : `${DOW[d]} ${h}시 영업 없음`}
-                          style={{ border: 'none', borderTop: h === D.rules.barStartHour ? '2px solid var(--border-strong)' : '1px solid var(--border)', borderLeft: '1px solid var(--border)', background: bg, padding: '6px 2px 4px', cursor: s ? 'pointer' : 'default', outline: sel === k ? '2px solid var(--accent)' : 'none', outlineOffset: -2, font: 'inherit', color: 'inherit', minHeight: 36 }}>
-                          {s && (
-                            <>
-                              <div className="num" style={{ fontWeight: s.kind === 'ok' ? 600 : 800, fontSize: 12, whiteSpace: 'nowrap', color: s.kind === 'over' ? '#00876c' : s.kind === 'under' ? '#c2410c' : 'var(--text)' }}>
-                                {s.kind === 'ok' ? s.rec : `${staffTxt(s.avgStaff)}→${s.rec}`}
-                              </div>
-                              <div style={{ height: 3, borderRadius: 999, background: 'var(--surface-soft)', margin: '3px 4px 0', overflow: 'hidden' }} aria-hidden="true">
-                                <div style={{ width: `${Math.round((s.p75Items / maxItems) * 100)}%`, height: '100%', background: 'var(--accent)', opacity: 0.55 }} />
-                              </div>
-                            </>
-                          )}
-                        </button>
-                      );
-                    })}
-                  </div>
-                ))}
-              </div>
-              <div style={{ padding: '10px 16px 14px', fontSize: 12 }}>
-                {selSlot ? (
-                  <div style={{ lineHeight: 1.6 }}>
-                    <strong>{DOW[selSlot.dow]} {selSlot.hour}시</strong> ({selSlot.daypart === 'bar' ? '바' : '낮'}) · 평균 배치 {staffTxt(selSlot.avgStaff)}명 → 권장 {selSlot.rec}명<br />
-                    <span className="text-secondary">평균 매출 {formatCurrency(selSlot.avgSales)}원 · 주문량 평균 {staffTxt(selSlot.avgItems)}잔, 바쁜 주 {staffTxt(selSlot.p75Items)}잔 · 1명 처리량 {staffTxt(r.capacity[selSlot.daypart])}잔/시간</span>
-                  </div>
-                ) : (
-                  <div className="text-muted" style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
-                    <span><span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: 3, background: 'var(--success-soft)', border: '1px solid #00876c', marginRight: 4, verticalAlign: -1 }} />줄일 수 있음</span>
-                    <span><span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: 3, background: 'var(--warning-soft)', border: '1px solid #c2410c', marginRight: 4, verticalAlign: -1 }} />붐빔</span>
-                    <span>굵은 선 아래는 바 시간 · 칸을 누르면 근거가 보여요</span>
-                  </div>
-                )}
-              </div>
-            </section>
-
-            {/* 요일별 */}
-            <section className="card">
-              <h2 className="h3">요일별 인건비율</h2>
-              <ul style={{ listStyle: 'none', margin: '10px 0 0', padding: 0, display: 'grid', gap: 8 }}>
-                {DOW_ORDER.map((d) => {
-                  const x = r.byDow[d];
-                  const over = x.ratio != null && x.ratio > S.targetRatio;
-                  const w = x.ratio == null ? 0 : Math.min(100, (x.ratio / 0.5) * 100); // 50% 를 막대 끝으로
-                  return (
-                    <li key={d} style={{ display: 'grid', gridTemplateColumns: '22px 1fr auto', alignItems: 'center', gap: 10 }}>
-                      <span style={{ fontWeight: 700, fontSize: 13 }}>{DOW[d]}</span>
-                      <div>
-                        <div style={{ position: 'relative', height: 8, borderRadius: 999, background: 'var(--surface-soft)' }}>
-                          <div style={{ width: `${w}%`, height: '100%', borderRadius: 999, background: over ? 'var(--danger)' : 'var(--accent)' }} />
-                          <div style={{ position: 'absolute', top: -3, bottom: -3, left: `${(S.targetRatio / 0.5) * 100}%`, width: 2, background: 'var(--text-secondary)' }} title="목표" />
+            <div className="stf-cols">
+              {/* 한 주 시간표 */}
+              <section className="card">
+                <h2 className="h3">한 주 시간표</h2>
+                <p className="text-muted" style={{ fontSize: 12, marginTop: 2 }}>숫자는 권장 인원. 색이 있는 칸만 지금 근무표와 달라요.</p>
+                <div className="stf-grid" style={{ marginTop: 12 }}>
+                  <div />
+                  {DOW_ORDER.map((d) => <div key={d} style={{ textAlign: 'center', fontSize: 12, fontWeight: 700, paddingBottom: 2, color: d === 0 ? TEXT.danger : d === 6 ? 'var(--accent)' : 'var(--text-secondary)' }}>{DOW[d]}</div>)}
+                  {hours.map((h) => (
+                    <div key={h} style={{ display: 'contents' }}>
+                      {h === D.rules.barStartHour && (
+                        <div className="text-muted" style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'center', gap: 8, fontSize: 11, fontWeight: 600, margin: '6px 0 2px' }}>
+                          바 시간<span style={{ flex: 1, height: 1, background: 'var(--border)' }} />
                         </div>
-                        <div className="text-muted num" style={{ fontSize: 11, marginTop: 3 }}>하루 매출 {man(x.sales)} · 인건비 {man(x.laborCost)}</div>
-                      </div>
-                      <span className="num" style={{ fontWeight: 800, fontSize: 14, color: over ? 'var(--danger)' : 'var(--text)' }}>{pct(x.ratio)}</span>
-                    </li>
-                  );
-                })}
-              </ul>
-            </section>
-
-            {/* 예상 인건비 */}
-            <section className="card">
-              <h2 className="h3">예상 인건비</h2>
-              <p className="text-muted" style={{ fontSize: 12, marginTop: 2 }}>예상 매출은 요일별 평균 × 그 달의 요일 수. 근무표를 고치면 다시 계산됩니다.</p>
-              <div style={{ display: 'grid', gap: 10, marginTop: 10 }}>
-                {calc.months.map((m) => (
-                  <div key={m.label} style={{ padding: 12, borderRadius: 12, background: 'var(--surface-soft)' }}>
-                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-                      <strong style={{ fontSize: 14 }}>{m.label}</strong>
-                      <span className="tag" style={{ fontSize: 10 }}>{m.scheduled ? `입력된 근무표 ${m.shiftCount}건 기준` : '근무표 없음 — 최근 패턴 가정'}</span>
-                      <span className="num" style={{ marginLeft: 'auto', fontWeight: 800, fontSize: 16, color: m.ratio != null && m.ratio > S.targetRatio ? 'var(--danger)' : 'var(--text)' }}>{pct(m.ratio)}</span>
+                      )}
+                      <div className="num text-muted" style={{ textAlign: 'right', paddingRight: 4, fontSize: 11, alignSelf: 'center' }}>{h}시</div>
+                      {DOW_ORDER.map((d) => {
+                        const s = slotOf(d, h);
+                        const k = `${d}|${h}`;
+                        if (!s) return <div key={k} className="stf-cell is-off" aria-label={`${DOW[d]} ${h}시 영업 없음`} />;
+                        return (
+                          <button key={k} type="button" onClick={() => setSel(sel === k ? null : k)}
+                            className={`stf-cell num is-${s.kind}${sel === k ? ' is-sel' : ''}`}
+                            aria-label={`${DOW[d]} ${h}시 지금 ${staffTxt(s.avgStaff)}명 권장 ${s.rec}명`}>
+                            {s.rec}
+                          </button>
+                        );
+                      })}
                     </div>
-                    <div className="text-secondary num" style={{ fontSize: 12, marginTop: 4 }}>예상 매출 {man(m.sales)} · 예상 인건비 {man(m.labor)}</div>
-                    {S.weeklySaving > 0 && <div className="num" style={{ fontSize: 12, marginTop: 2, color: '#00876c' }}>겹치는 시간을 줄이면 {man(m.trimmed)} ({pct(m.trimmedRatio)})</div>}
-                  </div>
-                ))}
-              </div>
-            </section>
+                  ))}
+                </div>
+                <div style={{ marginTop: 12, fontSize: 12, minHeight: 38 }}>
+                  {selSlot ? (
+                    <div style={{ padding: '8px 12px', borderRadius: 10, background: 'var(--surface-soft)', lineHeight: 1.6 }}>
+                      <strong>{DOW[selSlot.dow]} {selSlot.hour}시</strong> · 지금 평균 {staffTxt(selSlot.avgStaff)}명 → 권장 {selSlot.rec}명<br />
+                      <span className="text-secondary num">주문 평균 {staffTxt(selSlot.avgItems)}잔(바쁜 주 {staffTxt(selSlot.p75Items)}잔) · 1명이 시간당 {staffTxt(r.capacity[selSlot.daypart])}잔까지 · 매출 {man(selSlot.avgSales)}</span>
+                    </div>
+                  ) : (
+                    <div className="text-secondary" style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '4px 14px' }}>
+                      <span><span className="stf-swatch" style={{ background: 'var(--success-soft)' }} />줄일 수 있음</span>
+                      <span><span className="stf-swatch" style={{ background: 'var(--warning-soft)' }} />붐빔 · 보강 검토</span>
+                      <span className="text-muted">칸을 누르면 근거가 보여요</span>
+                    </div>
+                  )}
+                </div>
+              </section>
 
-            <section className="text-muted" style={{ fontSize: 11, lineHeight: 1.6, display: 'flex', gap: 6 }}>
-              <Info size={13} style={{ flexShrink: 0, marginTop: 2 }} />
-              <div>
-                계산 방식 — 주문량은 토스 주문의 품목 수량(잔 수)이고, 바 테이블은 주문을 연 시각부터 결제 시각까지 고르게 나눠 셉니다(결제 시각만 보면 초저녁이 비어 보이기 때문). 1명 처리량은 근무자가 있던 시간대의 1인당 주문량 중 상위 10% 값(낮 {staffTxt(r.capacity.day)}잔, 바 {staffTxt(r.capacity.bar)}잔/시간). 권장 인원 = 바쁜 주 주문량 ÷ 1명 처리량을 올림, 최소 낮 {D.rules.dayFloor}명·바 {D.rules.barFloor}명, 평소 세우는 최대 인원 이내. 인건비는 근무표 × 시급에 주휴{D.premiumExempt ? '' : '·야간·연장 가산'}을 더한 추정치(×{calc.loadFactor.toFixed(2)})이며 실제 급여와 다를 수 있습니다. 방문객 수는 데이터가 없어 주문량으로 대신합니다. 청소·준비처럼 주문에 안 잡히는 일은 반영되지 않으니 최종 판단은 현장 사정과 함께 해 주세요.
-              </div>
-            </section>
+              {/* 조정 제안 */}
+              <section className="card">
+                <h2 className="h3">조정 제안</h2>
+                {groups.length === 0 && <p style={{ fontSize: 13, marginTop: 10 }}>지금 근무표가 주문량과 잘 맞아요. 조정할 곳이 없습니다.</p>}
+                {overs.length > 0 && <RecGroup kind="over" title="줄일 수 있는 시간" groups={overs} expanded={expanded} />}
+                {unders.length > 0 && <RecGroup kind="under" title="붐비는 시간 · 보강 검토" groups={unders} expanded={expanded} />}
+                {hiddenCount > 0 && (
+                  <button type="button" className="btn btn-ghost btn-sm btn-block" style={{ marginTop: 6 }} onClick={() => setExpanded(!expanded)} aria-expanded={expanded}>
+                    {expanded ? '접기' : `${hiddenCount}곳 더 보기`}
+                  </button>
+                )}
+              </section>
+            </div>
+
+            <div className="stf-cols">
+              {/* 요일별 */}
+              <section className="card">
+                <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }}>
+                  <h2 className="h3">요일별 인건비율</h2>
+                  <span className="text-muted" style={{ fontSize: 12 }}>세로선 = 목표 {target}</span>
+                </div>
+                <ul style={{ listStyle: 'none', margin: '14px 0 0', padding: 0, display: 'grid', gap: 12 }}>
+                  {DOW_ORDER.map((d) => {
+                    const x = r.byDow[d];
+                    const ratio = x.ratio ?? 0;
+                    const over = ratio > S.targetRatio;
+                    const w = (v) => `${(v / barMax) * 100}%`;
+                    return (
+                      <li key={d} style={{ display: 'grid', gridTemplateColumns: '18px minmax(0, 1fr) auto 48px', alignItems: 'center', gap: 10, fontSize: 13 }}>
+                        <span style={{ fontWeight: 700 }}>{DOW[d]}</span>
+                        <div style={{ position: 'relative', height: 10, borderRadius: 999, background: 'var(--surface-soft)', overflow: 'hidden' }} aria-hidden="true">
+                          <div style={{ position: 'absolute', inset: '0 auto 0 0', width: w(Math.min(ratio, S.targetRatio)), background: 'var(--border-strong)' }} />
+                          {over && <div style={{ position: 'absolute', top: 0, bottom: 0, left: w(S.targetRatio), width: w(ratio - S.targetRatio), background: 'var(--danger)' }} />}
+                          <div style={{ position: 'absolute', top: 0, bottom: 0, left: w(S.targetRatio), width: 2, marginLeft: -1, background: 'var(--text)' }} />
+                        </div>
+                        <span className="text-muted num" style={{ fontSize: 11 }}>매출 {man(x.sales)}</span>
+                        <span className="num" style={{ fontWeight: 800, textAlign: 'right', color: over ? TEXT.danger : 'var(--text)' }}>{pct(x.ratio)}</span>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </section>
+
+              {/* 예상 인건비 */}
+              <section className="card">
+                <h2 className="h3">예상 인건비</h2>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10, marginTop: 14 }}>
+                  {calc.months.map((m) => (
+                    <div key={m.label} style={{ padding: 14, borderRadius: 12, background: 'var(--surface-soft)' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
+                        <strong style={{ fontSize: 14 }}>{m.label}</strong>
+                        <span className="tag" style={{ fontSize: 10, background: 'var(--surface)' }}>{m.scheduled ? '근무표 기준' : '최근 패턴 가정'}</span>
+                      </div>
+                      <div className="num" style={{ fontSize: 24, fontWeight: 800, marginTop: 6, color: m.ratio != null && m.ratio > S.targetRatio ? TEXT.danger : 'var(--text)' }}>{pct(m.ratio)}</div>
+                      <div className="text-secondary num" style={{ fontSize: 12, lineHeight: 1.6 }}>인건비 {man(m.labor)}<br />매출 {man(m.sales)}</div>
+                      {S.weeklySaving > 0 && <div className="num" style={{ fontSize: 12, fontWeight: 700, marginTop: 6, color: TEXT.over }}>겹침 줄이면 {pct(m.trimmedRatio)}</div>}
+                    </div>
+                  ))}
+                </div>
+              </section>
+            </div>
+
+            <details className="stf-details">
+              <summary>계산 방식과 한계</summary>
+              <ul>
+                <li>주문량은 토스 주문의 잔 수예요. 바 테이블은 주문을 연 시각부터 결제할 때까지 고르게 나눠 셉니다.</li>
+                <li>1명 처리량은 바빴던 시간대(상위 10%)의 1인당 주문량이에요. 낮 {staffTxt(r.capacity.day)}잔, 바 {staffTxt(r.capacity.bar)}잔/시간.</li>
+                <li>권장 인원은 바쁜 주 주문량 ÷ 1명 처리량(올림). 최소 낮 {D.rules.dayFloor}명·바 {D.rules.barFloor}명, 평소 세우는 최대 인원 이내입니다.</li>
+                <li>인건비는 근무표 × 시급에 주휴{D.premiumExempt ? '' : '·야간·연장'}을 더한 추정치(기본급의 {calc.loadFactor.toFixed(2)}배)라 실제 급여와 다를 수 있어요.</li>
+                <li>예상 매출은 요일별 평균 × 그 달의 요일 수. 근무표를 넣거나 고치면 다시 계산됩니다.</li>
+                <li>청소·준비처럼 주문에 안 잡히는 일과 방문객 수는 반영되지 않았어요. 최종 판단은 현장 사정과 함께 해 주세요.</li>
+              </ul>
+            </details>
           </>
         )}
         {!loading && !D && !res.error && stores.length === 0 && <div className="card empty"><div className="empty-icon"><Users size={26} /></div><div className="empty-title">매장이 없어요</div></div>}
