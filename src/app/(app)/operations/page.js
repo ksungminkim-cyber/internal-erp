@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 
 export default function OperationsMenu() {
-  const { currentWorkplaceId, supabase, user, profile, memberships } = useApp();
+  const { currentWorkplaceId, supabase, user, profile, memberships, isHQView } = useApp();
   const isHQMember = memberships.some((m) => m.workplaces?.name === '본사');
   const isAdmin = profile?.is_super_admin === true || isHQMember || memberships.some((m) => m.role === 'owner');
   // 월별 리포트: 본사 소속(임원·super_admin 포함)만
@@ -92,10 +92,10 @@ export default function OperationsMenu() {
 
   return (
     <>
-      <PageHeader title="운영" subtitle="매장 운영의 모든 기능" />
+      <PageHeader title={isHQView ? '전체 관리' : '운영'} subtitle={isHQView ? '매장을 고르면 매장 운영 메뉴가 나옵니다' : '매장 운영의 모든 기능'} />
 
       <main className="fade-in page-main" style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-        {urgentItems.length > 0 && (
+        {!isHQView && urgentItems.length > 0 && (
           <Link href={urgentItems[0].href} style={{ textDecoration: 'none' }}>
             <div className="bento warm" style={{ minHeight: 90, padding: 18 }}>
               <div className="bento-decor" />
@@ -114,6 +114,7 @@ export default function OperationsMenu() {
           </Link>
         )}
 
+        {!isHQView && (
         <section className="stack stack-3">
           <h2 className="h3">매장 운영</h2>
           <div className="grid-4 stagger">
@@ -127,13 +128,15 @@ export default function OperationsMenu() {
             <OpsCard href="/recipes"    icon={BookOpen}      label="레시피"      desc="두 매장 공통"      accent="mint" />
           </div>
         </section>
+        )}
         {/* 미사용 기능 숨김 (2026-08 사용량 0건): 장비 점검·고객 클레임·건의함 — 복원 시 git 이력 참조 */}
 
         <section className="stack stack-3">
-          <h2 className="h3">매출 · 인사이트</h2>
+          <h2 className="h3">{isHQView ? '전 매장' : '매출 · 인사이트'}</h2>
           <div className="grid-4 stagger">
-            <OpsCard href="/sales"          icon={TrendingUp} label="매출"       desc="일별 매출"      accent="success" />
-            <OpsCard href="/kpis"           icon={Target}     label="KPI"        desc="월별 목표·결재"  accent="violet" />
+            {!isHQView && <OpsCard href="/sales"        icon={TrendingUp} label="매출"       desc="일별 매출"      accent="success" />}
+            {!isHQView && <OpsCard href="/kpis"         icon={Target}     label="KPI"        desc="월별 목표·결재"  accent="violet" />}
+            {isHQView && <OpsCard href="/recipes"    icon={BookOpen}   label="레시피"     desc="두 매장 공통"    accent="mint" />}
             {canViewReports && (
               <OpsCard href="/reports"      icon={BarChart3}  label="월별 리포트" desc="손익·인건비 대시보드" accent="accent" />
             )}
@@ -156,6 +159,7 @@ export default function OperationsMenu() {
           </section>
         )}
 
+        {!isHQView && (
         <section style={{ paddingTop: 8 }}>
           <div className="card" style={{ background: 'var(--surface-soft)', boxShadow: 'none' }}>
             <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
@@ -173,6 +177,7 @@ export default function OperationsMenu() {
             </div>
           </div>
         </section>
+        )}
       </main>
     </>
   );

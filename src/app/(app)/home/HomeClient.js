@@ -11,6 +11,7 @@ import TrendPicksCard from '@/components/TrendPicksCard';
 import TodayTodoCard from '@/components/TodayTodoCard';
 import PushSetupCard from '@/components/PushSetupCard';
 import { todayKey, ymd } from '@/lib/date';
+import { countInbox } from '@/lib/hqView';
 import {
   Clock, FileText, Megaphone, Users, ChevronRight, Plus, Sparkles,
   Calendar, ClipboardCheck, Package, TrendingUp,
@@ -141,7 +142,7 @@ export default function HomeClient({
   userId,
   hqWorkplaceStatuses = null,
 }) {
-  const { currentWorkplaceId, currentWorkplace, supabase, profile, memberships, isManager } = useApp();
+  const { currentWorkplaceId, currentWorkplace, supabase, profile, memberships, isManager, isHQView, switchWorkplace } = useApp();
   const [orderCount, setOrderCount] = useState(0); // 발주 권장 품목 수 (OrderSuggestionsCard 가 채움)
   const [orderOpen, setOrderOpen] = useState(() => {
     try { return localStorage.getItem('home:orderCardOpen') !== '0'; } catch { return true; }
@@ -208,12 +209,6 @@ export default function HomeClient({
         .eq('resolved', false),
     ]);
 
-    const inboxValid = (inboxSteps.data ?? []).filter(
-      (s) =>
-        s.approval_requests?.workplace_id === currentWorkplaceId &&
-        s.approval_requests?.status === 'pending' &&
-        s.approval_requests?.current_step === s.step_order
-    );
     const readIds  = new Set((reads.data ?? []).map((r) => r.announcement_id));
 
     // 공지 작성자 이름 — 공용 액션으로 매핑 (RLS 무관)
@@ -224,7 +219,7 @@ export default function HomeClient({
     setStats((prev) => ({
       ...prev, // checklists·inboundPending·평소 대비는 SSR 값 유지 (매장 전환 시 다음 SSR 에서 갱신)
       working:            (board.data ?? []).filter((b) => b.status === 'working' || b.status === 'on_break').length,
-      inbox:              inboxValid.length,
+      inbox:              countInbox(inboxSteps.data, isHQView ? null : currentWorkplaceId), // 전체(본사) 보기면 전 매장
       unread:             Math.max(0, (annTotal.count ?? 0) - readIds.size),
       todayCheckins:      new Set((todayLogs.data ?? []).map((l) => l.user_id)).size,
       todaySales:         Number((salesToday.data ?? []).find((r) => r.sales_date === today)?.total_amount ?? 0),
@@ -233,7 +228,7 @@ export default function HomeClient({
       todayShifts:        todayShifts.count ?? 0,
       handoverUnresolved: handover.count ?? 0,
     }));
-  }, [supabase, currentWorkplaceId, userId]);
+  }, [supabase, currentWorkplaceId, userId, isHQView]);
 
   // workplace가 SSR과 다를 때(사업장 전환)만 재로드
   const initialSkipped = useRef(false);
@@ -331,16 +326,18 @@ export default function HomeClient({
         {/* 푸시 알림 안내 — 이 기기에서 아직 안 켠 사람에게만 (닫으면 다시 안 뜸) */}
         <PushSetupCard variant="banner" />
 
-        {/* 오늘 할 일 — 체크리스트·결재·인수인계·입고 대기·재고 알림을 한 카드에 */}
-        <TodayTodoCard
-          inbox={s.inbox}
-          handoverUnresolved={s.handoverUnresolved}
-          checklists={s.checklists ?? []}
-          inboundPending={s.inboundPending ?? 0}
-        />
+        {/* 오늘 할 일 — 체크리스트·결재·인수인계·입고 대기·재고 알림을 한 카드에. 전체(본사) 보기에는 매장 할 일이 없다 */}
+        {!isHQView && (
+          <TodayTodoCard
+            inbox={s.inbox}
+            handoverUnresolved={s.handoverUnresolved}
+            checklists={s.checklists ?? []}
+            inboundPending={s.inboundPending ?? 0}
+          />
+        )}
 
         {/* 발주 권장 — POS 판매 예측(연결 품목) + 최소 수량(그 외). 매니저 이상은 기안 생성 */}
-        {currentWorkplaceId && (
+        {currentWorkplaceId && !isHQView && (
           <OrderSuggestionsCard
             workplaceId={currentWorkplaceId}
             workplaceName={currentWorkplace?.name}
@@ -354,10 +351,11 @@ export default function HomeClient({
         )}
 
         {/* 이번 주 트렌드 픽 — 검색 추이 + 메뉴 개발 후보 */}
-        {currentWorkplaceId && <TrendPicksCard workplaceId={currentWorkplaceId} />}
+        {currentWorkplaceId && !isHQView && <TrendPicksCard workplaceId={currentWorkplaceId} />}
 
         {/* Hero — 매출 + 인원/결재 */}
         <section className="stack stack-3 stagger">
+          {!isHQView && (
           <Link href="/sales" style={{ textDecoration: 'none' }}>
             <div className="bento accent interactive" style={{ minHeight: 130 }}>
               <div className="bento-decor" />
@@ -377,8 +375,10 @@ export default function HomeClient({
               </div>
             </div>
           </Link>
+          )}
 
           <div className="grid-2">
+            {!isHQView && (
             <Link href="/attendance" style={{ textDecoration: 'none' }}>
               <div className="bento interactive" style={{ minHeight: 110 }}>
                 <div className="bento-label text-secondary"><Users size={14} /> 매장 인원</div>
@@ -388,6 +388,7 @@ export default function HomeClient({
                 <div className="bento-sub text-muted">오늘 출근 {s.todayCheckins}명</div>
               </div>
             </Link>
+            )}
 
             <Link href="/approvals" style={{ textDecoration: 'none' }}>
               <div className={`bento interactive ${s.inbox > 0 ? 'violet' : ''}`} style={{ minHeight: 110 }}>
@@ -399,7 +400,7 @@ export default function HomeClient({
                   {s.inbox}<span style={{ fontSize: 14, opacity: 0.7, marginLeft: 4 }}>건</span>
                 </div>
                 <div className="bento-sub" style={{ color: s.inbox > 0 ? 'rgba(255,255,255,0.85)' : 'var(--text-muted)' }}>
-                  {s.inbox > 0 ? '확인 필요' : '모두 처리됨'}
+                  {isHQView ? '전 매장 · ' : ''}{s.inbox > 0 ? '확인 필요' : '모두 처리됨'}
                 </div>
               </div>
             </Link>
@@ -418,7 +419,7 @@ export default function HomeClient({
             </div>
             <div className="grid-2">
               {hqWorkplaceStatuses.map((wp) => (
-                <Link key={wp.id} href="/attendance" style={{ textDecoration: 'none' }}>
+                <Link key={wp.id} href="/attendance" onClick={() => switchWorkplace(wp.id)} style={{ textDecoration: 'none' }}>
                   <div className="card interactive">
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
                       <div className="h4">{wp.name}</div>
@@ -445,7 +446,8 @@ export default function HomeClient({
         {/* 날씨 위젯 */}
         <WeatherWidget />
 
-        {/* 바로가기 */}
+        {/* 바로가기 — 매장 화면들이라 전체(본사) 보기에서는 숨김 */}
+        {!isHQView && (
         <section className="stack stack-3">
           <h2 className="h3">바로가기</h2>
           <div className="grid-4">
@@ -457,9 +459,10 @@ export default function HomeClient({
             <QuickAction href="/handover"      icon={ClipboardCheck}  label="인수인계"    desc={s.handoverUnresolved > 0 ? `미확인 ${s.handoverUnresolved}` : '교대 메모'} tone="neutral" />
           </div>
         </section>
+        )}
 
-        {/* 최근 공지 (안 읽은 공지가 없을 때만) */}
-        {recentAnnouncements.filter((a) => !announcementReadIds.has(a.id)).length === 0 && (
+        {/* 최근 공지 (안 읽은 공지가 없을 때만) — 공지는 매장별이라 전체 보기에서는 숨김 */}
+        {!isHQView && recentAnnouncements.filter((a) => !announcementReadIds.has(a.id)).length === 0 && (
           <section className="stack stack-3">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
               <h2 className="h3">최근 공지</h2>

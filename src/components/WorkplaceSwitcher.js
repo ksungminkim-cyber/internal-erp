@@ -2,6 +2,7 @@
 
 import { useApp } from '@/context/AppContext';
 import { Building2 } from 'lucide-react';
+import { splitWorkplaces } from '@/lib/hqView';
 
 export default function WorkplaceSwitcher() {
   const { memberships, currentWorkplaceId, switchWorkplace, currentWorkplace } = useApp();
@@ -22,16 +23,18 @@ export default function WorkplaceSwitcher() {
     );
   }
 
+  const { hq, stores } = splitWorkplaces(memberships);
+
   return (
     <div className="segment">
-      {memberships.map((m) => (
+      {[...(hq ? [hq] : []), ...stores].map((m) => (
         <button
           key={m.workplace_id}
           type="button"
           className={`segment-item ${m.workplace_id === currentWorkplaceId ? 'is-active' : ''}`}
           onClick={() => switchWorkplace(m.workplace_id)}
         >
-          {m.workplaces?.name}
+          {m === hq ? '전체' : m.workplaces?.name}
         </button>
       ))}
     </div>
