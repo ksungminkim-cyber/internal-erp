@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation';
 import HomeClient from './HomeClient';
 import { kstDateKey, addDaysKey } from '@/lib/date';
 import { countInbox } from '@/lib/hqView';
+import { getSalesVsUsual } from '@/app/(app)/sales/actions';
 
 // 서버(UTC 런타임)에서 한국시간 기준 '오늘'
 
@@ -105,15 +106,15 @@ export default async function HomePage() {
     supabase.from('profiles').select('is_super_admin').eq('user_id', user.id).maybeSingle(),
     supabase.from('memberships').select('workplaces(name)').eq('user_id', user.id).eq('active', true),
     supabase.from('workplaces').select('id, name').neq('name', '본사').order('name'),
-    // 평소(같은 요일 4주 평균) 대비 오늘 매출
-    supabase.rpc('sales_vs_usual', { p_workplace_id: wpId }),
+    // 평소(같은 요일 4주 평균) 대비 오늘 매출 — 서비스롤 경로 (사용자 권한으로 부르면 첫 호출이 수 초)
+    getSalesVsUsual([wpId]),
     // 오늘 할 일: 오픈·마감 체크리스트 진행률, 입고 확인할 발주
     supabase.from('checklist_templates').select('id, name, type, checklist_items(id)').eq('workplace_id', wpId).eq('active', true).in('type', ['open', 'close']),
     supabase.from('checklist_completions').select('template_id, completed_count, total_count').eq('workplace_id', wpId).eq('completion_date', todayStr),
     supabase.from('approval_requests').select('id', { count: 'exact', head: true })
       .eq('workplace_id', wpId).eq('doc_type', 'expense').eq('status', 'approved').is('received_at', null),
   ]);
-  const vsUsual = vsUsualRes.data?.[0];
+  const vsUsual = vsUsualRes[wpId];
   const compByTpl = Object.fromEntries((compRes.data ?? []).map((c) => [c.template_id, c]));
   const checklists = (tplRes.data ?? []).map((t) => ({
     name: t.name, href: '/checklists',

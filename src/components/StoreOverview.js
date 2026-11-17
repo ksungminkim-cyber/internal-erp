@@ -6,7 +6,7 @@ import { TrendingUp, Users, FileText, Package, ChevronRight } from 'lucide-react
 import { useApp } from '@/context/AppContext';
 import { formatCurrency } from '@/lib/format';
 import { todayKey, ymd } from '@/lib/date';
-import { getOrderSuggestions } from '@/lib/reads';
+import { getOrderSuggestions, getSalesVsUsual } from '@/lib/reads';
 import { splitWorkplaces } from '@/lib/hqView';
 import { buildStoreOverview } from '@/lib/storeOverview';
 
@@ -31,18 +31,17 @@ export default function StoreOverview() {
         .in('workplace_id', ids).in('sales_date', [today, yesterday]),
       supabase.from('attendance_current_status').select('workplace_id, user_id, status, name').in('workplace_id', ids),
       supabase.from('approval_requests').select('workplace_id').in('workplace_id', ids).eq('status', 'pending'),
-      Promise.all(ids.map((id) => supabase.rpc('sales_vs_usual', { p_workplace_id: id }))),
-      // 발주 권장은 실패해도 나머지는 보여준다
+      // 평소 대비·발주 권장은 실패해도 나머지는 보여준다
+      getSalesVsUsual(ids).catch(() => ({})),
       Promise.all(ids.map((id) => getOrderSuggestions({ workplaceId: id }).catch(() => null))),
     ]);
-    const pct = (r) => (r.data?.[0]?.pct == null ? null : Number(r.data[0].pct));
     setView({
       overview: buildStoreOverview({
         stores, today, yesterday,
         sales: sales.data ?? [],
         boards: boards.data ?? [],
         pending: pending.data ?? [],
-        vsUsual: Object.fromEntries(ids.map((id, i) => [id, pct(usual[i])])),
+        vsUsual: Object.fromEntries(ids.map((id) => [id, usual[id]?.pct == null ? null : Number(usual[id].pct)])),
         orderCounts: Object.fromEntries(ids.map((id, i) => [id, orders[i]?.suggestions?.length ?? 0])),
       }),
       at: new Date(),

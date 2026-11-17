@@ -50,6 +50,24 @@ export async function getSalesSummary(workplaceId) {
 }
 
 /**
+ * 평소(같은 요일 최근 4주, 지금 시각까지) 대비 오늘 매출 — 매장별. 서비스롤 + 멤버십 검증.
+ * 로그인 사용자 권한(RLS)으로 sales_vs_usual 을 부르면 몇 분 쉰 뒤 첫 호출이 2~4초 걸린다
+ * (서비스롤은 0.1초). 홈 화면이 통째로 그만큼 늦게 떠서 다른 포스 조회처럼 서비스롤로 옮겼다.
+ * 반환: { 매장 id: { today_total, usual_avg, pct } | null } — 권한 없는 매장은 빠진다.
+ */
+export async function getSalesVsUsual(workplaceIds) {
+  const authClient = await createServerClient();
+  const { data: { user } } = await authClient.auth.getUser();
+  if (!user) return {};
+
+  const svc = getServiceClient();
+  const perms = await loadActorPerms(svc, user.id);
+  const ids = (Array.isArray(workplaceIds) ? workplaceIds : []).filter((id) => perms.isMemberOf(id));
+  const rows = await Promise.all(ids.map((id) => svc.rpc('sales_vs_usual', { p_workplace_id: id })));
+  return Object.fromEntries(ids.map((id, i) => [id, rows[i].data?.[0] ?? null]));
+}
+
+/**
  * 일 매출 저장 — 서비스롤 + 멤버십 검증.
  * 기존 RLS가 매니저(is_manager_of)만 허용해 마감 담당 직원이 입력 못 하던 문제 해결.
  * 해당 매장의 active 멤버면 누구나 입력 가능 (마감 담당이 직원인 경우 대응).

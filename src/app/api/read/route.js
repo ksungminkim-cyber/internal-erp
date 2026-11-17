@@ -38,6 +38,7 @@ const READS = {
   getTodayAttendance: attendance.getTodayAttendance,
   getMissingAttendance: attendance.getMissingAttendance,
   getSalesSummary: sales.getSalesSummary,
+  getSalesVsUsual: sales.getSalesVsUsual,
   getProductSales: sales.getProductSales,
   getSalesKpi: sales.getSalesKpi,
   getDaySalesDetail: sales.getDaySalesDetail,
