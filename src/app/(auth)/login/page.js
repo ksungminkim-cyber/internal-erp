@@ -57,6 +57,7 @@ function LoginForm() {
       {/* 로고 영역 */}
       <div style={{ textAlign: 'center', marginBottom: 36 }}>
         <div
+          className="brand-mark"
           style={{
             width: 72, height: 72, margin: '0 auto 20px',
             borderRadius: 22,
