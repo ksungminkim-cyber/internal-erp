@@ -38,6 +38,7 @@ export const getTodayAttendance = mk('getTodayAttendance');
 export const getMissingAttendance = mk('getMissingAttendance');
 // 매출
 export const getSalesSummary = mk('getSalesSummary');
+export const getSalesVsUsual = mk('getSalesVsUsual');
 export const getProductSales = mk('getProductSales');
 export const getSalesKpi = mk('getSalesKpi');
 export const getDaySalesDetail = mk('getDaySalesDetail');
