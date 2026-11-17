@@ -10,6 +10,7 @@ import OrderSuggestionsCard from '@/components/OrderSuggestionsCard';
 import TrendPicksCard from '@/components/TrendPicksCard';
 import TodayTodoCard from '@/components/TodayTodoCard';
 import PushSetupCard from '@/components/PushSetupCard';
+import StoreOverview from '@/components/StoreOverview';
 import { todayKey, ymd } from '@/lib/date';
 import { countInbox } from '@/lib/hqView';
 import {
@@ -353,6 +354,9 @@ export default function HomeClient({
         {/* 이번 주 트렌드 픽 — 검색 추이 + 메뉴 개발 후보 */}
         {currentWorkplaceId && !isHQView && <TrendPicksCard workplaceId={currentWorkplaceId} />}
 
+        {/* 전체(본사) 보기 — 매장별 오늘 매출·근무 인원·결재·발주를 나란히 */}
+        {isHQView && <StoreOverview />}
+
         {/* Hero — 매출 + 인원/결재 */}
         <section className="stack stack-3 stagger">
           {!isHQView && (
@@ -407,8 +411,8 @@ export default function HomeClient({
           </div>
         </section>
 
-        {/* 본사: 전 매장 출근 현황 */}
-        {hqWorkplaceStatuses && hqWorkplaceStatuses.length > 0 && (
+        {/* 본사: 전 매장 출근 현황 — 전체 보기에서는 위 매장별 현황에 들어 있다 */}
+        {!isHQView && hqWorkplaceStatuses && hqWorkplaceStatuses.length > 0 && (
           <section className="stack stack-3">
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
               <h2 className="h3">
