@@ -2,7 +2,7 @@
 // 켜는 방식: <html data-season="xmas">. 색·장식은 전부 globals.css 의 [data-season="xmas"] 블록에 있다.
 // 걷어낼 때: 이 파일, layout.js 의 <SeasonalDecor />, globals.css 의 "시즌 테마" 블록, brand-mark 클래스 두 곳.
 
-const END = Date.UTC(2026, 11, 25, 15); // 2026-12-26 00:00 KST 부터 꺼짐
+const END = Date.UTC(2026, 11, 31, 15); // 2026-12-31 까지. 2027-01-01 00:00 KST 부터 꺼짐
 
 // 눈 배치 (왼쪽 %, 크기 px, 떨어지는 시간 s, 시작 지연 s, 옆으로 흐르는 정도 px) — 매번 같은 모양이 되도록 고정값.
 // 10px 이상은 눈꽃 모양, 그보다 작으면 흰 점
