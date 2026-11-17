@@ -651,3 +651,52 @@ input[type="password"], input[type="date"], input[type="time"], textarea, select
 .stf-details summary { cursor: pointer; font-weight: 600; color: var(--text-muted); padding: 4px 0; width: fit-content; }
 .stf-details ul { list-style: disc; margin: 8px 0 0; padding-left: 18px; display: grid; gap: 4px; line-height: 1.6; max-width: 72ch; }
 
+/* ─── 시즌 테마: 크리스마스 (임시) ───
+   <html data-season="xmas"> 일 때만 적용 — SeasonalDecor 가 기간 안에서만 켠다. 이 블록을 지우면 원래대로 돌아간다. */
+.xmas-snow { display: none; }
+html[data-season="xmas"] {
+  --bg: #f1f5f9;
+  --bg-pattern: #e9eff5;
+  --accent: #137f4f;
+  --accent-strong: #0c6038;
+  --accent-soft: #e2f4ea;
+  --accent-soft-2: #c8e9d6;
+  --grad-accent: linear-gradient(135deg, #137f4f 0%, #35a871 100%);
+  --sh-accent: 0 12px 32px -8px rgba(19, 127, 79, 0.38);
+}
+/* 눈 — 본문 위로 옅게 내리고, 머리말·메뉴·팝업(z-index 30 이상) 뒤로 지나간다 */
+html[data-season="xmas"] .xmas-snow { display: block; position: fixed; inset: 0; z-index: 20; overflow: hidden; pointer-events: none; }
+.xmas-snow i {
+  position: absolute; top: -12px; border-radius: 50%;
+  background: #d9e6f5; box-shadow: 0 0 0 1px rgba(148, 173, 204, 0.3); opacity: 0.85;
+  animation: xmasSnow linear infinite;
+}
+@keyframes xmasSnow {
+  from { transform: translate3d(0, -4vh, 0); }
+  to   { transform: translate3d(var(--drift, 0), 106vh, 0); }
+}
+/* 머리말 아래 전구 줄 */
+html[data-season="xmas"] .page-header::after,
+html[data-season="xmas"] .page-header::before {
+  content: ''; position: absolute; left: 0; right: 0; top: 100%; pointer-events: none;
+  background-repeat: repeat-x; background-position: 8px 0;
+}
+html[data-season="xmas"] .page-header::after { height: 16px; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='96' height='16' viewBox='0 0 96 16'%3E%3Cpath d='M0 3 Q24 9 48 3 T96 3' fill='none' stroke='%237b8a84' stroke-width='1'/%3E%3Crect x='10.8' y='5' width='2.4' height='2.4' rx='.6' fill='%237b8a84'/%3E%3Cellipse cx='12' cy='10.6' rx='2.7' ry='3.6' fill='%23e5484d'/%3E%3Crect x='34.8' y='5' width='2.4' height='2.4' rx='.6' fill='%237b8a84'/%3E%3Cellipse cx='36' cy='10.6' rx='2.7' ry='3.6' fill='%23f2b93b'/%3E%3Crect x='58.8' y='5' width='2.4' height='2.4' rx='.6' fill='%237b8a84'/%3E%3Cellipse cx='60' cy='10.6' rx='2.7' ry='3.6' fill='%232fa36b'/%3E%3Crect x='82.8' y='5' width='2.4' height='2.4' rx='.6' fill='%237b8a84'/%3E%3Cellipse cx='84' cy='10.6' rx='2.7' ry='3.6' fill='%234c9aff'/%3E%3C/svg%3E"); }
+html[data-season="xmas"] .page-header::before { height: 18px; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='96' height='18' viewBox='0 0 96 18'%3E%3Ccircle cx='12' cy='10.6' r='6' fill='%23e5484d' opacity='.35'/%3E%3Ccircle cx='36' cy='10.6' r='6' fill='%23f2b93b' opacity='.35'/%3E%3Ccircle cx='60' cy='10.6' r='6' fill='%232fa36b' opacity='.35'/%3E%3Ccircle cx='84' cy='10.6' r='6' fill='%234c9aff' opacity='.35'/%3E%3C/svg%3E"); animation: xmasTwinkle 2.6s ease-in-out infinite; }
+@keyframes xmasTwinkle { 0%, 100% { opacity: 0.15; } 50% { opacity: 1; } }
+/* 화면 제목 옆 작은 트리 */
+html[data-season="xmas"] .page-header h1::after {
+  content: ''; display: inline-block; width: 0.9em; height: 0.9em; margin-left: 6px; vertical-align: -0.08em;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E %3Crect x='10.5' y='19' width='3' height='3.5' rx='.6' fill='%238b5e3c'/%3E %3Cpath d='M12 3.5 6.8 10.5h2.4L4.5 16.2h3L3.8 20h16.4l-3.7-3.8h3l-4.7-5.7h2.4z' fill='%232a9a63'/%3E %3Ccircle cx='12' cy='3.6' r='2' fill='%23f2b93b'/%3E %3Ccircle cx='10' cy='12.8' r='1.1' fill='%23e5484d'/%3E%3Ccircle cx='14.4' cy='16.6' r='1.1' fill='%23f2b93b'/%3E%3Ccircle cx='8.6' cy='17.6' r='1.1' fill='%23fff'/%3E %3C/svg%3E") center / contain no-repeat;
+}
+/* 로고에 산타 모자 */
+html[data-season="xmas"] .brand-mark { position: relative; }
+html[data-season="xmas"] .brand-mark::after {
+  content: ''; position: absolute; width: 66%; aspect-ratio: 44 / 36; top: -30%; right: -26%;
+  transform: rotate(16deg);
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 44 36'%3E %3Cpath d='M6 27C7 13 18 4 29 6c7 1.500 11 8 10 16-3-5-7-7-11-6-2 3-2.500 7-2 11z' fill='%23d93a45'/%3E %3Crect x='2.500' y='24.500' width='27' height='8.500' rx='4.250' fill='%23fff' stroke='%23dfe6ee' stroke-width='1'/%3E %3Ccircle cx='39' cy='23' r='4.500' fill='%23fff' stroke='%23dfe6ee' stroke-width='1'/%3E %3C/svg%3E") center / contain no-repeat;
+}
+@media (prefers-reduced-motion: reduce) {
+  html[data-season="xmas"] .xmas-snow { display: none; }
+  html[data-season="xmas"] .page-header::before { animation: none; opacity: 0.5; }
+}

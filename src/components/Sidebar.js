@@ -107,6 +107,7 @@ export default function Sidebar() {
         style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20, padding: '4px 8px', textDecoration: 'none', color: 'inherit' }}
       >
         <div
+          className="brand-mark"
           style={{
             width: 36, height: 36, borderRadius: 10,
             background: 'var(--grad-accent)',

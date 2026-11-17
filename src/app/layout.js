@@ -1,5 +1,6 @@
 import localFont from 'next/font/local';
 import './globals.css';
+import SeasonalDecor from '@/components/SeasonalDecor';
 
 // CDN @import(3단 직렬 로딩) 대신 self-host — 빌드 시 인라인 preload되어 첫 페인트가 빨라진다
 const pretendard = localFont({
@@ -29,8 +30,8 @@ export const viewport = {
 
 export default function RootLayout({ children }) {
   return (
-    <html lang="ko" className={pretendard.variable}>
-      <body>{children}</body>
+    <html lang="ko" className={pretendard.variable} suppressHydrationWarning>
+      <body><SeasonalDecor />{children}</body>
     </html>
   );
 }
