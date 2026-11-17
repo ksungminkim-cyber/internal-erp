@@ -4,12 +4,12 @@
 // 구글 애즈 API(캠페인 일예산). 당근 OpenAPI 는 쓰기 미확인이라 링크만 제공한다.
 import crypto from 'crypto';
 
-const NAVER_CAMPAIGN = 'cmp-a001-06-000000009424591';
+export const NAVER_CAMPAIGN = 'cmp-a001-06-000000009424591';
 const GOOGLE_CUSTOMER = '1309305023';
-const META_ACCOUNT = 'act_1513789977241121';
+export const META_ACCOUNT = 'act_1513789977241121';
 
 // ── 네이버
-async function naverCall(method, uri, { query, body } = {}) {
+export async function naverCall(method, uri, { query, body } = {}) {
   const key = process.env.NAVER_AD_API_KEY, secret = process.env.NAVER_AD_SECRET_KEY, customer = process.env.NAVER_AD_CUSTOMER_ID;
   if (!key || !secret || !customer) throw new Error('네이버 API 환경변수 없음');
   const ts = String(Date.now());
@@ -22,7 +22,7 @@ async function naverCall(method, uri, { query, body } = {}) {
   if (!r.ok) throw new Error(`네이버 ${r.status}: ${j.title || j.message || JSON.stringify(j).slice(0, 200)}`);
   return j;
 }
-const adName = (a, g) => (a.ad && (a.ad.description || a.ad.headline)) || g.name; // collect_naver 와 같은 이름 규칙
+export const adName = (a, g) => (a.ad && (a.ad.description || a.ad.headline)) || g.name; // collect_naver 와 같은 이름 규칙
 
 async function naverAds() {
   const out = [];
@@ -71,7 +71,7 @@ const NAVER = {
 };
 
 // ── 메타 (광고 세트 단위)
-async function metaCall(path, params, method = 'GET') {
+export async function metaCall(path, params, method = 'GET') {
   const token = process.env.META_ADS_TOKEN;
   if (!token) throw new Error('메타 토큰 환경변수 없음');
   const q = new URLSearchParams({ ...params, access_token: token });
@@ -119,7 +119,7 @@ async function googleToken() {
   if (!tj.access_token) throw new Error('구글 토큰 발급 실패');
   return tj.access_token;
 }
-async function googleCall(path, body) {
+export async function googleCall(path, body) {
   const token = await googleToken();
   const r = await fetch(`https://googleads.googleapis.com/v26/customers/${GOOGLE_CUSTOMER}/${path}`, { method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body), cache: 'no-store' });
   const j = await r.json();

@@ -1,7 +1,7 @@
 // src/lib/adsInsights.test.js
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { stats, bucketize, buildInsights, prepaidBalance, spendPace, paceWithHint, customRange } from './adsInsights.js';
+import { stats, bucketize, buildInsights, prepaidBalance, spendPace, paceWithHint, customRange, applyAdStatus, refreshSpendAlerts } from './adsInsights.js';
 
 const day = (d, ch, cost, imp, inn, extra = {}) => ({ d, [ch]: { cost, imp, in: inn, c: [], ...extra } });
 const seq = (from, n, f) => Array.from({ length: n }, (_, i) => { const t = new Date(from + 'T00:00:00Z'); t.setUTCDate(t.getUTCDate() + i); return f(t.toISOString().slice(0, 10), i); });
@@ -94,4 +94,72 @@ test('customRange: 프리셋에서 처음 고르면 그날 하루, 직접 지정
   assert.deepEqual(customRange(one, 'from', '2026-11-10', F, C), { from: '2026-11-10', to: '2026-11-10' }); // 시작이 끝을 넘으면 그날 하루
   assert.deepEqual(customRange(one, 'to', '2026-12-25', F, C), { from: '2026-11-05', to: C }); // 마감일 뒤는 마감일로
   assert.deepEqual(customRange(null, 'from', '2026-01-01', F, C), { from: F, to: F }); // 데이터 시작 전은 첫날로
+});
+
+// ── 서버 자동 마감이 광고 API에서 읽은 상태를 마감 자료에 반영
+const baseD = () => ({
+  closed: '2026-11-16',
+  ads: [
+    { ch: 'naver', name: '플레이스#1_녹턴', type: '플레이스 (클릭형+노출형)', status: '운영 중', budget: 25000, cost: 100, in: 10, lastSpend: '2026-11-16' },
+    { ch: 'google', name: '녹턴 바_합정 저녁', type: '자동 수집', status: '운영 중', budget: null, cost: 5440, in: 10, lastSpend: '2026-11-16' },
+    { ch: 'meta', name: '녹턴 흰색 트리', type: '인스타 게시물 홍보', status: '운영 중', budget: null, cost: 3338, in: 30, lastSpend: '2026-11-16' },
+    { ch: 'karrot', name: '녹턴 #12', type: '비즈프로필 홍보', status: '운영중', budget: 5000, cost: 0, in: 0, lastSpend: '2026-10-27' },
+  ],
+  naver: { ads: [{ name: '옛 소재', status: 'ELIGIBLE', imp: 100, clicks: 1, cost: 90 }], bizmoney: -58, campaign: { name: '플레이스#1_녹턴', status: 'ELIGIBLE', dailyBudget: 25000 }, updated: '2026-11-09T01:02:42.512Z' },
+  google: { status: { alerts: ['잔액이 거의 소진됨'], checked: '2026-11-09', campaigns: [] }, updated: '2026-11-09T01:02:50.541Z' },
+  meta: { status: { spent: 17091, activeCampaigns: 1, checked: '2026-11-09' }, updated: '2026-11-09T01:02:47.637Z' },
+  karrot: { status: { asOf: '2026-11-12', balance_cash: 163565, checked: '2026-11-09', campaigns: [{ name: '녹턴 #12', type: '비즈프로필 홍보', budget: 5000, status: '운영중' }] }, updated: '2026-11-09T01:02:50.000Z' },
+});
+const when = { today: '2026-11-17', now: '2026-11-17T08:00:00.000Z' };
+
+test('applyAdStatus: 네이버 소재·일예산, 구글·당근 캠페인 상태·유형·일예산을 방금 읽은 값으로 바꾼다', () => {
+  const D = baseD();
+  const out = applyAdStatus(D, {
+    naver: { campaign: { name: '플레이스#1_녹턴', status: 'PAUSED', dailyBudget: 30000 }, ads: [{ name: '저녁 7시부터는 칵테일 바', status: 'ELIGIBLE', imp: 2000, clicks: 30, cost: 2700 }] },
+    google: { campaigns: [{ name: '녹턴 바_합정 저녁', type: '검색', status: '운영 가능', budget: 10000 }, { name: '새 캠페인', type: '디맨드젠', status: '일시중지됨', budget: 5000 }] },
+    karrot: { campaigns: [{ name: '녹턴 (전문가) 토스트+바', type: 'Display (전문가)', status: '운영중', budget: 20000 }] },
+    meta: null,
+  }, when);
+  assert.deepEqual(out.naver.ads.map((a) => a.name), ['저녁 7시부터는 칵테일 바']);
+  assert.equal(out.naver.updated, when.now);
+  assert.equal(out.naver.bizmoney, -58); // 건드리지 않는 값은 그대로
+  const row = (ch, name) => out.ads.find((a) => a.ch === ch && a.name === name);
+  assert.deepEqual([row('naver', '플레이스#1_녹턴').status, row('naver', '플레이스#1_녹턴').budget], ['PAUSED', 30000]);
+  assert.deepEqual([row('google', '녹턴 바_합정 저녁').type, row('google', '녹턴 바_합정 저녁').budget, row('google', '녹턴 바_합정 저녁').cost], ['검색', 10000, 5440]);
+  assert.deepEqual(row('google', '새 캠페인'), { ch: 'google', name: '새 캠페인', type: '디맨드젠', status: '일시중지됨', budget: 5000, cost: 0, in: 0, lastSpend: null });
+  assert.deepEqual(out.google.status.alerts, ['잔액이 거의 소진됨']); // API로 못 읽는 값은 유지
+  assert.equal(out.google.status.checked, '2026-11-17');
+  // 당근: API에 없는 간편모드 캠페인은 남기고, 전문가모드 캠페인을 더한다. 잔액 기준값도 그대로
+  assert.deepEqual(out.karrot.status.campaigns.map((c) => c.name), ['녹턴 #12', '녹턴 (전문가) 토스트+바']);
+  assert.equal(out.karrot.status.balance_cash, 163565);
+  assert.equal(row('karrot', '녹턴 (전문가) 토스트+바').budget, 20000);
+  // 조회에 실패한 채널(null)과 원본은 그대로
+  assert.deepEqual(out.meta, D.meta);
+  assert.equal(D.naver.ads[0].name, '옛 소재');
+  assert.equal(D.ads.length, 4);
+});
+
+test('applyAdStatus: 네이버 캠페인이 정상이면 「운영 중」, 메타는 이미 있는 캠페인의 상태만 바꾼다', () => {
+  const out = applyAdStatus(baseD(), {
+    naver: { campaign: { name: '플레이스#1_녹턴', status: 'ELIGIBLE', dailyBudget: 25000 }, ads: [] },
+    google: null, karrot: null,
+    meta: { activeCampaigns: 2, campaigns: [{ name: '녹턴 흰색 트리', status: '일시중지됨', budget: null }, { name: '표에 없는 캠페인', status: '운영 중', budget: 7000 }] },
+  }, when);
+  assert.equal(out.ads.find((a) => a.ch === 'naver').status, '운영 중');
+  const m = out.ads.filter((a) => a.ch === 'meta');
+  assert.deepEqual(m.map((a) => [a.name, a.status, a.budget]), [['녹턴 흰색 트리', '일시중지됨', null]]);
+  assert.deepEqual([out.meta.status.activeCampaigns, out.meta.status.checked, out.meta.status.spent], [2, '2026-11-17', 17091]);
+});
+
+test('refreshSpendAlerts: 지난 마감일의 「지출 0원」 경고는 지우고, 이번 마감일에 0원인 채널만 다시 넣는다', () => {
+  const alerts = [
+    { ch: '구글', level: 'critical', text: '구글 애즈 경고: 잔액이 거의 소진됨.', at: '2026-11-09' },
+    { ch: '네이버', level: 'warning', text: '마감일(2026-11-08)에 지출이 0원입니다. 광고가 멈췄는지 확인하세요.' },
+    { ch: '당근', level: 'warning', text: '마감일(2026-11-08)에 지출이 0원입니다. 광고가 멈췄는지 확인하세요.' },
+  ];
+  const days = [day('2026-11-15', 'naver', 0, 0, 0), { d: '2026-11-16', naver: { cost: 15176, imp: 1, in: 1 }, google: { cost: 0, imp: 0, in: 0 }, meta: { cost: 0, imp: 0, in: 0 }, karrot: null }];
+  const out = refreshSpendAlerts(alerts, days);
+  assert.deepEqual(out.map((a) => [a.ch, a.text.slice(0, 16)]), [['구글', '구글 애즈 경고: 잔액이 거의'], ['구글', '마감일(2026-11-16)에']]);
+  assert.equal(alerts.length, 3); // 원본은 그대로
+  assert.deepEqual(refreshSpendAlerts(undefined, []), []);
 });

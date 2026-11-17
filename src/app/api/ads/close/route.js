@@ -3,13 +3,15 @@ import { NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { getServiceClient } from '@/lib/server/guard';
 import { naver, google, meta, karrot } from '@/lib/server/adsLive';
-import { prepaidBalance, spendPace, paceWithHint } from '@/lib/adsInsights';
+import { fetchAdStatus } from '@/lib/server/adsStatus';
+import { prepaidBalance, spendPace, paceWithHint, applyAdStatus, refreshSpendAlerts } from '@/lib/adsInsights';
 
 // ─────────────────────────────────────────────────────────────────────────
 // 광고 일 마감 자동 채움 — Vercel Cron 이 매일 00:30 UTC(09:30 KST) 호출.
 // 로컬 /ad-daily(모니터링 폴더)가 돌지 않아도 ad_dashboard.data.days 가 어제까지 채워지게 한다.
 // 마지막 마감일 다음 날부터 어제(KST)까지 네 채널 광고 API로 하루씩 받아 붙이고, 캠페인 표(7일 합계·마지막 지출)와
-// 네이버 잔액을 갱신한다. 로컬 마감이 나중에 돌면 더 자세한 값(순위·도달·잔액·의견)으로 덮어쓴다.
+// 네이버 잔액을 갱신한다. 채울 날이 없어도 소재별 성과·캠페인 상태·일예산은 광고 API에서 지금 값을 읽어 반영한다
+// (예전에는 로컬 마감만 올려서, 로컬 작업이 멈추면 소재 표와 상태가 굳었다). 로컬 마감이 나중에 돌면 더 자세한 값(순위·도달·잔액·의견)으로 덮어쓴다.
 //   GET  (Vercel Cron)  헤더 Authorization: Bearer CRON_SECRET
 //   POST (수동)         헤더 x-sync-secret: POS_SYNC_SECRET, 본문 { days?: 최대 일수 }
 // ─────────────────────────────────────────────────────────────────────────
@@ -30,11 +32,11 @@ async function fill(maxDays) {
   const svc = getServiceClient();
   const { data: row, error } = await svc.from('ad_dashboard').select('data').eq('id', 'nocturne').maybeSingle();
   if (error) throw new Error(error.message);
-  const D = row?.data;
+  let D = row?.data;
   if (!D || !Array.isArray(D.days) || !D.days.length) return { filled: [], reason: '마감 데이터 없음' };
-  const yesterday = addDays(kst(new Date()), -1);
-  let from = addDays(D.closed || D.days[D.days.length - 1].d, 1);
-  if (from > yesterday) return { filled: [], closed: D.closed };
+  const today = kst(new Date());
+  const yesterday = addDays(today, -1);
+  let from = addDays(D.closed || D.days[D.days.length - 1].d, 1); // 어제까지 이미 마감됐으면 아래 반복은 돌지 않는다
   if (addDays(from, maxDays - 1) < yesterday) from = addDays(yesterday, -(maxDays - 1)); // 너무 오래 비었으면 최근 N일만
   const byD = Object.fromEntries(D.days.map((x) => [x.d, x]));
   const filled = [], errors = {};
@@ -53,6 +55,10 @@ async function fill(maxDays) {
   }
   const days = Object.values(byD).sort((a, b) => (a.d < b.d ? -1 : 1));
   const closed = days[days.length - 1].d;
+  // 소재·캠페인 상태·일예산: 광고 API의 지금 값 (조회에 실패한 채널은 이전 값 그대로)
+  const S = await fetchAdStatus(today);
+  for (const [k, v] of Object.entries(S.errors)) errors[`상태 ${k}`] = v;
+  D = applyAdStatus(D, S, { today, now: new Date().toISOString() });
   // 캠페인 표: 최근 7일 합계와 마지막 지출일을 다시 계산 (이름 기준. 네이버는 채널 합계)
   const last7 = days.slice(-7);
   const inKey = { meta: 'results', google: 'clicks', karrot: 'clicks', naver: 'clicks' };
@@ -76,10 +82,10 @@ async function fill(maxDays) {
   // 당근 잔액 (조회 API 없음): 확인한 잔액(base, asOf 끝 기준)에서 그 뒤 지출을 뺀 추정. 충전하면 base·asOf 를 다시 넣어야 한다
   const kf = (D.funding || []).find((x) => x.ch === 'karrot');
   if (kf && kf.asOf && kf.base !== null && kf.base !== undefined) { const avg = paceWithHint(spendPace(days, 'karrot'), kf.paceHint, closed); kf.balance = prepaidBalance(kf.base, kf.asOf, days, 'karrot'); kf.avg = Math.round(avg); kf.daysLeft = avg > 0 ? +(kf.balance / avg).toFixed(1) : null; }
-  const data = { ...D, days, closed, built: new Date().toISOString(), autoFilled: [...new Set([...(D.autoFilled || []), ...filled])].filter((d) => d > (D.localClosed || '')).slice(-30) };
+  const data = { ...D, days, closed, alerts: refreshSpendAlerts(D.alerts, days), built: new Date().toISOString(), autoFilled: [...new Set([...(D.autoFilled || []), ...filled])].filter((d) => d > (D.localClosed || '')).slice(-30) };
   const { error: e2 } = await svc.from('ad_dashboard').upsert({ id: 'nocturne', data, html: null, closed_date: closed, built_at: data.built, updated_at: new Date().toISOString() });
   if (e2) throw new Error(e2.message);
-  return { filled, closed, errors };
+  return { filled, closed, errors, status: Object.fromEntries(CH.map((ch) => [ch, !!S[ch]])) };
 }
 
 export async function GET(request) {
