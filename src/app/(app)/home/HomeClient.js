@@ -282,6 +282,9 @@ export default function HomeClient({
       <PageHeader title={`${greeting},`} subtitle={`${profile?.name ?? ''}님 · ${today}`} large />
 
       <main className="fade-in page-main" style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+        {/* 새해 인사 — 새해 시즌 테마 기간(1/1~1/15)에만 보인다. 모양은 globals.css 의 .season-greeting */}
+        <p className="season-greeting">정미년 새해 복 많이 받으세요</p>
+
         {/* 안 읽은 공지 */}
         {recentAnnouncements.filter((a) => !announcementReadIds.has(a.id)).length > 0 && (
           <section className="stack stack-3">
