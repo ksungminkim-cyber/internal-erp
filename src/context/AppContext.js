@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client';
 import { remindMyOverdueApprovals } from '@/app/(app)/approvals/actions';
 import { getMyContext } from '@/app/_actions/context';
 import { clearPageCache } from '@/lib/pageCache';
+import { isHQWorkplace } from '@/lib/hqView';
 
 const AppContext = createContext(null);
 
@@ -104,10 +105,12 @@ export function AppProvider({ children, initialUser, initialProfile = null, init
   const role = currentMembership?.role
     ?? (profile?.is_super_admin ? 'owner' : null);
   const isManager = role === 'manager' || role === 'owner';
+  // 본사를 고른 상태 = 전체 보기 (매장 운영 화면 대신 관리 화면만)
+  const isHQView = isHQWorkplace(currentWorkplace);
 
   const value = {
     user, profile, memberships, currentWorkplaceId, currentWorkplace,
-    currentMembership, role, isManager, loading,
+    currentMembership, role, isManager, isHQView, loading,
     switchWorkplace, refresh: () => user && loadProfileAndMemberships(user.id),
     supabase,
   };

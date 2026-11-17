@@ -7,9 +7,10 @@ import {
   Home, Clock, FileText, User, Building2, Calendar, ClipboardCheck,
   ListTodo, Package, TrendingUp, Megaphone, Wrench, BookOpen,
   MessageCircle, BarChart3, LogOut, Crown, Shield, ChevronDown, Lock,
-  Target, MessageSquare, HelpCircle, UserCheck, FileSearch, Users,
+  Target, MessageSquare, HelpCircle, UserCheck, FileSearch, Users, LayoutGrid,
 } from 'lucide-react';
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
+import { HQ_LABEL, splitWorkplaces, hiddenInHQView } from '@/lib/hqView';
 
 const MAIN_LINKS = [
   { href: '/home', label: '홈', icon: Home },
@@ -63,7 +64,7 @@ const ROLE_META = {
 export default function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
-  const { user, profile, memberships, currentWorkplaceId, currentWorkplace, switchWorkplace, role, supabase } = useApp();
+  const { user, profile, memberships, currentWorkplaceId, currentWorkplace, switchWorkplace, role, supabase, isHQView } = useApp();
   // profile.name이 null이면 이메일 prefix로 fallback (DB 복구 전 임시 표시)
   const displayName = profile?.name || user?.email?.split('@')[0] || '—';
   const [wpOpen, setWpOpen] = useState(false);
@@ -73,7 +74,13 @@ export default function Sidebar() {
   // 월별 리포트·인력 배치: 본사 소속(임원·super_admin 포함)만
   const canViewReports = profile?.is_super_admin === true || profile?.is_executive === true || isHQMember;
   const adminLinks = [...ADMIN_LINKS, ...(canViewReports ? HQ_LINKS : []), ...(isOwner ? OWNER_LINKS : [])];
-  const mainLinks = MAIN_LINKS.filter((l) => l.href !== '/reports' || canViewReports);
+  // 전체(본사) 보기에서는 매장 일상 운영 메뉴를 숨긴다 — 본사에는 근무표·재고 같은 자료가 없다
+  const inView = (l) => !isHQView || !hiddenInHQView(l.href);
+  const mainLinks = MAIN_LINKS.filter((l) => l.href !== '/reports' || canViewReports).filter(inView);
+  const opsLinks = OPS_LINKS.filter(inView);
+  // 드롭다운: 전체(본사)를 맨 위에 따로, 그 아래 매장들
+  const { hq, stores } = splitWorkplaces(memberships);
+  const wpName = (m) => (m === hq ? HQ_LABEL : m.workplaces?.name);
 
   const isActive = (href) => pathname === href || pathname.startsWith(href + '/');
   // 임원(본사 대표) → '대표' / 본사 매니저·직원 → '본사' / 그 외 → 현재 매장 role
@@ -140,8 +147,8 @@ export default function Sidebar() {
               textAlign: 'left',
             }}
           >
-            <Building2 size={16} color="var(--accent)" />
-            <span style={{ flex: 1, fontWeight: 700, fontSize: 13 }}>{currentWorkplace?.name ?? '사업장 선택'}</span>
+            {isHQView ? <LayoutGrid size={16} color="var(--accent)" /> : <Building2 size={16} color="var(--accent)" />}
+            <span style={{ flex: 1, fontWeight: 700, fontSize: 13 }}>{isHQView ? HQ_LABEL : (currentWorkplace?.name ?? '사업장 선택')}</span>
             {memberships.length > 1 && <ChevronDown size={14} className="text-muted" />}
           </button>
           {wpOpen && memberships.length > 1 && (
@@ -155,9 +162,9 @@ export default function Sidebar() {
                 zIndex: 50,
               }}
             >
-              {memberships.map((m) => (
+              {[...(hq ? [hq] : []), ...stores].map((m) => (
+                <Fragment key={m.workplace_id}>
                 <button
-                  key={m.workplace_id}
                   type="button"
                   onClick={() => { switchWorkplace(m.workplace_id); setWpOpen(false); }}
                   style={{
@@ -169,9 +176,11 @@ export default function Sidebar() {
                     display: 'flex', alignItems: 'center', gap: 8,
                   }}
                 >
-                  <Building2 size={14} />
-                  {m.workplaces?.name}
+                  {m === hq ? <LayoutGrid size={14} /> : <Building2 size={14} />}
+                  {wpName(m)}
                 </button>
+                {m === hq && <div style={{ height: 1, background: 'var(--border)', margin: '6px 4px' }} />}
+                </Fragment>
               ))}
             </div>
           )}
@@ -189,9 +198,9 @@ export default function Sidebar() {
           letterSpacing: 0.08, textTransform: 'uppercase',
           padding: '16px 12px 6px',
         }}>
-          운영
+          {isHQView ? '공통' : '운영'}
         </div>
-        {OPS_LINKS.map(({ href, label, icon: Icon }) => (
+        {opsLinks.map(({ href, label, icon: Icon }) => (
           <NavLink key={href} href={href} icon={Icon} label={label} active={isActive(href)} />
         ))}
 

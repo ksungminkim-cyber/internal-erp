@@ -48,13 +48,15 @@ const DOC_TYPES = [
 const DOC_TYPE_LABEL = { expense: '지출', schedule: '시프트', kpi: 'KPI', closing: '월마감' };
 
 export default function ApprovalsClient({ initialItems, ssrWorkplaceId, userId }) {
-  const { user, profile, memberships, currentWorkplaceId, supabase } = useApp();
+  const { user, profile, memberships, currentWorkplaceId, supabase, isHQView } = useApp();
   const [tab, setTab] = useState('inbox');
   const [statusFilter, setStatusFilter] = useState('all');
   const [docType, setDocType] = useState('all');
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState(''); // 디바운스된 검색어
-  const [allWp, setAllWp] = useState(false); // 전 매장 통합 뷰
+  const [allWpOn, setAllWp] = useState(false); // 전 매장 통합 뷰
+  // 전체(본사) 보기에서는 늘 전 매장 — 본사 명의 문서만 찾으면 매장에서 올라온 결재가 안 보인다
+  const allWp = allWpOn || isHQView;
   const [items, setItems] = useState(initialItems ?? []);
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -112,13 +114,13 @@ export default function ApprovalsClient({ initialItems, ssrWorkplaceId, userId }
     const channel = supabase
       .channel(`approvals:${currentWorkplaceId}`)
       .on('postgres_changes',
-        { event: '*', schema: 'public', table: 'approval_requests', filter: `workplace_id=eq.${currentWorkplaceId}` },
+        { event: '*', schema: 'public', table: 'approval_requests', ...(isHQView ? {} : { filter: `workplace_id=eq.${currentWorkplaceId}` }) },
         () => load()
       )
       .on('postgres_changes', { event: '*', schema: 'public', table: 'approval_steps' }, () => load())
       .subscribe();
     return () => { supabase.removeChannel(channel); };
-  }, [supabase, currentWorkplaceId, load]);
+  }, [supabase, currentWorkplaceId, isHQView, load]);
 
   function exportCsv() {
     downloadCsv(
@@ -163,7 +165,7 @@ export default function ApprovalsClient({ initialItems, ssrWorkplaceId, userId }
             ))}
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            {canAllWp && (
+            {canAllWp && !isHQView && (
               <button
                 type="button"
                 onClick={() => setAllWp((v) => !v)}

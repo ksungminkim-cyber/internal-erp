@@ -4,6 +4,7 @@ import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import HomeClient from './HomeClient';
 import { kstDateKey, addDaysKey } from '@/lib/date';
+import { countInbox } from '@/lib/hqView';
 
 // 서버(UTC 런타임)에서 한국시간 기준 '오늘'
 
@@ -121,15 +122,14 @@ export default async function HomePage() {
   }));
 
   const readIds    = new Set((reads.data ?? []).map((r) => r.announcement_id));
-  const inboxValid = (inboxSteps.data ?? []).filter(
-    (s) =>
-      s.approval_requests?.workplace_id === wpId &&
-      s.approval_requests?.status === 'pending' &&
-      s.approval_requests?.current_step === s.step_order
-  );
+  // ── 본사/super_admin 판정 — 본사를 고른 상태(전체 보기)면 결재 대기는 전 매장 기준 ──
+  const isHQ = myProfileRes.data?.is_super_admin === true
+    || (myMemsRes.data ?? []).some((m) => m.workplaces?.name === '본사');
+  const allWps = allWpsRes.data ?? []; // 본사 제외 매장 목록
+  const hqView = isHQ && !allWps.some((w) => w.id === wpId);
   const initialStats = {
     working:            (board.data ?? []).filter((b) => b.status === 'working' || b.status === 'on_break').length,
-    inbox:              inboxValid.length,
+    inbox:              countInbox(inboxSteps.data, hqView ? null : wpId),
     unread:             Math.max(0, (annTotal.count ?? 0) - readIds.size),
     todayCheckins:      new Set((todayLogs.data ?? []).map((l) => l.user_id)).size,
     todaySales:         Number((salesToday.data ?? []).find((r) => r.sales_date === todayStr)?.total_amount ?? 0),
@@ -144,11 +144,7 @@ export default async function HomePage() {
   };
 
   // ── 본사/super_admin 이면 전 매장 출근 현황 추가 조회 ──
-  const isHQ = myProfileRes.data?.is_super_admin === true
-    || (myMemsRes.data ?? []).some((m) => m.workplaces?.name === '본사');
-
   let hqWorkplaceStatuses = null;
-  const allWps = allWpsRes.data ?? [];
   if (isHQ && allWps.length) {
     // 매장별 개별 쿼리 대신 in() 한 방 — 매장 수만큼의 왕복 제거
     const { data: allBoards } = await supabase
