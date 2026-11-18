@@ -426,11 +426,11 @@ export default function AdsPage() {
                   <span key="m">{+r.m.slice(0, 4) !== new Date().getFullYear() ? r.m.slice(2, 4) + '년 ' : ''}{+r.m.slice(5)}월{r.partial && <span className="tag tag-accent" style={{ fontSize: 10, marginLeft: 6 }}>{r.adDays}일</span>}</span>,
                   <span key="r">{won(r.total)} <span className="text-muted" style={{ fontSize: 11 }}>({num(r.day)} / {num(r.bar)})</span></span>, pctS(r.dayYoy), pctS(r.barYoy), won(r.ad), `${(r.adShare * 100).toFixed(1)}%`,
                   r.incrDayPerDay === null ? '—' : won(r.incrDayPerDay), won(r.adPerDay), xS(r.ratioDay)])} empty="광고비와 매출이 같이 있는 달이 없습니다." />
-              <div className="text-muted" style={{ fontSize: 11, margin: '12px 0 6px' }}>예산 변화 전후 · 채널 하루 광고비가 30% 이상 바뀐 시점의 앞뒤 14일 낮 매출. 「전년 보정」은 작년 같은 날짜의 변화를 뺀 값. 「배」= 하루 낮 매출 변화 ÷ 하루 광고비 변화. 예산을 올려 보면 여기에 자동으로 잡힙니다.</div>
-              <Table cols={[{ h: '채널', left: true }, { h: '시점', left: true }, { h: '하루 광고비' }, { h: '낮 매출 전후' }, { h: '전년 보정' }, { h: '배' }]}
+              <div className="text-muted" style={{ fontSize: 11, margin: '12px 0 6px' }}>예산 변화 전후 · 채널 하루 광고비가 30% 이상 바뀐 시점의 앞뒤 14일 낮 매출. 「전년 보정」은 작년 같은 날짜의 변화를 뺀 값. 「배」= 하루 낮 매출 변화 ÷ 하루 광고비 변화. 예산을 올려 보면 여기에 자동으로 잡힙니다. 「측정 중」은 바뀐 뒤 14일이 아직 안 찬 것. 지금 집행 중인 광고 목록이 아닙니다 (집행 여부는 위 채널 카드).</div>
+              <Table cols={[{ h: '채널', left: true }, { h: '광고비가 바뀐 날', left: true }, { h: '하루 광고비' }, { h: '낮 매출 전후' }, { h: '전년 보정' }, { h: '배' }]}
                 rows={SC.map((c) => [
                   <span key="c" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Dot color={BY[c.ch].color} />{BY[c.ch].label}</span>,
-                  <span key="d">{md(c.d)}{c.partial && <span className="tag tag-accent" style={{ fontSize: 10, marginLeft: 6 }}>진행 중</span>}</span>,
+                  <span key="d">{md(c.d)}{c.partial && <span className="tag tag-accent" style={{ fontSize: 10, marginLeft: 6 }}>측정 중 {c.postDays}/14일</span>}</span>,
                   <span key="a">{won(c.before)} → {won(c.after)} <span className="text-muted">({c.chg >= 0 ? '+' : ''}{Math.round(c.chg * 100)}%)</span></span>, pctS(c.raw), pctS(c.adj), c.ratio === null ? <span className="text-muted">감액</span> : xS(c.ratio)])} empty="광고비가 크게 바뀐 시점이 아직 없습니다." />
               {SR && SR.r !== null && <div className="text-muted" style={{ fontSize: 11, marginTop: 10 }}>일 단위 상관계수 {SR.r.toFixed(2)} ({SR.n}일). 0에 가까우면 「광고를 더 쓴 날 매출이 더 나온다」는 식으로는 읽을 수 없다는 뜻입니다. 판단은 월 단위 증분과 예산 변화 전후로 하세요. 이 표는 상관이지 인과가 아닙니다. 날씨·행사·메뉴 변경도 같이 움직입니다.</div>}
             </>
