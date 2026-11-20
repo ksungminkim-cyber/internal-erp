@@ -102,6 +102,8 @@ export async function saveInventoryItem({ id, workplaceId, payload }) {
       return uu && per > 0 ? { usage_unit: uu, usage_per_unit: per } : { usage_unit: null, usage_per_unit: null };
     })() : {}),
     ...('supply_type' in payload ? { supply_type: payload.supply_type === 'made' ? 'made' : 'purchase' } : {}),
+    // true = 판매 자동 차감 없이 개봉할 때 직접 −1
+    ...('manual_count' in payload ? { manual_count: !!payload.manual_count } : {}),
   };
 
   let error;
