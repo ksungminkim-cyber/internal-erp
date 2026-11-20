@@ -23,6 +23,7 @@ const CATEGORY_OPTIONS = ['식자재', '음료/시럽', '주류', '컵·뚜껑',
 export default function InventoryPage() {
   const router = useRouter();
   const { user, currentWorkplaceId, currentWorkplace, supabase, isManager } = useApp();
+  const { toast } = useFeedback();
   const [daysLeftById, setDaysLeftById] = useState({}); // 연결 품목의 남은 일수 (추천 카드가 채움)
   const [suggestionsOpen, setSuggestionsOpen] = useState(() => {
     try { return localStorage.getItem('inventory:suggestionsOpen') !== '0'; } catch { return true; }
@@ -44,6 +45,7 @@ export default function InventoryPage() {
   const [counting, setCounting] = useState(false);     // 재고 실사 시트
   const [idleById, setIdleById] = useState({});        // 30일 미사용 품목 { id: lastTxAt|null }
   const [inboundKey, setInboundKey] = useState(0);     // 입고 대기 재조회
+  const [openingId, setOpeningId] = useState(null);    // 「−1 개봉」 처리 중인 품목
 
   const load = useCallback(async () => {
     if (!currentWorkplaceId) return;
@@ -86,6 +88,25 @@ export default function InventoryPage() {
       .subscribe();
     return () => { supabase.removeChannel(ch); };
   }, [supabase, currentWorkplaceId, load]);
+
+  // 직접 세는 품목 — 새로 한 단위를 뜯을 때 −1
+  async function openOne(it) {
+    if (!(Number(it.current_qty) >= 1)) {
+      toast(`${it.name} 남은 수량이 없어요. 입고를 먼저 기록해 주세요.`, 'error');
+      return;
+    }
+    setOpeningId(it.id);
+    try {
+      const res = await recordInventoryTransaction({ workplaceId: currentWorkplaceId, itemId: it.id, type: 'use', qtyDelta: -1, note: '개봉' });
+      if (res?.error) { toast(res.error, 'error'); return; }
+      toast(`${it.name} 1${it.unit} 개봉 · 남은 ${Number(it.current_qty) - 1}${it.unit}`, 'success');
+      load();
+    } catch (e) {
+      toast(String(e?.message || e), 'error');
+    } finally {
+      setOpeningId(null);
+    }
+  }
 
   const filtered = useMemo(() => {
     let list = items;
@@ -195,7 +216,9 @@ export default function InventoryPage() {
                     <InventoryRow
                       key={it.id}
                       item={it}
-                      onAdjust={() => setAdjusting({ ...it, _linked: (usageCounts[it.id] ?? 0) > 0 })}
+                      onAdjust={() => setAdjusting({ ...it, _linked: !it.manual_count && (usageCounts[it.id] ?? 0) > 0 })}
+                      onOpenOne={() => openOne(it)}
+                      opening={openingId === it.id}
                       onEdit={() => setEditing(it)}
                       onUsage={() => setUsageItem(it)}
                       usageCount={usageCounts[it.id] ?? 0}
@@ -405,7 +428,8 @@ function InventoryClosingDialog({ items, supabase, userId, workplaceId, onClose 
   );
 }
 
-function InventoryRow({ item, onAdjust, onEdit, onUsage, usageCount = 0, daysLeft = null, idle = false }) {
+function InventoryRow({ item, onAdjust, onOpenOne, opening = false, onEdit, onUsage, usageCount = 0, daysLeft = null, idle = false }) {
+  const manual = !!item.manual_count; // 판매 자동 차감 없이 개봉할 때 직접 −1
   const low = Number(item.current_qty) < Number(item.min_qty);
   const countedAgo = formatCountedAgo(item.last_counted_at);
   return (
@@ -434,17 +458,27 @@ function InventoryRow({ item, onAdjust, onEdit, onUsage, usageCount = 0, daysLef
         )}
         {item.supply_type === 'made' && <span className="tag" style={{ fontSize: 10, marginTop: 2 }}>직접 제조</span>}
         {low && <span className="tag tag-danger" style={{ fontSize: 10, marginTop: 2 }}>{item.supply_type === 'made' ? '제조' : '발주'}</span>}
-        {usageCount > 0 && <span className="tag tag-mint" style={{ fontSize: 10, marginTop: 2 }}>연결 {usageCount}</span>}
+        {manual && <span className="tag tag-accent" style={{ fontSize: 10, marginTop: 2 }}>개봉 시 −1</span>}
+        {!manual && usageCount > 0 && <span className="tag tag-mint" style={{ fontSize: 10, marginTop: 2 }}>연결 {usageCount}</span>}
         {idle && <span className="tag" style={{ fontSize: 10, marginTop: 2, color: 'var(--text-muted)' }}>30일 미사용</span>}
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-        <button onClick={onAdjust} className="btn btn-soft btn-xs">±</button>
+        {manual ? (
+          <>
+            <button onClick={onOpenOne} disabled={opening} className="btn btn-primary btn-xs" style={{ whiteSpace: 'nowrap' }} aria-label={`${item.name} 1${item.unit} 개봉`}>−1 개봉</button>
+            <button onClick={onAdjust} className="btn btn-soft btn-xs" style={{ whiteSpace: 'nowrap' }} aria-label={`${item.name} 입고·조정`}>+ 입고</button>
+          </>
+        ) : (
+          <button onClick={onAdjust} className="btn btn-soft btn-xs">±</button>
+        )}
         <button onClick={onEdit} className="btn btn-ghost btn-icon" style={{ minHeight: 28, padding: 4 }} aria-label="편집">
           <Edit3 size={12} />
         </button>
-        <button onClick={onUsage} className="btn btn-ghost btn-icon" style={{ minHeight: 28, padding: 4 }} aria-label="소요량 연결">
-          <Link2 size={12} />
-        </button>
+        {!manual && (
+          <button onClick={onUsage} className="btn btn-ghost btn-icon" style={{ minHeight: 28, padding: 4 }} aria-label="소요량 연결">
+            <Link2 size={12} />
+          </button>
+        )}
       </div>
     </div>
   );
@@ -464,6 +498,7 @@ function InventoryEditor({ item, supabase, workplaceId, onClose, onSaved }) {
   const [usageUnit, setUsageUnit] = useState(item?.usage_unit ?? '');
   const [usagePerUnit, setUsagePerUnit] = useState(item?.usage_per_unit ?? '');
   const [supplyType, setSupplyType] = useState(item?.supply_type ?? 'purchase');
+  const [manualCount, setManualCount] = useState(!!item?.manual_count);
   const [vendor, setVendor] = useState(item?.vendor ?? '');
   const [notes, setNotes] = useState(item?.notes ?? '');
   const [saving, setSaving] = useState(false);
@@ -490,6 +525,7 @@ function InventoryEditor({ item, supabase, workplaceId, onClose, onSaved }) {
       usage_unit: usageUnit.trim() === unit.trim() ? '' : usageUnit.trim(),
       usage_per_unit: usageUnit.trim() === unit.trim() || usagePerUnit === '' ? '' : Number(usagePerUnit),
       supply_type: supplyType,
+      manual_count: manualCount,
       vendor: vendor.trim() || null,
       notes: notes.trim() || null,
     };
@@ -566,14 +602,27 @@ function InventoryEditor({ item, supabase, workplaceId, onClose, onSaved }) {
               />
               <span style={{ fontSize: 13, fontWeight: 700, whiteSpace: 'nowrap' }}>{usageUnit}</span>
             </div>
-            <div className="text-muted" style={{ fontSize: 11, marginTop: 4 }}>
+            {!manualCount && <div className="text-muted" style={{ fontSize: 11, marginTop: 4 }}>
               판매로 {usageUnit}이(가) 빠지면 그만큼 {unit || '개'} 재고가 줄어듭니다. 예) 1박스 = 1000개, 1병 = 700ml.
-            </div>
+            </div>}
           </div>
         )}
         {usageUnit && usageUnit === unit && (
           <div className="text-muted" style={{ fontSize: 11, marginTop: 4 }}>세는 단위와 같아요. &ldquo;세는 단위와 같음&rdquo;을 고르면 됩니다.</div>
         )}
+      </div>
+
+      <div style={{ marginTop: 12 }}>
+        <label className="label">재고 차감 방식</label>
+        <div className="segment" role="group" aria-label="재고 차감 방식">
+          <button type="button" aria-pressed={!manualCount} className={`segment-item ${!manualCount ? 'is-active' : ''}`} onClick={() => setManualCount(false)}>판매 자동 차감</button>
+          <button type="button" aria-pressed={manualCount} className={`segment-item ${manualCount ? 'is-active' : ''}`} onClick={() => setManualCount(true)}>개봉할 때 −1</button>
+        </div>
+        <div className="text-muted" style={{ fontSize: 11, marginTop: 4 }}>
+          {manualCount
+            ? '판매로는 줄지 않아요. 새로 뜯을 때마다 목록의 「−1 개봉」을 누르고, 남은 수가 최소 수량보다 적어지면 발주 알림이 뜹니다.'
+            : '메뉴를 연결해 두면 판매량만큼 자동으로 줄어듭니다.'}
+        </div>
       </div>
 
       <div style={{ marginTop: 12 }}>
